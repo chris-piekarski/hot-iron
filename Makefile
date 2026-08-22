@@ -1,5 +1,5 @@
-# Root Makefile for hackrf-spectrum-analyzer
-# Provides convenient top-level targets. The real build logic lives in src/hackrf-sweep/Makefile
+# Root Makefile for hotiron
+# Provides convenient top-level targets. The real build logic lives in src/hotiron/Makefile
 # (cd there and run make for advanced build options, or use these wrappers).
 #
 # Run 'make help' for colorful categorized usage.
@@ -16,9 +16,8 @@ NC     := \033[0m
 
 .PHONY: help
 help: ## Show this help (colorized with categories)
-	@echo ""
-	@echo "$(BOLD)$(CYAN)hackrf-spectrum-analyzer$(NC) - top level make targets"
-	@echo "$(YELLOW)Tip: cd src/hackrf-sweep && make help for the detailed native build targets$(NC)"
+	@sh $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/hotiron-banner.sh
+	@echo "$(YELLOW)QSY: cd src/hotiron && make help for the native targets$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "  $(YELLOW)%-15s$(NC) %s\n", "Target", "Description"} \
 		/^##@/ { printf "\n$(BOLD)%s$(NC)\n", substr($$0, 5) } \
@@ -54,20 +53,23 @@ runtime-deps: ## Install only what's needed to run (after a build)
 
 ##@ Build
 build: ## Build the full application (jar + natives + zip). Delegates to subdir.
-	$(MAKE) -C src/hackrf-sweep all
+	$(MAKE) -C src/hotiron all
 
 clean: ## Clean build artifacts (delegates to subdir).
-	$(MAKE) -C src/hackrf-sweep clean
+	$(MAKE) -C src/hotiron clean
 
 ##@ Test & Quality
-test: ## Run unit tests (Maven). Hardware tests are excluded.
-	cd src/hackrf-sweep && mvn clean test
+test: ## Native C/C++ self-tests (gcov) then Maven unit tests. No radio.
+	$(MAKE) -C src/hotiron test
+
+native-test: ## Native C/C++ self-tests + gcov only (no Maven).
+	$(MAKE) -C src/hotiron native-test
 
 test-hw: ## Hardware smoke tests (skips if no HackRF). Does not run under make test.
-	$(MAKE) -C src/hackrf-sweep test-hw
+	$(MAKE) -C src/hotiron test-hw
 
 lint: ## Run Maven compile (acts as basic lint/quality check).
-	cd src/hackrf-sweep && mvn clean compile
+	cd src/hotiron && mvn clean compile
 
 stats: ## Refresh docs/stats.md (first-party LOC, packages, tests, git)
 	@python3 $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/repo-stats.py
@@ -90,11 +92,11 @@ udev: ## Install persistent udev rules (sudo once). Keeps usbfs writable after u
 
 ##@ Run
 start: build ## Build if needed, then launch the Linux app.
-	./src/hackrf-sweep/build/hackrf-spectrum-analyzer/hackrf_sweep_spectrum_analyzer_linux.sh
+	./src/hotiron/build/hotiron/hotiron.sh
 
 mcp: build ## Launch the app with a localhost MCP server (127.0.0.1:8765)
-	./src/hackrf-sweep/build/hackrf-spectrum-analyzer/hackrf_sweep_spectrum_analyzer_linux.sh --mcp
+	./src/hotiron/build/hotiron/hotiron.sh --mcp
 
 run: start ## Alias for start.
 
-.PHONY: build clean test test-hw lint stats mermaid info list-devices firmware-update udev start run mcp help deps runtime-deps
+.PHONY: build clean test native-test test-hw lint stats mermaid info list-devices firmware-update udev start run mcp help deps runtime-deps

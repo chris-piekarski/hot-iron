@@ -34,6 +34,7 @@ One RF path. **Watching stops the sweep.** Pause still only freezes the plot. St
 - [x] Preserve a complete HackRF transfer (about 106 TS packets) and retry IQ polarity before lock
 - [x] Drop stale IQ backlog and reset the complete decoder after any discontinuity
 - [x] Native stage diagnostics + MCP `tv_debug` / `tv_debug_history`
+- [x] Main chart + MCP `tv_spectrum` show live local ±8 MHz RF from the parked IQ stream
 - [ ] Hardware IT Watch start/stop then resume sweep
 - [x] Live ATSC lock + CRC-valid PAT + decoded MPEG-2 frames on RF channels 28 and 33
 

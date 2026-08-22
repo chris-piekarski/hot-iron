@@ -1,15 +1,15 @@
 # Documentation
 
-This directory contains the first-class documentation for the **hackrf-spectrum-analyzer** project: a HackRF GUI with a live **MCP** interface so AI agents can read the same sweep the operator sees.
+This directory contains the first-class documentation for **HotIron**: a HackRF desktop with Sweep / Listen / Watch, QSY to live hits, and a live **MCP** interface so agents copy the RF bins.
 
 ## Quick Navigation
 
-- [MCP for AI agents](mcp.md) — why MCP, tools, stdio proxy, what v1 will not do
+- [MCP for AI agents](agents.md) — why MCP, tools, stdio proxy, what v1 will not do
 - [Getting Started](getting-started.md)
 - [Building & Running](building.md)
-- [Development Guide](development.md) (including testing and linting)
-- [HackRF Hardware Setup](hackrf-setup.md)
-- [Usage](usage.md) — operator UI (Quick Select, auto-gain, waterfall)
+- [Development Guide](develop.md) (including testing and linting)
+- [HackRF Hardware Setup](hardware.md)
+- [Usage](operator.md) — operator UI (Quick Select, auto-gain, waterfall)
 - [Architecture](architecture.md)
 - [Repository stats](stats.md) — first-party LOC, packages, tests (`make stats`)
 - [Contributing](contributing.md)

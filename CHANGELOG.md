@@ -5,24 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.1] - 2026-08-22
+
+### Changed
+- **HotIron 2.0.1 identity.** Product name, GitHub slug `chris-piekarski/hotiron`, Java packages `hotiron.*`, module `src/hotiron`, launchers `hotiron.sh` / `hotiron.cmd`, window title, MCP `serverInfo.name`, and docs IA (`operator.md`, `agents.md`, `hardware.md`, `develop.md`). License stays GPLv3; derived from pavsa’s analyzer. Operator still needs to leave the GitHub fork network and rename the remote repo.
+- ASCII **HotIron** wordmark on the README, `make help`, `make info`, and the Linux/Windows launchers. Not printed on the MCP stdio proxy.
+- Branding copy and product console lines use ham lingo (QSY / QRV / QRT / copy) without changing MCP tool names.
 
 ### Added
-- **TV watch** (ATSC 1.0): US ch **2–36** overlay and sidebar **Watch**. Parks the HackRF at 16 MS/s with an 8 MHz analog bandwidth, demodulates 8VSB (vendored GNU Radio `gr-dtv`) to MPEG-TS, and shows MPEG-2 video (host `ffmpeg`) in the 16:9 TV-tuner preview while the waterfall remains VIDEO · ±8 MHz IQ. AC-3 uses the same Pulse/Java Sound sink as Listen. HUD is **ATSC lock** + SNR or **no ATSC lock**. MCP `sweep_config` reports `radioMode=watch` and `tvChannel`. Needs `ffmpeg` on `PATH`. HackRF is 8-bit — weak indoor VHF often will not lock; UHF 14–36 is the usual bet.
+- `make test` runs `atsc_selftest` and `sweep_power_average_selftest` with **gcov**; summary at `src/hotiron/obj/gcov/coverage.txt`. Release `.so` is not instrumented.
+- Quick Select **All** scans the full 1–7250 MHz selectable range; use coarse FFT bins for practical update rates.
+- **TV watch** (ATSC 1.0): US ch **2–36** overlay and sidebar **Watch**. Parks the HackRF at 16 MS/s with an 8 MHz analog bandwidth, demodulates 8VSB (vendored GNU Radio `gr-dtv`) to MPEG-TS, and shows MPEG-2 video (host `ffmpeg`) in the 16:9 TV-tuner preview. The same parked IQ drives the main ±8 MHz RF chart, VIDEO waterfall, and MCP `tv_spectrum`. AC-3 uses the same Pulse/Java Sound sink as Listen. HUD is **ATSC lock** + SNR or **no ATSC lock**. MCP `sweep_config` reports `radioMode=watch` and `tvChannel`. Needs `ffmpeg` on `PATH`. HackRF is 8-bit — weak indoor VHF often will not lock; UHF 14–36 is the usual bet.
 - Sidebar and status bar **MCP** status: bind (`127.0.0.1:8765`), connected clients (from `initialize.clientInfo`), last tool, or **off** / **failed**.
-- **Listen**: park the HackRF on a US FM dial and play mono audio (click a **97.3** header tag or the Listen control). An analog-style **knob** jumps between detected stations (right = higher MHz). The tuned station is a gold cursor on the spectrum. The waterfall panel shows a live **audio** spectrum (0–16 kHz) of the demodulated FM. Stops the RF sweep; **Restart** or Listen again resumes it. MCP `sweep_config` reports `radioMode` and `listenMHz`.
+- **Listen**: park the HackRF on a US FM dial and play mono audio (click a **97.3** header tag or the Listen control). An analog-style **knob** jumps between detected stations (right = higher MHz). The main chart shows the live ±2 MHz local RF spectrum from the same parked 4 MS/s IQ, while the waterfall remains the demodulated 0–16 kHz audio spectrum. MCP `fm_spectrum` publishes that dBFS RF view. Stops the wideband sweep; **Restart** or Listen again resumes it. MCP `sweep_config` reports `radioMode` and `listenMHz`.
 - MCP write tools `fm_listen` (`mhz` 88.1–107.9) and `tv_watch` (`channel` 2–36) park the same exclusive RF path as the UI. `sweep_config` also reports `tvLocked` / `tvSnrDb` / `tvPackets`.
 - MCP `tv_debug` and `tv_debug_history` expose the live ATSC stage, IQ/AGC levels, segment/field sync, RS error ratio, equalizer taps, PAT/frame state, and queue continuity.
 - MCP `spectrum_occupancy` (emitters above noise+8 dB, width, optional Wi-Fi `ch N` label) and `spectrum_history` (ring of summaries, new series on MHz/FFT change). `spectrum_summary` now includes `occupiedFraction` and `emitterCount`.
 
 ### Changed
 - Watch keeps the **same waterfall strip and split** as Listen (**VIDEO · ±8 MHz** IQ at 16 MS/s). Decoded ATSC video is a 16:9 preview **under Watching ch N** in the TV tuner, not on the waterfall.
-- Window title is **Spectrum Analyzer** (board name stays in the sidebar).
+- Window title is **HotIron** (board name stays in the sidebar).
 - Sweep range is one readout (type `88-108`, pan, zoom) instead of two Frequency start/end digit wheels. Quick Select and plot drag/scroll still set the same window.
-- Docs and GitHub about/topics present the app as an **MCP interface for AI agents** on a live HackRF sweep (same JVM as the GUI). New [docs/mcp.md](docs/mcp.md).
-- `src/hackrf-sweep` layout: Maven-standard Java tree (`src/main/{java,resources}`, `src/test/java`). Drop Eclipse CDT files, duplicate CSVs, unused Ant/JNAerator/32-bit/Zadig binaries. POM is indented, plugins version-pinned, `groupId` is `io.github.chris-piekarski`.
+- Docs and GitHub about/topics present the app as an **MCP interface for AI agents** on a live HackRF sweep (same JVM as the GUI). See [docs/agents.md](docs/agents.md).
+- `src/hotiron` layout: Maven-standard Java tree (`src/main/{java,resources}`, `src/test/java`). Drop Eclipse CDT files, duplicate CSVs, unused Ant/JNAerator/32-bit/Zadig binaries. POM is indented, plugins version-pinned, `groupId` is `io.github.chris-piekarski`.
 
 ### Fixed
+- **Number of samples** now controls sweep dwell instead of being a no-op: 8192 uses one firmware block; larger choices request multiple blocks at each tuning frequency and average their FFTs in linear power before publishing. Sweep latency grows with the selected sample count while FFT-bin resolution remains unchanged.
 - Watch 8VSB front-end matches GNU Radio `atsc_rx`: a 16-phase RRC filters **before** decimation, then FPLL → long-form DC blocker → AGC ref 4 → 8-tap MMSE timing → sync…RS. The old linear decimator aliased discarded wideband samples, its 4-point cubic timing shim was not GNU Radio's MMSE interpolator, and decision-directed equalizer updates diverged from upstream field-only LMS. A recursive NCO, SIMD equalizer, and 16 MS/s / 8 MHz capture keep this chain near real time while preserving 1 MHz guard around the ATSC brick. Double-precision AGC avoids stalling at gain 1024; the UHF RF seed now targets ~0.25 ADC RMS (40 dB LNA + 22 dB VGA) without clipping.
 - Watch could starve `ffmpeg` without ever painting a decoded frame: the equalizer started with all-zero taps (muted trellis), field-sync flushed the convolutional deinterleaver, and a 64-packet output buffer stopped native processing partway through every ~106-packet HackRF transfer. Center-tap init + continuous deinterleaving + a full-transfer TS buffer + start decode after a CRC-valid MPEG PAT. Queue overflow now drops stale backlog and recreates the full decoder instead of carrying invalid trellis state across an IQ gap. Watch also retries conjugated IQ when the first RF polarity cannot reach field sync, and FFmpeg teardown no longer deadlocks behind a full stdin pipe. Live MPEG-2 picture was verified on RF channels 28 and 33.
 - Listen no longer slides the spectrum’s right-hand dB color bar: audio waterfall uses its own dBFS window; the RF palette stays on the plot axis.

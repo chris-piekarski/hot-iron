@@ -1,4 +1,4 @@
-# Contributing to hackrf-spectrum-analyzer
+# Contributing to hotiron
 
 Please see the detailed contributing guide:
 

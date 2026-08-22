@@ -9,7 +9,7 @@ flowchart LR
     D --> F[Agent: MCP tools on :8765]
 ```
 
-Turn a HackRF into a live spectrum analyzer **and** an MCP endpoint for local AI agents. You watch the waterfall. The agent queries the same bins.
+Turn a HackRF into **HotIron**: live waterfall, QSY to Listen/Watch, **and** MCP so local agents copy the RF bins.
 
 ## What you need
 
@@ -38,19 +38,19 @@ The sidebar shows the board name, short serial, and firmware when the radio open
 ## If you already have a zip / installer
 
 1. **Windows**: install the WinUSB driver with Zadig if Windows has not claimed the device. Run the `.cmd` launcher in the package.
-2. **Linux**: set udev rules ([hackrf-setup.md](hackrf-setup.md)), then run the launcher script.
+2. **Linux**: set udev rules ([hackrf-setup.md](hardware.md)), then run the launcher script.
 
 ## First run
 
 - Plug the radio in before you click around. The sweep starts on its own. **Auto gain** and **auto-scale dB** are on by default.
-- **Quick Select** jumps to common bands (Wi‑Fi, LTE, FM, amateur 2 m / 70 cm, …). Hover a button for the MHz range. Details: [usage.md](usage.md).
+- **Quick Select** jumps to common bands (Wi‑Fi, LTE, FM, amateur 2 m / 70 cm, …). Hover a button for the MHz range. Details: [usage.md](operator.md).
 - **Antenna LNA +14 dB** turns on the amplifier on the radio. Use it when the signal is weak; skip it on strong local transmitters.
 - Changing the sweep range (Quick Select, the range readout, or plot zoom), gain, or FFT bin retunes automatically.
-- Attach an agent with the stdio proxy — **[MCP for AI agents](mcp.md)**.
+- Attach an agent with the stdio proxy — **[MCP for AI agents](agents.md)**.
 
 ## Next
 
-- [MCP for AI agents](mcp.md) — read tools, Listen/Watch controls, diagnostics, client config
-- [Usage](usage.md) — buttons, gain, and the status line
-- [Radio setup](hackrf-setup.md) — firmware, udev, Zadig
-- [Development](development.md) — if you are changing the code
+- [MCP for AI agents](agents.md) — read tools, Listen/Watch controls, diagnostics, client config
+- [Usage](operator.md) — buttons, gain, and the status line
+- [Radio setup](hardware.md) — firmware, udev, Zadig
+- [Development](develop.md) — if you are changing the code

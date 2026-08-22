@@ -12,14 +12,14 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-HACKRF_C="$ROOT/src/hackrf-sweep/lib/hackrf/host/libhackrf/src/hackrf.c"
-HACKRF_H_DIR="$ROOT/src/hackrf-sweep/lib/hackrf/host/libhackrf/src"
-USB_INC="$ROOT/src/hackrf-sweep/lib/libusb-1.0.21/include/libusb-1.0"
-SPIFLASH_C="$ROOT/src/hackrf-sweep/lib/hackrf/host/hackrf-tools/src/hackrf_spiflash.c"
-CACHE="$ROOT/src/hackrf-sweep/build/firmware-cache"
-TOOL="$ROOT/src/hackrf-sweep/build/hackrf_spiflash"
-LIST_C="$ROOT/src/hackrf-sweep/src-c/hackrf_list.c"
-HELPER="$ROOT/src/hackrf-sweep/build/hackrf-list"
+HACKRF_C="$ROOT/src/hotiron/lib/hackrf/host/libhackrf/src/hackrf.c"
+HACKRF_H_DIR="$ROOT/src/hotiron/lib/hackrf/host/libhackrf/src"
+USB_INC="$ROOT/src/hotiron/lib/libusb-1.0.21/include/libusb-1.0"
+SPIFLASH_C="$ROOT/src/hotiron/lib/hackrf/host/hackrf-tools/src/hackrf_spiflash.c"
+CACHE="$ROOT/src/hotiron/build/firmware-cache"
+TOOL="$ROOT/src/hotiron/build/hackrf_spiflash"
+LIST_C="$ROOT/src/hotiron/src-c/hackrf_list.c"
+HELPER="$ROOT/src/hotiron/build/hackrf-list"
 
 CONFIRM=${CONFIRM:-0}
 VERSION=${VERSION:-}
@@ -140,7 +140,7 @@ import json, os, ssl, urllib.request
 url = "https://api.github.com/repos/greatscottgadgets/hackrf/releases/latest"
 req = urllib.request.Request(url, headers={
     "Accept": "application/vnd.github+json",
-    "User-Agent": "hackrf-spectrum-analyzer-firmware-update",
+    "User-Agent": "hotiron-firmware-update",
 })
 token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 if token:
@@ -201,7 +201,7 @@ echo
 
 build_tool() {
 	command -v gcc >/dev/null 2>&1 || die "gcc required to build hackrf_spiflash"
-	[ -f "$SPIFLASH_C" ] && [ -f "$HACKRF_C" ] || die "hackrf sources missing (git submodule update --init src/hackrf-sweep/lib/hackrf)"
+	[ -f "$SPIFLASH_C" ] && [ -f "$HACKRF_C" ] || die "hackrf sources missing (git submodule update --init src/hotiron/lib/hackrf)"
 	if [ -x "$TOOL" ] && [ "$TOOL" -nt "$SPIFLASH_C" ] && [ "$TOOL" -nt "$HACKRF_C" ]; then
 		return 0
 	fi

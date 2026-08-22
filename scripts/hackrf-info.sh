@@ -5,17 +5,20 @@
 # Set HACKRF_INFO_NO_NET=1 to skip the GitHub latest-release check.
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-HACKRF_C="$ROOT/src/hackrf-sweep/lib/hackrf/host/libhackrf/src/hackrf.c"
-HACKRF_H_DIR="$ROOT/src/hackrf-sweep/lib/hackrf/host/libhackrf/src"
-HACKRF_DIR="$ROOT/src/hackrf-sweep/lib/hackrf"
-LIST_C="$ROOT/src/hackrf-sweep/src-c/hackrf_list.c"
-USB_INC="$ROOT/src/hackrf-sweep/lib/libusb-1.0.21/include/libusb-1.0"
-HELPER="$ROOT/src/hackrf-sweep/build/hackrf-list"
+if [ -t 1 ] && [ -f "$ROOT/scripts/hotiron-banner.sh" ]; then
+	sh "$ROOT/scripts/hotiron-banner.sh"
+fi
+HACKRF_C="$ROOT/src/hotiron/lib/hackrf/host/libhackrf/src/hackrf.c"
+HACKRF_H_DIR="$ROOT/src/hotiron/lib/hackrf/host/libhackrf/src"
+HACKRF_DIR="$ROOT/src/hotiron/lib/hackrf"
+LIST_C="$ROOT/src/hotiron/src-c/hackrf_list.c"
+USB_INC="$ROOT/src/hotiron/lib/libusb-1.0.21/include/libusb-1.0"
+HELPER="$ROOT/src/hotiron/build/hackrf-list"
 USB_DESC="$HACKRF_DIR/firmware/hackrf_usb/usb_descriptor.c"
-VERSION_JAVA="$ROOT/src/hackrf-sweep/src/main/java/jspectrumanalyzer/Version.java"
-POM="$ROOT/src/hackrf-sweep/pom.xml"
-MAKEFILE_SWEEP="$ROOT/src/hackrf-sweep/Makefile"
-QUERY_JAVA="$ROOT/src/hackrf-sweep/src/main/java/jspectrumanalyzer/nativebridge/HackRFDeviceQuery.java"
+VERSION_JAVA="$ROOT/src/hotiron/src/main/java/hotiron/Version.java"
+POM="$ROOT/src/hotiron/pom.xml"
+MAKEFILE_SWEEP="$ROOT/src/hotiron/Makefile"
+QUERY_JAVA="$ROOT/src/hotiron/src/main/java/hotiron/nativebridge/HackRFDeviceQuery.java"
 
 product_name() {
 	case "$1" in
@@ -202,7 +205,7 @@ else
 	echo "  Firmware not read: no libhackrf helper and hackrf_info not in PATH."
 	if [ ! -f "$HACKRF_C" ]; then
 		echo "  Init the hackrf submodule to build the helper:"
-		echo "    git submodule update --init src/hackrf-sweep/lib/hackrf"
+		echo "    git submodule update --init src/hotiron/lib/hackrf"
 	fi
 	echo "  Or install the official tool: sudo apt install hackrf"
 fi
@@ -246,7 +249,7 @@ else:
     url = "https://api.github.com/repos/greatscottgadgets/hackrf/releases/latest"
     req = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
-        "User-Agent": "hackrf-spectrum-analyzer-make-info",
+        "User-Agent": "hotiron-make-info",
     })
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token:

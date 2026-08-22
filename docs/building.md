@@ -11,7 +11,7 @@ make help          # Explore all targets
 make deps          # Install all required packages (Ubuntu/Debian)
 make build         # Full build (natives + JAR + release zip)
 make start         # Build (if needed) + run the Linux app
-make mcp           # GUI + MCP for AI agents (127.0.0.1:8765) — see docs/mcp.md
+make mcp           # GUI + MCP for AI agents (127.0.0.1:8765) — see docs/agents.md
 ```
 
 This is the easiest path on Ubuntu/Debian.
@@ -67,7 +67,7 @@ sudo apt install \
 | `start`         | Launch the Linux app                |
 | `run`           | Alias for `start`                   |
 
-### Inside `src/hackrf-sweep/`
+### Inside `src/hotiron/`
 
 Run `make help` inside this directory for advanced / low-level targets:
 
@@ -80,13 +80,13 @@ Run `make help` inside this directory for advanced / low-level targets:
 
 After a successful build you will find:
 
-- `src/hackrf-sweep/build/hackrf-spectrum-analyzer/` — runnable tree with launcher + `lib/`
+- `src/hotiron/build/hotiron/` — runnable tree with launcher + `lib/`
 - `release/` — cross-platform release zip (Linux and Windows launchers/native libraries, if `zip_file` ran)
 
 ## Cross-Compilation Notes
 
 - Linux build produces both the Linux `.so` **and** the Windows `.dll` (using mingw-w64).
-- The hackrf submodule is automatically reset to v2026.01.3 and patched during build (`HACKRF_SDK_PIN` in `src/hackrf-sweep/Makefile`).
+- The hackrf submodule is automatically reset to v2026.01.3 and patched during build (`HACKRF_SDK_PIN` in `src/hotiron/Makefile`).
 - The Java fat JAR is built with Maven (`maven-assembly-plugin`); there is no Ant or Eclipse JAR export.
 - Windows x86_64 cross-link uses vendored `lib/fftw-3.3.5-dll64` and `lib/libusb-1.0.21/MinGW64`. Linux links system libusb/fftw.
 
@@ -96,6 +96,6 @@ After a successful build you will find:
 - UI fails with a headless JRE → install `openjdk-21-jdk` (not `-headless`).
 - Java older than 21 → the launcher prints the required version and exits.
 - Submodule not initialized → run `git submodule update --init --recursive`.
-- Permission issues on Linux → see [hackrf-setup.md](hackrf-setup.md) for udev rules (also needed at runtime).
+- Permission issues on Linux → see [hackrf-setup.md](hardware.md) for udev rules (also needed at runtime).
 
 For the most current instructions, always run `make help` rather than relying solely on this document.

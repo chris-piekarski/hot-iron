@@ -17,9 +17,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs" / "stats.md"
-JAVA_MAIN = ROOT / "src/hackrf-sweep/src/main/java"
-JAVA_TEST = ROOT / "src/hackrf-sweep/src/test/java"
-SRC_C = ROOT / "src/hackrf-sweep/src-c"
+JAVA_MAIN = ROOT / "src/hotiron/src/main/java"
+JAVA_TEST = ROOT / "src/hotiron/src/test/java"
+SRC_C = ROOT / "src/hotiron/src-c"
 DOCS = ROOT / "docs"
 SCRIPTS = ROOT / "scripts"
 ATSC_VENDOR_DIRS = (
@@ -177,18 +177,18 @@ def parse_pin(text: str, pattern: str) -> str:
 
 
 def metadata() -> dict:
-    pom = (ROOT / "src/hackrf-sweep/pom.xml").read_text(encoding="utf-8", errors="replace")
-    mk = (ROOT / "src/hackrf-sweep/Makefile").read_text(encoding="utf-8", errors="replace")
-    ver = (ROOT / "src/hackrf-sweep/src/main/java/jspectrumanalyzer/Version.java").read_text(
+    pom = (ROOT / "src/hotiron/pom.xml").read_text(encoding="utf-8", errors="replace")
+    mk = (ROOT / "src/hotiron/Makefile").read_text(encoding="utf-8", errors="replace")
+    ver = (ROOT / "src/hotiron/src/main/java/hotiron/Version.java").read_text(
         encoding="utf-8", errors="replace"
     )
     query = (
-        ROOT / "src/hackrf-sweep/src/main/java/jspectrumanalyzer/nativebridge/HackRFDeviceQuery.java"
+        ROOT / "src/hotiron/src/main/java/hotiron/nativebridge/HackRFDeviceQuery.java"
     ).read_text(encoding="utf-8", errors="replace")
     presets = (
-        ROOT / "src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/QuickSelectPreset.java"
+        ROOT / "src/hotiron/src/main/java/hotiron/ui/QuickSelectPreset.java"
     ).read_text(encoding="utf-8", errors="replace")
-    freq_usa = ROOT / "src/hackrf-sweep/src/main/resources/freq-usa.csv"
+    freq_usa = ROOT / "src/hotiron/src/main/resources/freq-usa.csv"
     alloc_rows = 0
     if freq_usa.is_file():
         alloc_rows = max(0, sum(1 for _ in freq_usa.open(encoding="utf-8", errors="replace")) - 1)
@@ -305,7 +305,7 @@ make stats
 python3 scripts/repo-stats.py
 ```
 
-Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{{lib,fec,shim}}` GNU Radio/libfec), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
+Vendor trees (`src/hotiron/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{{lib,fec,shim}}` GNU Radio/libfec), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
 
 ## Snapshot
 
@@ -357,7 +357,7 @@ Tests (`src/test/java`): **{test['files']}** files, **{test['lines']}** lines.
 | Makefile | Documented / named targets |
 |---|---|
 | Root | {len(root_targets)} ({', '.join('`'+t+'`' for t in root_targets)}) |
-| `src/hackrf-sweep` | {len(sub_targets)} |
+| `src/hotiron` | {len(sub_targets)} |
 
 ## Diagrams
 
@@ -371,7 +371,7 @@ Tests (`src/test/java`): **{test['files']}** files, **{test['lines']}** lines.
 
 {chr(10).join(largest)}
 
-`HackRFSweepSpectrumAnalyzer.java` is the Swing shell. Prefer growing `core/` and tests rather than this class.
+`HotIron.java` is the Swing shell. Prefer growing `core/` and tests rather than this class.
 
 ## Git authors
 
@@ -398,7 +398,7 @@ def main() -> int:
         "c": count_dir(SRC_C, ["*.c", "*.cc", "*.cpp", "*.h", "*.patch"], ATSC_VENDOR_DIRS),
         "mermaid": mermaid_inventory(),
         "root_targets": makefile_targets(ROOT / "Makefile"),
-        "sub_targets": makefile_targets(ROOT / "src/hackrf-sweep/Makefile"),
+        "sub_targets": makefile_targets(ROOT / "src/hotiron/Makefile"),
         "largest": largest_java(),
         "git": git_info(),
         "meta": metadata(),

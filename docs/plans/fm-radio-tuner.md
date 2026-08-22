@@ -25,6 +25,7 @@ One RF path. **Listening stops the sweep.** Pause still only freezes the plot. S
 - [x] Hardware IT listen start/stop then resume sweep
 - [x] Live listen on FM Quick Select with speakers (relaunch the GUI)
 - [x] Analog knob jumps detected stations; spectrum highlights the tuned station
+- [x] Main chart + MCP `fm_spectrum` show live local ±2 MHz RF from the parked IQ stream
 
 ## Non-goals (v1)
 
