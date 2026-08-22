@@ -40,7 +40,7 @@ make test
 
 Rules the suite still follows:
 
-- Java 8 source/target (`var` forbidden).
+- Java 21 source/target; existing Java 8-style syntax remains acceptable.
 - JUnit 5, no Mockito. Synthetic `DatasetSpectrum` / `FFTBins`.
 - Same-package access to `protected` peak fields; reflection only for private clocks on `PersistentDisplay`.
 - Swing tests flush the EDT (`SwingUtilities.invokeAndWait`) because `MVCController.updateView` is `invokeLater`.

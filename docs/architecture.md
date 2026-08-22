@@ -45,7 +45,7 @@ These are the best candidates for unit testing (and have the majority of our tes
 - `src-c/atsc/` — ATSC 1.0 RX (`atsc_rx_create` / `process` / `destroy`): GNU Radio `gr-dtv` inner loops + Phil Karn `libfec`, no GR runtime.
 - `HackRFSweepNativeBridge.java` / `HackRFFmNativeBridge.java` + hand-maintained `HackrfSweepLibrary.java` (`make jnabridge` does not regenerate it)
 - The build process resets the hackrf submodule to `HACKRF_SDK_PIN` (v2026.01.3) and applies the patch.
-- Sweep, FM listen, and ATSC watch are exclusive. `WfmDemodulator` (Java) turns int8 IQ into 48 kHz mono PCM. Watch reuses parked IQ at 20 MS/s (`hackrf_fm_lib_*`, `TvChannelPlan`). `IqSpectrum` FFTs that IQ into the **same** `WaterfallPlot` strip Listen uses (VIDEO banner, original split). Decoded frames (IQ preview, then MPEG-2) go to a 16:9 box on `TvTunerPanel`. Native `atsc_rx_*` in `libhackrf-sweep` (vendored GNU Radio `gr-dtv` 8VSB + libfec) emits MPEG-TS; `MpegTsPlayer` runs host `ffmpeg` for MPEG-2 `bgr24` frames and AC-3 → 48 kHz PCM on `AudioSink`.
+- Sweep, FM listen, and ATSC watch are exclusive. `WfmDemodulator` (Java) turns int8 IQ into 48 kHz mono PCM. Watch reuses parked IQ at 16 MS/s through an 8 MHz analog filter (`hackrf_fm_lib_*`, `TvChannelPlan`); UHF auto gain starts at LNA 40 dB + VGA 22 dB. `IqSpectrum` FFTs that IQ into the **same** `WaterfallPlot` strip Listen uses (VIDEO banner, original split). Decoded frames (IQ preview, then MPEG-2) go to a 16:9 box on `TvTunerPanel`. Native `atsc_rx_*` in `libhackrf-sweep` (vendored GNU Radio `gr-dtv` 8VSB + libfec) emits MPEG-TS; `MpegTsPlayer` runs host `ffmpeg` for MPEG-2 `bgr24` frames and AC-3 → 48 kHz PCM on `AudioSink`. `tv_debug` / `tv_debug_history` expose stage diagnostics without opening another RF path.
 
 ### UI Layer
 - Swing + FlatLaf + JFreeChart.
@@ -53,7 +53,7 @@ These are the best candidates for unit testing (and have the majority of our tes
 - `HackRFSweepSettingsUI`, Quick Select (`QuickSelectPreset`), `SweepStatusBar`, radio identity (board / serial / firmware), MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen and Watch both keep `WaterfallPlot` (AUDIO / VIDEO banners) at the same split.
 
 ### MCP (`jspectrumanalyzer/mcp/`)
-Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked`), `fm_stations`, `spectrum_occupancy`, `spectrum_history`. Writes: `fm_listen` (US FM dial) and `tv_watch` (US ATSC ch 2–36). Hop holes are omitted. Stdio clients use `scripts/mcp-spectrum-proxy.py`.
+Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked`), `fm_stations`, `spectrum_occupancy`, `spectrum_history`, `tv_debug`, `tv_debug_history`. Writes: `fm_listen` (US FM dial) and `tv_watch` (US ATSC ch 2–36). Hop holes are omitted. Stdio clients use `scripts/mcp-spectrum-proxy.py`.
 
 ### Build System
 - Root `Makefile` — convenience targets (`make help`, `make test`, `make start`, etc.).
@@ -85,7 +85,8 @@ sequenceDiagram
     Engine->>DSP: filter peaks persist
     Engine->>UI: hooks update displays
     Engine->>Store: immutable snapshot copy
-    MCP->>Store: tools/call (read-only)
+    MCP->>Store: read snapshots and diagnostics
+    MCP->>Analyzer: explicit fm_listen / tv_watch
 ```
 
 ## Testing Strategy

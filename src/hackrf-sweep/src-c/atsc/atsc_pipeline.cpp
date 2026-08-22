@@ -8,6 +8,8 @@
  * IQ must be processed in realtime or RS never locks.
  */
 #include "atsc_rx.h"
+#include "atsc_dc_blocker.h"
+#include "atsc_rx_filter.h"
 
 #include "atsc_deinterleaver_impl.h"
 #include "atsc_derandomizer_impl.h"
@@ -18,7 +20,6 @@
 #include "atsc_sync_impl.h"
 #include "atsc_viterbi_decoder_impl.h"
 #include <gnuradio/dtv/atsc_consts.h>
-#include <gnuradio/math.h>
 
 #include <algorithm>
 #include <cmath>
@@ -39,54 +40,14 @@ static constexpr int LOCK_WIN = 64;
 static constexpr int DC_D = 4096;
 static constexpr float AGC_RATE = 1e-5f;
 static constexpr float AGC_REF = 4.f;
-static constexpr double RRC_ALPHA = 0.1152;
-static constexpr int RRC_SYMS = 8;
-
-static std::vector<float> rrc_taps(double fs, double baud, double alpha, int ntaps)
-{
-	if ((ntaps & 1) == 0)
-		ntaps++;
-	std::vector<float> t(ntaps);
-	const double spb = fs / baud;
-	double scale = 0;
-	const double mid = ntaps / 2.0;
-	for (int i = 0; i < ntaps; i++) {
-		const double xindx = i - mid;
-		const double x1 = GR_M_PI * xindx / spb;
-		const double x2 = 4 * alpha * xindx / spb;
-		if (xindx == 0) {
-			t[i] = (float) (1 + alpha * (4 / GR_M_PI - 1));
-		} else if (std::fabs(std::fabs(x1) - GR_M_PI / (4 * alpha)) < 1e-8) {
-			double v = (1 + 2 / GR_M_PI) * std::sin(GR_M_PI / (4 * alpha)) +
-				   (1 - 2 / GR_M_PI) * std::cos(GR_M_PI / (4 * alpha));
-			t[i] = (float) (alpha / std::sqrt(2.0) * v);
-		} else {
-			const double num = std::cos((1 + alpha) * x1) +
-					   std::sin((1 - alpha) * x1) / (4 * alpha * xindx / spb);
-			const double den = 1 - x2 * x2;
-			t[i] = (float) (4 * alpha / GR_M_PI * num / den);
-		}
-		scale += t[i];
-	}
-	if (std::fabs(scale) < 1e-12)
-		scale = 1;
-	for (float& v : t)
-		v = (float) (v / scale);
-	return t;
-}
 
 struct AtscRx
 {
 	double in_rate;
 	double out_rate;
-	double acc = 0;
-	float agc_ff = 1.f;
-	std::vector<float> rrc;
-	std::vector<std::complex<float>> rrc_hist;
-	int rrc_i = 0;
-	std::vector<float> dc_d;
-	int dc_i = 0;
-	double dc_acc = 0;
+	double agc_ff = 1.0;
+	AtscRxFilter rx_filter;
+	AtscDcBlocker dc_blocker;
 	gr::dtv::atsc_fpll_impl fpll;
 	gr::dtv::atsc_sync_impl sync;
 	gr::dtv::atsc_fs_checker_impl fsc;
@@ -95,8 +56,6 @@ struct AtscRx
 	gr::dtv::atsc_deinterleaver_impl dei;
 	gr::dtv::atsc_rs_decoder_impl rsd;
 	gr::dtv::atsc_derandomizer_impl der;
-	std::vector<std::complex<float>> in_iq;
-	size_t in_off = 0;
 	std::vector<std::complex<float>> rs;
 	std::vector<float> fpll_out;
 	std::vector<float> bb;
@@ -124,20 +83,20 @@ struct AtscRx
 	double sum_bb2 = 0;
 	long n_iq = 0;
 	long n_bb = 0;
+	uint64_t total_iq = 0;
+	float last_rms_iq = 0;
+	float last_rms_bb = 0;
+	float equalizer_main_tap = 0;
+	float equalizer_peak_tap = 0;
 	int lvl[4]{};
 	int invert = 0;
 
 	explicit AtscRx(double rate)
 		: in_rate(rate > 1e6 ? rate : 20e6), out_rate(ATSC_SYMBOL_RATE * SPS),
+		  rx_filter(in_rate, out_rate), dc_blocker(DC_D),
 		  fpll((float) (ATSC_SYMBOL_RATE * SPS)), sync((float) (ATSC_SYMBOL_RATE * SPS))
 	{
-		const double baud = ATSC_SYMBOL_RATE / 2.0;
-		int ntaps = (int) ((2 * RRC_SYMS + 1) * (out_rate / baud));
-		rrc = rrc_taps(out_rate, baud, RRC_ALPHA, ntaps);
-		rrc_hist.assign(rrc.size(), { 0.f, 0.f });
-		dc_d.assign(DC_D, 0.f);
 		bb.reserve(1 << 16);
-		in_iq.reserve(1 << 16);
 		rs.reserve(1 << 16);
 	}
 };
@@ -180,18 +139,42 @@ extern "C" int atsc_rx_bad_packets(void* rx)
 	return rx ? static_cast<AtscRx*>(rx)->rsd.num_bad_packets() : 0;
 }
 
-static void compact(std::vector<std::complex<float>>& v, size_t& off)
+extern "C" int atsc_rx_debug(void* rx, int64_t* counters, int counter_cap,
+		float* gauges, int gauge_cap)
 {
-	if (off == 0)
-		return;
-	if (off >= v.size())
-	{
-		v.clear();
-		off = 0;
-		return;
-	}
-	v.erase(v.begin(), v.begin() + (long) off);
-	off = 0;
+	if (!rx)
+		return 0;
+	AtscRx* r = static_cast<AtscRx*>(rx);
+	int64_t values[ATSC_RX_DEBUG_COUNTERS] = {
+			r->packets,
+			r->rsd.num_bad_packets(),
+			r->good,
+			r->segs_out,
+			r->fsc_out,
+			(int64_t) (r->bb.size() - r->bb_off),
+			r->lock_good,
+			r->lock_n,
+			r->invert,
+			(int64_t) r->total_iq
+	};
+	float ratio_db = r->lock_n > 8
+			? 10.f * std::log10(std::max(1e-3f, (float) r->lock_good / r->lock_n))
+			: 0.f;
+	float measurements[ATSC_RX_DEBUG_GAUGES] = {
+			(float) r->agc_ff,
+			r->last_rms_iq,
+			r->last_rms_bb,
+			ratio_db,
+			r->equalizer_main_tap,
+			r->equalizer_peak_tap
+	};
+	if (counters && counter_cap > 0)
+		memcpy(counters, values, (size_t) std::min(counter_cap, ATSC_RX_DEBUG_COUNTERS)
+				* sizeof(values[0]));
+	if (gauges && gauge_cap > 0)
+		memcpy(gauges, measurements, (size_t) std::min(gauge_cap, ATSC_RX_DEBUG_GAUGES)
+				* sizeof(measurements[0]));
+	return 1;
 }
 
 static void bb_consume(AtscRx* r, int n)
@@ -355,54 +338,19 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 	AtscRx* r = static_cast<AtscRx*>(rx);
 	int n = nbytes & ~1;
 	int npairs = n / 2;
-	r->in_iq.reserve(r->in_iq.size() + (size_t) npairs);
+	r->total_iq += (uint64_t) npairs;
 	for (int i = 0; i < npairs; i++)
 	{
-		float qi = iq[2 * i + 1] / 128.f;
-		if (r->invert)
-			qi = -qi;
-		std::complex<float> c(iq[2 * i] / 128.f, qi);
-		r->sum_iq2 += (double) (c.real() * c.real() + c.imag() * c.imag());
+		float fi = iq[2 * i] / 128.f;
+		float fq = iq[2 * i + 1] / 128.f;
+		r->sum_iq2 += (double) (fi * fi + fq * fq);
 		r->n_iq++;
-		r->in_iq.push_back(c);
 	}
 
-	double step = r->in_rate / r->out_rate;
 	r->rs.clear();
-	double acc = r->acc + (double) r->in_off;
-	int nsrc = (int) r->in_iq.size();
-	while (acc + 1 < nsrc)
-	{
-		int i0 = (int) acc;
-		float mu = (float) (acc - i0);
-		r->rs.push_back((1.f - mu) * r->in_iq[i0] + mu * r->in_iq[i0 + 1]);
-		acc += step;
-	}
-	r->in_off = (size_t) acc;
-	r->acc = acc - (double) r->in_off;
-	if (r->in_off > 8192)
-		compact(r->in_iq, r->in_off);
-
+	r->rx_filter.process_int8(iq, (size_t) npairs, r->invert != 0, r->rs);
 	if (r->rs.empty())
 		return 0;
-
-	const int nt = (int) r->rrc.size();
-	for (size_t i = 0; i < r->rs.size(); i++)
-	{
-		r->rrc_hist[r->rrc_i] = r->rs[i];
-		std::complex<float> y(0.f, 0.f);
-		int hi = r->rrc_i;
-		for (int k = 0; k < nt; k++)
-		{
-			y += r->rrc_hist[hi] * r->rrc[k];
-			if (--hi < 0)
-				hi = nt - 1;
-		}
-		r->rrc_i++;
-		if (r->rrc_i >= nt)
-			r->rrc_i = 0;
-		r->rs[i] = y;
-	}
 
 	r->fpll_out.resize(r->rs.size());
 	gr::gr_vector_const_void_star fins{ r->rs.data() };
@@ -411,17 +359,13 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 	for (float s : r->fpll_out)
 	{
 		/* GNU Radio atsc_rx: dc_blocker_ff(4096) then agc_ff(1e-5, 4.0). */
-		float old = r->dc_d[r->dc_i];
-		r->dc_d[r->dc_i] = s;
-		r->dc_i = (r->dc_i + 1) % DC_D;
-		r->dc_acc += (double) s - (double) old;
-		float ac = s - (float) (r->dc_acc / DC_D);
-		float out = ac * r->agc_ff;
-		r->agc_ff += AGC_RATE * (AGC_REF - std::fabs(out));
-		if (r->agc_ff < 1e-4f)
-			r->agc_ff = 1e-4f;
-		if (r->agc_ff > 400.f)
-			r->agc_ff = 400.f;
+		float ac = r->dc_blocker.filter(s);
+		float out = ac * (float) r->agc_ff;
+		r->agc_ff += (double) AGC_RATE * (AGC_REF - std::fabs(out));
+		if (r->agc_ff < 1e-4)
+			r->agc_ff = 1e-4;
+		if (r->agc_ff > 65536.0)
+			r->agc_ff = 65536.0;
 		r->bb.push_back(out);
 		r->sum_bb2 += (double) (out * out);
 		r->n_bb++;
@@ -444,9 +388,18 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 			snr = 10.f * std::log10(std::max(1e-3f, (float) r->lock_good / (float) r->lock_n));
 		float rms_iq = r->n_iq ? (float) std::sqrt(r->sum_iq2 / r->n_iq) : 0;
 		float rms_bb = r->n_bb ? (float) std::sqrt(r->sum_bb2 / r->n_bb) : 0;
+		r->last_rms_iq = rms_iq;
+		r->last_rms_bb = rms_bb;
+		std::vector<float> eq_taps = r->equ.taps();
+		r->equalizer_main_tap = eq_taps.size() > 51 ? eq_taps[51] : 0.f;
+		r->equalizer_peak_tap = 0.f;
+		for (float tap : eq_taps)
+			r->equalizer_peak_tap = std::max(r->equalizer_peak_tap, std::fabs(tap));
 		fprintf(stderr,
-				"atsc_rx: locked=%d packets=%d good=%d (+%d) segs=%d fsc=%d snr=%.1f rms_iq=%.4f rms_bb=%.2f bb=%zu pat=%d psip=%d null=%d other=%d lvl=%d/%d/%d/%d\n",
-				r->locked, r->packets, r->good, dgood, r->segs_out, r->fsc_out, snr, rms_iq, rms_bb,
+				"atsc_rx: locked=%d packets=%d bad=%d good=%d (+%d) segs=%d fsc=%d rs_good_db=%.1f agc=%.1f rms_iq=%.4f rms_bb=%.2f eq_main=%.4f eq_peak=%.4f inv=%d bb=%zu pat=%d psip=%d null=%d other=%d lvl=%d/%d/%d/%d\n",
+				r->locked, r->packets, r->rsd.num_bad_packets(), r->good, dgood,
+				r->segs_out, r->fsc_out, snr, r->agc_ff, rms_iq, rms_bb,
+				r->equalizer_main_tap, r->equalizer_peak_tap, r->invert,
 				r->bb.size() - r->bb_off, r->pid_pat, r->pid_psip, r->pid_null, r->pid_other,
 				r->lvl[0], r->lvl[1], r->lvl[2], r->lvl[3]);
 		r->log_in = 0;

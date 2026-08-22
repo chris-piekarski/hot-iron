@@ -23,6 +23,12 @@ import hackrfsweep.HackrfSweepLibrary;
 public final class TvWatchEngine
 {
 	public static final int QUEUE_CAP = 128;
+	static final int TS_PACKET_BYTES = 188;
+	static final int TS_OUTPUT_PACKETS = 128;
+	static final long POLARITY_RETRY_MS = 12_000;
+	static final int DEBUG_COUNTERS = 10;
+	static final int DEBUG_GAUGES = 6;
+	static final long DEBUG_INTERVAL_MS = 200;
 
 	private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(QUEUE_CAP);
 	private final AtomicLong bytes = new AtomicLong();
@@ -37,6 +43,7 @@ public final class TvWatchEngine
 	private volatile boolean locked;
 	private volatile float snrDb;
 	private volatile int packets;
+	private volatile TvWatchDebug debug = TvWatchDebug.empty();
 	private Consumer<BufferedImage> onFrame;
 	private AudioSink sink;
 	private Thread worker;
@@ -48,6 +55,7 @@ public final class TvWatchEngine
 	private volatile boolean sawPat;
 	private FileOutputStream tsDump;
 	private int dumpLeft;
+	private boolean inverted;
 
 	public synchronized void start(Consumer<BufferedImage> onFrame, AudioSink sink)
 	{
@@ -69,16 +77,11 @@ public final class TvWatchEngine
 		queue.clear();
 		openDump();
 		run = true;
-		try
-		{
-			HackrfSweepLibrary.class.getName();
-			rx = HackrfSweepLibrary.atsc_rx_create(TvChannelPlan.IQ_RATE_HZ);
-		}
-		catch (UnsatisfiedLinkError e)
-		{
-			System.err.println("ATSC watch: native 8VSB missing (" + e.getMessage() + ")");
-			rx = null;
-		}
+		inverted = false;
+		rx = createReceiver(false);
+		debug = new TvWatchDebug(startMs, true, rx != null, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0);
 		worker = new Thread(this::loop, "atsc-8vsb");
 		worker.setDaemon(true);
 		worker.setPriority(Thread.MAX_PRIORITY);
@@ -138,6 +141,7 @@ public final class TvWatchEngine
 		if (s != null)
 			s.close();
 		locked = false;
+		debug = TvWatchDebug.empty();
 	}
 
 	public void setVolume(int volume0to100)
@@ -180,6 +184,11 @@ public final class TvWatchEngine
 		return preview.frames();
 	}
 
+	public TvWatchDebug debug()
+	{
+		return debug;
+	}
+
 	public boolean hasPat()
 	{
 		return sawPat;
@@ -195,6 +204,11 @@ public final class TvWatchEngine
 		return iqSpectrum;
 	}
 
+	static boolean shouldRetryPolarity(boolean hasPat, int packetCount, long elapsedMs)
+	{
+		return !hasPat && packetCount == 0 && elapsedMs >= POLARITY_RETRY_MS;
+	}
+
 	public boolean offerIq(byte[] iq)
 	{
 		if (!run || iq == null || iq.length == 0)
@@ -204,7 +218,13 @@ public final class TvWatchEngine
 		if (queue.offer(iq))
 			return true;
 		dropped.incrementAndGet();
-		return false;
+		/*
+		 * Staying behind is worse than losing this backlog: trellis and
+		 * deinterleaver state cannot cross the sample gap. Resume from the
+		 * newest chunk and let the worker recreate the complete receiver.
+		 */
+		queue.clear();
+		return queue.offer(iq);
 	}
 
 	public long bytesOffered()
@@ -255,8 +275,19 @@ public final class TvWatchEngine
 
 	private void loop()
 	{
-		byte[] ts = new byte[188 * 64];
+		/*
+		 * One 262144-byte HackRF transfer contains about 106 ATSC data
+		 * segments at 16 MS/s. A 64-packet buffer made the native pipeline
+		 * stop mid-transfer, permanently accumulating unprocessed segments.
+		 */
+		byte[] ts = new byte[TS_PACKET_BYTES * TS_OUTPUT_PACKETS];
 		FloatByReference snr = new FloatByReference();
+		long[] debugCounters = new long[DEBUG_COUNTERS];
+		float[] debugGauges = new float[DEBUG_GAUGES];
+		PatDetector patDetector = new PatDetector();
+		long lastDebugMs = 0;
+		long polaritySince = System.currentTimeMillis();
+		long receiverDrops = dropped.get();
 		while (run)
 		{
 			byte[] chunk;
@@ -271,6 +302,27 @@ public final class TvWatchEngine
 			if (chunk == null)
 				continue;
 			Pointer p = rx;
+			long currentDrops = dropped.get();
+			if (p != null && currentDrops != receiverDrops)
+			{
+				Pointer replacement = createReceiver(inverted);
+				if (replacement != null)
+				{
+					rx = replacement;
+					HackrfSweepLibrary.atsc_rx_destroy(p);
+					p = replacement;
+					receiverDrops = currentDrops;
+					player.stop();
+					sawPat = false;
+					patDetector.reset();
+					locked = false;
+					snrDb = 0;
+					packets = 0;
+					polaritySince = System.currentTimeMillis();
+					System.err.println("ATSC watch: reset receiver after IQ drop " + currentDrops);
+					continue;
+				}
+			}
 			int n = 0;
 			if (p != null)
 				n = HackrfSweepLibrary.atsc_rx_process(p, chunk, chunk.length, ts, ts.length, snr);
@@ -290,7 +342,7 @@ public final class TvWatchEngine
 				int nbytes = n - (n % 188);
 				dumpTs(ts, nbytes);
 				if (!sawPat)
-					sawPat = containsPat(ts, nbytes);
+					sawPat = patDetector.accept(ts, nbytes);
 				if (sawPat)
 				{
 					if (!player.running())
@@ -299,14 +351,76 @@ public final class TvWatchEngine
 				}
 			}
 			long now = System.currentTimeMillis();
+			if (now - lastDebugMs >= DEBUG_INTERVAL_MS)
+			{
+				lastDebugMs = now;
+				try
+				{
+					if (HackrfSweepLibrary.atsc_rx_debug(p, debugCounters, debugCounters.length,
+							debugGauges, debugGauges.length) > 0)
+					{
+						debug = new TvWatchDebug(now, run, true, sawPat, locked,
+								debugCounters[8] != 0, debugCounters[0], debugCounters[1],
+								debugCounters[2], debugCounters[3], debugCounters[4],
+								debugCounters[5], debugCounters[6], debugCounters[7],
+								debugCounters[9], dropped.get(), queue.size(), player.frames(),
+								preview.frames(), debugGauges[0], debugGauges[1],
+								debugGauges[2], debugGauges[3], debugGauges[4],
+								debugGauges[5]);
+					}
+				}
+				catch (UnsatisfiedLinkError ignored)
+				{
+				}
+			}
+			if (p != null && shouldRetryPolarity(sawPat, packets, now - polaritySince))
+			{
+				boolean nextInverted = !inverted;
+				Pointer replacement = createReceiver(nextInverted);
+				if (replacement != null)
+				{
+					rx = replacement;
+					HackrfSweepLibrary.atsc_rx_destroy(p);
+					inverted = nextInverted;
+					locked = false;
+					snrDb = 0;
+					packets = 0;
+					patDetector.reset();
+					polaritySince = now;
+					System.err.println("ATSC watch: retrying IQ polarity "
+							+ (inverted ? "inverted" : "normal"));
+				}
+			}
 			if (now - lastLogMs > 2000)
 			{
 				lastLogMs = now;
-				System.err.println("ATSC watch: locked=" + locked + " packets=" + packets + " snr="
+				TvWatchDebug d = debug;
+				System.err.println("ATSC watch: stage=" + d.stage() + " locked=" + locked
+						+ " packets=" + packets + " bad=" + d.badPackets + " good=" + d.goodPackets + " snr="
 						+ String.format(java.util.Locale.US, "%.1f", snrDb) + " dB dropped="
 						+ dropped.get() + " pat=" + sawPat + " frames=" + player.frames()
-						+ " preview=" + preview.frames());
+						+ " preview=" + preview.frames() + " agc="
+						+ String.format(java.util.Locale.US, "%.1f", d.agcGain)
+						+ " rmsIq=" + String.format(java.util.Locale.US, "%.4f", d.rmsIq)
+						+ " rmsBb=" + String.format(java.util.Locale.US, "%.2f", d.rmsBaseband));
 			}
+		}
+	}
+
+	private Pointer createReceiver(boolean invert)
+	{
+		try
+		{
+			HackrfSweepLibrary.class.getName();
+			Pointer created = HackrfSweepLibrary.atsc_rx_create(TvChannelPlan.IQ_RATE_HZ);
+			if (created != null)
+				HackrfSweepLibrary.atsc_rx_set_invert(created, invert ? 1 : 0);
+			return created;
+		}
+		catch (UnsatisfiedLinkError e)
+		{
+			System.err.println("ATSC watch: native 8VSB missing (" + e.getMessage() + ")");
+			return null;
 		}
 	}
 
@@ -392,17 +506,120 @@ public final class TvWatchEngine
 
 	static boolean containsPat(byte[] ts, int n)
 	{
-		if (ts == null)
-			return false;
-		int lim = n - (n % 188);
-		for (int i = 0; i + 188 <= lim; i += 188)
+		return new PatDetector().accept(ts, n);
+	}
+
+	static final class PatDetector
+	{
+		private final byte[] section = new byte[1024];
+		private int filled;
+		private int expected = -1;
+		private int lastContinuity = -1;
+		private boolean collecting;
+
+		void reset()
 		{
-			if (ts[i] != 0x47)
-				continue;
-			int pid = ((ts[i + 1] & 0x1f) << 8) | (ts[i + 2] & 0xff);
-			if (pid == 0)
-				return true;
+			resetSection();
+			lastContinuity = -1;
 		}
-		return false;
+
+		boolean accept(byte[] ts, int n)
+		{
+			if (ts == null)
+				return false;
+			int lim = Math.min(n, ts.length);
+			lim -= lim % 188;
+			for (int packet = 0; packet + 188 <= lim; packet += 188)
+			{
+				if (ts[packet] != 0x47)
+					continue;
+				int pid = ((ts[packet + 1] & 0x1f) << 8) | (ts[packet + 2] & 0xff);
+				int adaptation = (ts[packet + 3] >>> 4) & 0x03;
+				if (pid != 0 || adaptation == 0 || adaptation == 2)
+					continue;
+				int continuity = ts[packet + 3] & 0x0f;
+				if (lastContinuity >= 0 && continuity != ((lastContinuity + 1) & 0x0f))
+					resetSection();
+				lastContinuity = continuity;
+				int payload = packet + 4;
+				if (adaptation == 3)
+				{
+					if (payload >= packet + 188)
+						continue;
+					payload += 1 + (ts[payload] & 0xff);
+				}
+				if (payload >= packet + 188)
+					continue;
+				boolean unitStart = (ts[packet + 1] & 0x40) != 0;
+				if (unitStart)
+				{
+					int pointer = ts[payload] & 0xff;
+					int sectionStart = payload + 1 + pointer;
+					if (collecting && pointer > 0
+							&& append(ts, payload + 1, Math.min(sectionStart, packet + 188)))
+						return true;
+					resetSection();
+					if (sectionStart < packet + 188)
+					{
+						collecting = true;
+						if (append(ts, sectionStart, packet + 188))
+							return true;
+					}
+				}
+				else if (collecting && append(ts, payload, packet + 188))
+					return true;
+			}
+			return false;
+		}
+
+		private boolean append(byte[] data, int start, int end)
+		{
+			while (start < end && collecting)
+			{
+				if (filled >= section.length)
+				{
+					resetSection();
+					return false;
+				}
+				section[filled++] = data[start++];
+				if (filled == 3)
+				{
+					int sectionLength = ((section[1] & 0x0f) << 8) | (section[2] & 0xff);
+					if (section[0] != 0x00 || (section[1] & 0x80) == 0
+							|| sectionLength < 9 || sectionLength > 1021)
+					{
+						resetSection();
+						return false;
+					}
+					expected = 3 + sectionLength;
+				}
+				if (expected > 0 && filled == expected)
+				{
+					boolean valid = mpegCrc32(section, 0, expected) == 0;
+					resetSection();
+					return valid;
+				}
+			}
+			return false;
+		}
+
+		private void resetSection()
+		{
+			filled = 0;
+			expected = -1;
+			collecting = false;
+		}
+	}
+
+	static int mpegCrc32(byte[] data, int offset, int length)
+	{
+		int crc = 0xffffffff;
+		for (int i = 0; i < length; i++)
+		{
+			crc ^= (data[offset + i] & 0xff) << 24;
+			for (int bit = 0; bit < 8; bit++)
+				crc = (crc & 0x80000000) != 0 ? (crc << 1) ^ 0x04c11db7 : crc << 1;
+		}
+		return crc;
 	}
 }

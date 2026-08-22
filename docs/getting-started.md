@@ -19,7 +19,8 @@ Turn a HackRF into a live spectrum analyzer **and** an MCP endpoint for local AI
 
 ### Software
 - Java 21+ with a desktop (OpenJDK / Temurin — not a headless JRE)
-- To build on Linux: Maven, GCC, mingw-w64 (for the Windows natives), libusb and FFTW — see [building.md](building.md)
+- To build on Linux: Maven, GCC/G++ with C++17, mingw-w64 (for Windows natives), libusb, FFTW, and `zip` — see [building.md](building.md)
+- For TV Watch: host `ffmpeg`; audio playback also needs PulseAudio/PipeWire (`libpulse0` on Ubuntu/Debian)
 
 ## Fastest path
 
@@ -49,7 +50,7 @@ The sidebar shows the board name, short serial, and firmware when the radio open
 
 ## Next
 
-- [MCP for AI agents](mcp.md) — tools, client config, read-only v1
+- [MCP for AI agents](mcp.md) — read tools, Listen/Watch controls, diagnostics, client config
 - [Usage](usage.md) — buttons, gain, and the status line
 - [Radio setup](hackrf-setup.md) — firmware, udev, Zadig
 - [Development](development.md) — if you are changing the code

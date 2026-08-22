@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Refresh docs/stats.md from the working tree. Invoked by `make stats`.
 
-Counts first-party sources only. Vendor trees (lib/hackrf, libusb, FFTW),
-Maven target/, and native build/obj dirs are excluded so the numbers stay
-about *this* project, not the SDK submodule.
+Counts first-party sources only. Vendor trees (lib/hackrf, libusb, FFTW,
+ATSC GNU Radio/libfec), Maven target/, and native build/obj dirs are excluded
+so the numbers stay about *this* project, not imported dependencies.
 """
 from __future__ import annotations
 
@@ -22,6 +22,11 @@ JAVA_TEST = ROOT / "src/hackrf-sweep/src/test/java"
 SRC_C = ROOT / "src/hackrf-sweep/src-c"
 DOCS = ROOT / "docs"
 SCRIPTS = ROOT / "scripts"
+ATSC_VENDOR_DIRS = (
+    SRC_C / "atsc/lib",
+    SRC_C / "atsc/fec",
+    SRC_C / "atsc/shim",
+)
 
 SKIP_DIR_NAMES = {
     ".git",
@@ -82,7 +87,7 @@ def count_java_tree(root: Path) -> dict:
     return {"files": files, "lines": lines, "packages": dict(by_pkg)}
 
 
-def count_dir(root: Path, globs: list[str]) -> tuple[int, int]:
+def count_dir(root: Path, globs: list[str], skip_roots: tuple[Path, ...] = ()) -> tuple[int, int]:
     files = lines = 0
     if not root.exists():
         return 0, 0
@@ -92,6 +97,8 @@ def count_dir(root: Path, globs: list[str]) -> tuple[int, int]:
             if not path.is_file() or path in seen:
                 continue
             if any(p in SKIP_DIR_NAMES for p in path.parts):
+                continue
+            if any(path.is_relative_to(skip) for skip in skip_roots):
                 continue
             seen.add(path)
             n, _, _ = physical_lines(path)
@@ -275,7 +282,7 @@ def render(md: dict) -> str:
             pie_slice("Java main", main["lines"]),
             pie_slice("Java test", test["lines"]),
             pie_slice("Docs", docs_lines),
-            pie_slice("Scripts + first-party C", scripts_lines + c_lines),
+            pie_slice("Scripts + first-party C/C++", scripts_lines + c_lines),
             "```",
         ]
     )
@@ -298,7 +305,7 @@ make stats
 python3 scripts/repo-stats.py
 ```
 
-Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
+Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{{lib,fec,shim}}` GNU Radio/libfec), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
 
 ## Snapshot
 
@@ -343,7 +350,7 @@ Tests (`src/test/java`): **{test['files']}** files, **{test['lines']}** lines.
 |---|---:|---:|
 | Docs (`docs/`) | {docs_files} | {docs_lines} |
 | Scripts (`scripts/`) | {scripts_files} | {scripts_lines} |
-| First-party C / patch (`src-c/`) | {c_files} | {c_lines} |
+| First-party C/C++ / patch (`src-c/`) | {c_files} | {c_lines} |
 
 ## Build surface
 
@@ -388,7 +395,7 @@ def main() -> int:
         "tests": test_inventory(),
         "docs": count_dir(DOCS, ["*.md"]),
         "scripts": count_dir(SCRIPTS, ["*.sh", "*.py", "*.rules"]),
-        "c": count_dir(SRC_C, ["*.c", "*.h", "*.patch"]),
+        "c": count_dir(SRC_C, ["*.c", "*.cc", "*.cpp", "*.h", "*.patch"], ATSC_VENDOR_DIRS),
         "mermaid": mermaid_inventory(),
         "root_targets": makefile_targets(ROOT / "Makefile"),
         "sub_targets": makefile_targets(ROOT / "src/hackrf-sweep/Makefile"),

@@ -55,10 +55,10 @@ public final class MpegTsPlayer
 		writer = null;
 		if (w != null)
 			w.interrupt();
-		closeQuiet(videoIn);
-		closeQuiet(audioIn);
-		videoIn = null;
-		audioIn = null;
+		/*
+		 * Break a writer blocked in a full OS pipe before closing its
+		 * OutputStream. Closing first can wait forever for the write lock.
+		 */
 		if (video != null)
 		{
 			video.destroyForcibly();
@@ -83,6 +83,10 @@ public final class MpegTsPlayer
 				Thread.currentThread().interrupt();
 			}
 		}
+		closeQuiet(videoIn);
+		closeQuiet(audioIn);
+		videoIn = null;
+		audioIn = null;
 		video = null;
 		audio = null;
 		tsQ.clear();

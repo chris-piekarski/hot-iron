@@ -14,8 +14,8 @@ public final class TvChannelPlan
 	public static final int LAST_FCC_CHANNEL = 36;
 	public static final int WIDTH_MHZ = 6;
 	public static final double PILOT_OFFSET_MHZ = 0.31;
-	/** 20 MS/s so the analog BB filter is 10 MHz and the 6 MHz ATSC brick is not Nyquist-cropped. */
-	public static final int IQ_RATE_HZ = 20_000_000;
+	/** 16 MS/s with an 8 MHz analog filter leaves 1 MHz guard around the 6 MHz ATSC brick. */
+	public static final int IQ_RATE_HZ = 16_000_000;
 	public static final float DETECT_MARGIN_DB = 8f;
 	public static final float NOISE_PERCENTILE = 0.20f;
 

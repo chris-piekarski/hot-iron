@@ -16,6 +16,16 @@ int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* ts_out, int
 int atsc_rx_locked(void* rx);
 int atsc_rx_packets(void* rx);
 int atsc_rx_bad_packets(void* rx);
+/*
+ * Debug schema v1.
+ * counters: packets, bad, good, segments, fieldSegments, pendingBaseband,
+ *           rsGoodWindow, rsWindow, inverted, totalIqSamples
+ * gauges:   agcGain, rmsIq, rmsBaseband, rsGoodRatioDb,
+ *           equalizerMainTap, equalizerPeakTap
+ */
+#define ATSC_RX_DEBUG_COUNTERS 10
+#define ATSC_RX_DEBUG_GAUGES 6
+int atsc_rx_debug(void* rx, int64_t* counters, int counter_cap, float* gauges, int gauge_cap);
 
 #ifdef __cplusplus
 }

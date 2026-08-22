@@ -1,6 +1,6 @@
 # FM radio tuner (listen via HackRF)
 
-**Status:** in progress (unit tests green; native `.so` has `hackrf_fm_lib_*`; live listen needs relaunch)  
+**Status:** done 2026-08-22 (live FM Listen and listen→sweep hardware IT verified)
 **Started:** 2026-08-20
 
 ## Goal
@@ -19,16 +19,16 @@ One RF path. **Listening stops the sweep.** Pause still only freezes the plot. S
 - [x] `src-c/hackrf_fm.c` + JNA + Makefile `SOURCES`
 - [x] `RadioMode` on `AnalyzerSettings` + launcher sequencing
 - [x] Hardware strip Listen + frequency + volume; header-tag click; HUD
-- [x] MCP `sweep_config` `radioMode` / `listenMHz` (read-only; no `fm_listen`)
+- [x] MCP `sweep_config` `radioMode` / `listenMHz` + `fm_listen` write tool
 - [x] Docs: usage, architecture, mcp, hackrf-setup, CHANGELOG, AGENTS
-- [x] `make test` 287/287
-- [ ] Hardware IT listen start/stop then resume sweep (needs exclusive USB)
+- [x] `make test` green
+- [x] Hardware IT listen start/stop then resume sweep
 - [x] Live listen on FM Quick Select with speakers (relaunch the GUI)
 - [x] Analog knob jumps detected stations; spectrum highlights the tuned station
 
 ## Non-goals (v1)
 
-Stereo, RDS, NBFM/AM/SSB, simultaneous spectrum+audio, GNU Radio, MCP write tools, WAV.
+Stereo, RDS, NBFM/AM/SSB, simultaneous spectrum+audio, GNU Radio, WAV.
 
 ## DSP
 

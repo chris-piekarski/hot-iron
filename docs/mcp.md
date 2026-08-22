@@ -23,12 +23,14 @@ Start it with `make mcp`. Point the agent at `scripts/mcp-spectrum-proxy.py`. As
 | What radio is attached (board, serial, firmware, USB API)? | `radio_identity` |
 | What is the radio vs display config (range, FFT, gain, `radioMode`, `tvChannel`, `tvLocked`)? | `sweep_config` |
 | Park Watch on a US ATSC channel (2–36) | `tv_watch` |
+| Where is ATSC Watch failing (IQ, segment/field sync, RS, PAT, FFmpeg)? | `tv_debug` |
+| How have those ATSC stages changed over recent samples? | `tv_debug_history` |
 | Park Listen on a US FM dial (88.1–107.9) | `fm_listen` |
 | Which US FM dial hits are live right now? | `fm_stations` |
 | What is occupying the window (width, fraction, Wi-Fi ch)? | `spectrum_occupancy` |
 | How did peak/noise/occupancy move over the last few seconds? | `spectrum_history` |
 
-Hop holes are **omitted**, not reported as −150 dBm. Snapshots are sampled at most **10 Hz**. `spectrum_history` returns **summaries** from the ring (~20 s), not full bin arrays, and starts a new series when the MHz/FFT window changes. Occupancy is deterministic (noise+8 dB, merge adjacent bins); Wi-Fi views may label `ch 6`. `tv_watch` and `fm_listen` park the same exclusive RF path the operator uses (US TV ch 2–36, or FM 88.1–107.9). Gain and sweep range stay operator-only. `sweep_config` includes `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`, `tvSnrDb`, and `tvPackets`. While listening or watching, snapshots and `fm_stations` are stale (no full sweeps).
+Hop holes are **omitted**, not reported as −150 dBm. Snapshots are sampled at most **10 Hz**. `spectrum_history` returns **summaries** from the ring (~20 s), not full bin arrays, and starts a new series when the MHz/FFT window changes. Occupancy is deterministic (noise+8 dB, merge adjacent bins); Wi-Fi views may label `ch 6`. `tv_watch` and `fm_listen` park the same exclusive RF path the operator uses (US TV ch 2–36, or FM 88.1–107.9). Gain and sweep range stay operator-only. `sweep_config` includes `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`, `tvSnrDb`, and `tvPackets`. `tv_debug` labels the current failing stage (`no_segment_sync`, `no_field_sync`, `rs_unusable`, `no_pat`, `ffmpeg_waiting`, or `picture`) and exposes queue, AGC, equalizer, and packet-error measurements. `tv_debug_history` returns up to 200 recent diagnostic samples. While listening or watching, RF snapshots and `fm_stations` are stale (no full sweeps).
 
 ## Start
 

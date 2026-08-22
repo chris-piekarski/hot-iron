@@ -45,4 +45,9 @@ public class HackrfSweepLibrary implements Library {
 	public static native int atsc_rx_locked(Pointer rx);
 
 	public static native int atsc_rx_packets(Pointer rx);
+
+	public static native int atsc_rx_bad_packets(Pointer rx);
+
+	public static native int atsc_rx_debug(Pointer rx, long[] counters, int counterCap,
+			float[] gauges, int gaugeCap);
 }

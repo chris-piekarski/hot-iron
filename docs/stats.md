@@ -2,7 +2,7 @@
 
 # Repository stats
 
-Refreshed **2026-08-19 18:58 UTC** from `04b8e1e` on `master` (last commit 2026-08-19 12:57:28 -0600).
+Refreshed **2026-08-22 19:29 UTC** from `da2236f` on `master` (last commit 2026-08-22 02:01:31 -0600).
 
 Regenerate:
 
@@ -12,7 +12,7 @@ make stats
 python3 scripts/repo-stats.py
 ```
 
-Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
+Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{lib,fec,shim}` GNU Radio/libfec), `target/`, and `build/` are **excluded**. These numbers describe first-party code and docs.
 
 ## Snapshot
 
@@ -24,43 +24,43 @@ Vendor trees (`src/hackrf-sweep/lib/hackrf`, libusb, FFTW), `target/`, and `buil
 | Minimum firmware | `2024.02.1` |
 | Quick Select presets | 15 |
 | USA allocation rows | 574 |
-| Git commits on this branch | 101 |
-| First-party lines (all counted trees) | 18206 |
+| Git commits on this branch | 112 |
+| First-party lines (all counted trees) | 27807 |
 
 ```mermaid
 pie showData
     title First-party physical lines
-    "Java main" : 10209
-    "Java test" : 4894
-    "Docs" : 1374
-    "Scripts + first-party C" : 1729
+    "Java main" : 16394
+    "Java test" : 6735
+    "Docs" : 1607
+    "Scripts + first-party C/C++" : 3071
 ```
 
 ## Java by area
 
-Production (`src/main/java`): **69** files, **10209** lines.
+Production (`src/main/java`): **103** files, **16394** lines.
 
 | Package | Files | Lines |
 |---|---:|---:|
-| `jspectrumanalyzer/core` | 32 | 3889 |
-| `jspectrumanalyzer/ui` | 20 | 2656 |
-| `jspectrumanalyzer` | 2 | 1552 |
-| `jspectrumanalyzer/mcp` | 5 | 1159 |
-| `jspectrumanalyzer/nativebridge` | 3 | 343 |
+| `jspectrumanalyzer/core` | 57 | 7495 |
+| `jspectrumanalyzer/ui` | 28 | 4165 |
+| `jspectrumanalyzer` | 2 | 1932 |
+| `jspectrumanalyzer/mcp` | 5 | 1754 |
+| `jspectrumanalyzer/nativebridge` | 4 | 408 |
 | `jspectrumanalyzer/capture` | 2 | 282 |
 | `shared/mvc` | 2 | 244 |
 | `jspectrumanalyzer/core/jfc` | 2 | 61 |
-| `hackrfsweep` | 1 | 23 |
+| `hackrfsweep` | 1 | 53 |
 
-Tests (`src/test/java`): **64** files, **4894** lines.
+Tests (`src/test/java`): **85** files, **6735** lines.
 
 | Package | Files | Lines |
 |---|---:|---:|
-| `jspectrumanalyzer/core` | 27 | 2148 |
-| `jspectrumanalyzer/ui` | 19 | 1301 |
-| `jspectrumanalyzer/hw` | 5 | 553 |
-| `jspectrumanalyzer/mcp` | 3 | 261 |
-| `jspectrumanalyzer` | 3 | 252 |
+| `jspectrumanalyzer/core` | 42 | 3283 |
+| `jspectrumanalyzer/ui` | 23 | 1626 |
+| `jspectrumanalyzer/hw` | 6 | 621 |
+| `jspectrumanalyzer/mcp` | 4 | 507 |
+| `jspectrumanalyzer` | 3 | 319 |
 | `shared/mvc` | 2 | 186 |
 | `jspectrumanalyzer/nativebridge` | 1 | 83 |
 | `jspectrumanalyzer/core/jfc` | 3 | 74 |
@@ -70,11 +70,11 @@ Tests (`src/test/java`): **64** files, **4894** lines.
 
 | Kind | Count |
 |---|---:|
-| Unit test classes (`@Test`, not `*IT`) | 58 |
-| `@Test` methods (unit + hardware IT) | 263 |
+| Unit test classes (`@Test`, not `*IT`) | 78 |
+| `@Test` methods (unit + hardware IT) | 362 |
 | Hardware IT classes (`*IT`) | 1 |
-| `@HardwareTest` methods | 7 |
-| Support types (fakes, annotations, helpers) | 5 |
+| `@HardwareTest` methods | 8 |
+| Support types (fakes, annotations, helpers) | 6 |
 
 `make test` runs the unit classes only. `make test-hw` runs the hardware IT and skips if no radio is enumerated.
 
@@ -82,9 +82,9 @@ Tests (`src/test/java`): **64** files, **4894** lines.
 
 | Tree | Files | Lines |
 |---|---:|---:|
-| Docs (`docs/`) | 13 | 1374 |
-| Scripts (`scripts/`) | 7 | 1156 |
-| First-party C / patch (`src-c/`) | 3 | 573 |
+| Docs (`docs/`) | 16 | 1607 |
+| Scripts (`scripts/`) | 7 | 1163 |
+| First-party C/C++ / patch (`src-c/`) | 11 | 1908 |
 
 ## Build surface
 
@@ -95,7 +95,7 @@ Tests (`src/test/java`): **64** files, **4894** lines.
 
 ## Diagrams
 
-13 Mermaid fences in first-party Markdown. Check they still parse with `make mermaid`.
+14 Mermaid fences in first-party Markdown. Check they still parse with `make mermaid`.
 
 | File | Type |
 |---|---|
@@ -111,12 +111,13 @@ Tests (`src/test/java`): **64** files, **4894** lines.
 | `docs/development.md` | `sequenceDiagram` |
 | `docs/getting-started.md` | `flowchart` |
 | `docs/hackrf-setup.md` | `flowchart` |
+| `docs/mcp.md` | `flowchart` |
 | `docs/usage.md` | `flowchart` |
 
 ```mermaid
 pie showData
     title Mermaid diagrams by type
-    "flowchart" : 10
+    "flowchart" : 11
     "sequenceDiagram" : 2
     "classDiagram" : 1
 ```
@@ -125,14 +126,14 @@ pie showData
 
 | File | Lines |
 |---|---:|
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/HackRFSweepSpectrumAnalyzer.java` | 1545 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/HackRFSweepSettingsUI.java` | 577 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/WaterfallPlot.java` | 465 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/mcp/SpectrumSnapshot.java` | 388 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/AnalyzerSettings.java` | 319 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/DatasetSpectrum.java` | 280 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/PersistentDisplay.java` | 270 |
-| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/mcp/McpJson.java` | 266 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/HackRFSweepSpectrumAnalyzer.java` | 1925 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/WaterfallPlot.java` | 747 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/HackRFSweepSettingsUI.java` | 687 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/TvWatchEngine.java` | 625 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/AnalyzerSettings.java` | 430 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/mcp/SpectrumSnapshot.java` | 428 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/mcp/SpectrumSnapshotStore.java` | 378 |
+| `src/hackrf-sweep/src/main/java/jspectrumanalyzer/mcp/SpectrumMcpServer.java` | 372 |
 
 `HackRFSweepSpectrumAnalyzer.java` is the Swing shell. Prefer growing `core/` and tests rather than this class.
 
@@ -140,9 +141,9 @@ pie showData
 
 | Author | Commits |
 |---|---:|
+| Chris Piekarski | 32 |
 | Pavol Sakac | 27 |
 | selabnayr | 24 |
-| Chris Piekarski | 21 |
 | _sekki | 12 |
 | pavsa | 10 |
 | Christopher Piekarski | 3 |

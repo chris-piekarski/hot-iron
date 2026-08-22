@@ -13,13 +13,13 @@ Living implementation plans live here so later work (and agents) can pick them u
 
 | Plan | Notes |
 |---|---|
-| [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. 8VSB + ffmpeg video in the waterfall slot; hardware IT still open. |
-| [FM radio tuner](fm-radio-tuner.md) | In progress 2026-08-20. Listen mode stops the sweep; mono WFM via HackRF IQ. |
+| [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; hardware IT still open. |
 
 ## Done
 
 | Plan | Outcome |
 |---|---|
 | [Unit test coverage](unit-test-coverage.md) | Done 2026-08-17. `make test` 104/104. Project **56.1%** lines, `core` **90.2%**. |
-| [Hardware integration tests](hardware-integration-tests.md) | Done 2026-08-17. Gated `make test-hw` (7 ITs, including `SpectrumSweepEngine` queue + dataset). `make test` stays radio-free. |
+| [Hardware integration tests](hardware-integration-tests.md) | Done; updated 2026-08-22. Gated `make test-hw` (8 ITs, including sweep queue/dataset and FM Listen→sweep resume). `make test` stays radio-free. |
 | [Java 21 + FlatLaf UI](java-21-ui.md) | Done 2026-08-18. Java 21 floor, FlatDarkLaf, library bumps. `make test` 119/119, `make test-hw` 7/7. |
+| [FM radio tuner](fm-radio-tuner.md) | Done 2026-08-22. Live mono WFM Listen plus parked-IQ→sweep resume hardware IT verified. |

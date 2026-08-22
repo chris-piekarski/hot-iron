@@ -11,7 +11,7 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational.svg)](docs/building.md)
 [![Last commit](https://img.shields.io/github/last-commit/chris-piekarski/hackrf-spectrum-analyzer/master)](https://github.com/chris-piekarski/hackrf-spectrum-analyzer/commits/master)
 
-A Java 21 desktop analyzer for the [HackRF One](https://greatscottgadgets.com/hackrf/) with a **Model Context Protocol** server on the same JVM that holds the radio. You get the spectrum and waterfall. Grok, Claude, Cursor, or any MCP client gets `spectrum_summary`, snapshots, FM stations, and radio identity — **without a second USB open**.
+A Java 21 desktop analyzer for the [HackRF One](https://greatscottgadgets.com/hackrf/) with a **Model Context Protocol** server on the same JVM that holds the radio. You get spectrum, waterfall, FM Listen, and live ATSC 1.0 Watch. Grok, Claude, Cursor, or any MCP client can inspect the same RF data, park Listen/Watch, and diagnose the ATSC pipeline — **without a second USB open**.
 
 ```bash
 make mcp    # GUI + MCP on 127.0.0.1:8765
@@ -21,6 +21,8 @@ Full agent setup: **[docs/mcp.md](docs/mcp.md)**.
 
 ![HackRF Spectrum Analyzer](screenshot.png)
 
+*Live ATSC Watch with a decoded MPEG-2 frame in the TV-tuner preview.*
+
 This is a maintained fork of [pavsa/hackrf-spectrum-analyzer](https://github.com/pavsa/hackrf-spectrum-analyzer).
 
 ## Why MCP
@@ -29,16 +31,18 @@ This is a maintained fork of [pavsa/hackrf-spectrum-analyzer](https://github.com
 |---|---|
 | **Same bins as the plot** | Snapshots come from `onFullSweepProcessed`, not screenshots or log scrape |
 | **One radio** | MCP is in-process; a second `hackrf_sweep` would steal USB |
-| **Agent-safe v1** | Read-only tools, localhost / stdio, hop holes omitted (not −150 dBm) |
+| **Local, explicit control** | Read tools plus `fm_listen` / `tv_watch`; localhost / stdio; hop holes omitted (not −150 dBm) |
 | **Operator-ready GUI** | Auto gain, auto-scale dB, waterfall time axis, Quick Select |
 
-Ask an attached agent: *peak and noise on this window? any live FM dial hits? what firmware is on the HackRF?*
+Ask an attached agent: *peak and noise on this window? any live FM dial hits? watch RF 28; where is ATSC failing? what firmware is on the HackRF?*
 
 ## What the GUI does
 
 - Sweeps a range and draws live spectrum + waterfall (time scale on the left)
 - **Quick Select** for Wi‑Fi, LTE, FM, TV, NFC, amateur 6m / 2m / 70 cm / 33 cm
 - Auto gain (default) and auto-scale dB so FM/Wi‑Fi peaks are readable
+- Mono broadcast-FM Listen with station seek and audio spectrum
+- ATSC 1.0 Watch with MPEG-2 preview, AC-3 audio, and stage diagnostics
 - Peak hold, persistent display, spur filter, EU/USA allocation overlays
 - Bias-tee and onboard **Antenna LNA +14 dB**
 - Sidebar: board, serial, firmware, Restart / Stop / CLKOUT
@@ -86,6 +90,7 @@ flowchart TD
 
 - A HackRF (One or compatible) with firmware **v2024.02.1** or newer. This app is built against host SDK **v2026.01.3**.
 - Java 21+ with a display (not a headless JRE)
+- `ffmpeg` on `PATH` for decoded ATSC video/audio
 
 Building also needs Maven and a C toolchain — see [building.md](docs/building.md).
 

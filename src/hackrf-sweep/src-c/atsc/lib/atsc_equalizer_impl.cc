@@ -96,7 +96,7 @@ void atsc_equalizer_impl::adaptN(const float* input_samples,
                                  float* output_samples,
                                  int nsamples)
 {
-    static const double BETA = 0.00015;
+    static const double BETA = 0.00005;
 
     for (int j = 0; j < nsamples; j++) {
         output_samples[j] = 0;
@@ -155,18 +155,6 @@ int atsc_equalizer_impl::general_work(int noutput_items,
             }
         } else {
             filterN(data_mem, data_mem2, ATSC_DATA_SEGMENT_LENGTH);
-            // Decision-directed LMS on data symbols (skip 4-symbol segment sync).
-            static const float BETA_DD = 5e-5f;
-            for (int j = 4; j < ATSC_DATA_SEGMENT_LENGTH; j++) {
-                float y = data_mem2[j];
-                float a = std::fabs(y);
-                float lev = (a >= 6.f) ? 7.f : (a >= 4.f) ? 5.f : (a >= 2.f) ? 3.f : 1.f;
-                float d = (y < 0.f) ? -lev : lev;
-                float e = y - d;
-                const float* in = &data_mem[j];
-                for (int k = 0; k < NTAPS; k++)
-                    d_taps[k] -= BETA_DD * e * in[k];
-            }
 
             memcpy(&out[output_produced * ATSC_DATA_SEGMENT_LENGTH],
                    data_mem2,

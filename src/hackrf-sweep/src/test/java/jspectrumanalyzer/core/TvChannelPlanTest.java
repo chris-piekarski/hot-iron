@@ -10,7 +10,7 @@ class TvChannelPlanTest {
 
 	@Test
 	void watchSampleRateLeavesRoomForTheSixMegahertzBrick() {
-		assertEquals(20_000_000, TvChannelPlan.IQ_RATE_HZ);
+		assertEquals(16_000_000, TvChannelPlan.IQ_RATE_HZ);
 		assertTrue(TvChannelPlan.IQ_RATE_HZ / 2 > TvChannelPlan.WIDTH_MHZ * 1_000_000);
 	}
 

@@ -10,22 +10,22 @@ make help
 
 ## Module layout (`src/hackrf-sweep`)
 
-This is a **hybrid JNI desktop module**, which is normal for wrapping C next to Java. Maven owns the Java tree; the Makefile owns natives and the release zip.
+This is a **hybrid JNA desktop module** with C and C++ natives next to Java. Maven owns the Java tree; the Makefile owns native builds and the cross-platform release zip.
 
 | Path | Role |
 |---|---|
-| `src/main/java`, `src/main/resources` | Maven Java sources and classpath data (`freq-*.csv`, icons) |
+| `src/main/java`, `src/main/resources` | Maven Java sources and classpath data (`freq-*.csv`) |
 | `src/test/java` | JUnit 5 (no radio) + `hw/*IT` behind `-Phardware` |
 | `pom.xml` | Java 21, Surefire, JaCoCo, fat JAR (`groupId` `io.github.chris-piekarski`) |
 | `Makefile` | Patch `lib/hackrf`, build `.so` / `.dll`, copy launchers, zip |
-| `src-c/` | Sweep-as-library patch, JNA header, and first-party `hackrf_fm.c` (parked IQ RX) |
+| `src-c/` | Sweep-as-library patch, native headers, parked-IQ `hackrf_fm.c`, and ATSC C/C++ (`atsc/`: GNU Radio shims + libfec) |
 | `lib/hackrf` | git submodule (SDK pin) |
-| `lib/fftw-3.3.5-dll64`, `lib/libusb-1.0.21` | Windows x86_64 cross-link only |
+| `lib/fftw-3.3.5-dll64`, `lib/libusb-1.0.21` | Vendored headers used by native compilation; Windows also cross-links these trees, while Linux links system libraries |
 | `lib/win32-x86-64/libwinpthread-1.dll` | Shipped next to the Windows sweep DLL |
-| `lib/launchers`, `lib/program.ico` | Start scripts and package icons |
+| `lib/launchers`, `lib/program.ico`, `lib/program.png` | Start scripts and package icons |
 | `build/`, `target/`, `obj/` | Generated — not source |
 
-Do **not** put CSV/icons under `src/main/java`. Do not commit Eclipse `.project` / `.classpath`. Java dependencies come from Maven, not `lib/*.jar`. Do not vendor Ant / JNAerator / 32-bit Windows trees.
+Do **not** put CSVs under `src/main/java`; classpath data belongs in `src/main/resources`, and package icons stay under `lib/`. Do not commit Eclipse `.project` / `.classpath`. Java dependencies come from Maven, not `lib/*.jar`. Do not vendor Ant / JNAerator / 32-bit Windows trees.
 
 ## Daily Development Workflow
 
@@ -43,7 +43,7 @@ flowchart TD
 
 ## Testing
 
-Unit tests live under `src/hackrf-sweep/src/test/java` and do not need a radio. Counts (classes, methods, coverage) are refreshed by `make stats` into [stats.md](stats.md).
+Unit tests live under `src/hackrf-sweep/src/test/java` and do not need a radio. Counts (files, classes, methods, LOC) are refreshed by `make stats` into [stats.md](stats.md); coverage comes from `make test` and JaCoCo.
 
 ```bash
 make test
@@ -51,7 +51,7 @@ make test
 cd src/hackrf-sweep && mvn clean test
 ```
 
-`make test` must stay green and **never** requires a HackRF. Hardware/integration tests live in `jspectrumanalyzer.hw`, are named `*IT`, and each method is marked `@HardwareTest` (`@Tag("hardware")` + `@Test`). Surefire excludes that tag and `*IT`. Run them only with `make test-hw` (skips if the radio is not enumerated). That profile covers USB presence, firmware/USB API/board via the app’s `.so`, a live sweep through `FFTBins` → `DatasetSpectrumPeak`, start/stop/restart, antenna power + LNA, and restart after FFT bin / frequency change. See [plans/hardware-integration-tests.md](plans/hardware-integration-tests.md).
+`make test` must stay green and **never** requires a HackRF. Hardware/integration tests live in `jspectrumanalyzer.hw`, are named `*IT`, and each method is marked `@HardwareTest` (`@Tag("hardware")` + `@Test`). Surefire excludes that tag and `*IT`. Run them only with `make test-hw` (skips if the radio is not enumerated). That profile covers USB presence, firmware/USB API/board via the app’s `.so`, a live sweep through `FFTBins` → `DatasetSpectrumPeak`, start/stop/restart, antenna power + LNA, restart after FFT bin / frequency change, and parked FM IQ followed by sweep resume. See [plans/hardware-integration-tests.md](plans/hardware-integration-tests.md).
 
 `make info` (alias `make list-devices`) prints the SDK/USB API this tree is pinned to (libhackrf `v2026.01.3`, USB API from the firmware sources, JNA), attached HackRF USB devices, device firmware when the usbfs node is writable, and whether a newer Great Scott Gadgets release exists (GitHub; skip with `HACKRF_INFO_NO_NET=1`).
 
@@ -97,7 +97,7 @@ make mermaid       # Parse every ```mermaid fence (needs mermaid-cli for full ch
 
 There is currently no strict Java formatter or Checkstyle enforced, but please keep code style consistent with surrounding files.
 
-For the native C parts, a clang-format command is commented in the Makefile.
+For the native C/C++ parts, a clang-format command is commented in the Makefile.
 
 ## Documentation
 
@@ -114,14 +114,14 @@ Key directories:
 - `src/hackrf-sweep/src/main/java/jspectrumanalyzer/core/` — Pure DSP logic (best place for unit tests)
 - `src/hackrf-sweep/src/main/java/jspectrumanalyzer/ui/` — Swing UI
 - `src/hackrf-sweep/src/main/java/jspectrumanalyzer/nativebridge/` — JNA glue
-- `src/hackrf-sweep/src-c/` — Patch that turns hackrf_sweep into a library
+- `src/hackrf-sweep/src-c/` — Sweep library patch, parked-IQ receiver, native headers, and ATSC GNU Radio/libfec C/C++
 - `src/hackrf-sweep/lib/hackrf/` — Submodule (automatically patched during build)
 
 ## Working with AI Agents
 
 See the root `AGENTS.md` file. It contains specific instructions for coding agents (always start with `make help`, prefer `docs/`, add tests for core changes, etc.).
 
-Living work plans (coverage, larger refactors) live under [plans/](plans/README.md). The current coverage plan is [plans/unit-test-coverage.md](plans/unit-test-coverage.md).
+Living work plans (larger refactors and hardware follow-up) live under [plans/](plans/README.md). [plans/unit-test-coverage.md](plans/unit-test-coverage.md) is a completed historical plan.
 
 ## Syncing with Upstream
 
@@ -158,7 +158,7 @@ Current app version is **2.0.0** (`Version.java`, Maven `pom.xml`, MCP `SERVER_V
 2. Run `make stats` (do not hand-edit `docs/stats.md`).
 3. Run full `make build`.
 4. Test the resulting zip/launcher on target platforms.
-5. Tag `vX.Y.Z`, push `master` + the tag, and `gh release create` with notes (and the Linux zip if you have it).
+5. Tag `vX.Y.Z`, push `master` + the tag, and `gh release create` with notes and the cross-platform release zip.
 
 ## Getting Help
 

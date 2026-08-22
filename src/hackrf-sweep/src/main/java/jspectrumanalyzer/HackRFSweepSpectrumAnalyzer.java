@@ -94,6 +94,7 @@ import jspectrumanalyzer.core.FrequencyBand;
 import jspectrumanalyzer.core.FrequencyRange;
 import jspectrumanalyzer.core.AutoGainPolicy;
 import jspectrumanalyzer.core.GainPolicy;
+import jspectrumanalyzer.core.TvWatchGainPolicy;
 import jspectrumanalyzer.core.AudioSink;
 import jspectrumanalyzer.core.AudioSinks;
 import jspectrumanalyzer.core.AudioSpectrum;
@@ -1755,6 +1756,7 @@ public class HackRFSweepSpectrumAnalyzer implements HackRFSettings, HackRFSweepD
 			boolean locked = tvEngine.locked();
 			float snr = tvEngine.snrDb();
 			snapshotStore.publishWatchStats(locked, snr, tvEngine.packets());
+			snapshotStore.publishWatchDebug(tvEngine.debug());
 			if (settingsPanel != null)
 				settingsPanel.tvTunerPanel().setPreviewStatus(WatchHud.text(ch.fccChannel, locked, snr,
 						tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames()));
@@ -1770,8 +1772,7 @@ public class HackRFSweepSpectrumAnalyzer implements HackRFSettings, HackRFSweepD
 			int vga = settings.getGainVGA().getValue();
 			if (settings.isAutoGain().getValue())
 			{
-				int seed = AutoGainPolicy.seedGain(ch.lowMHz, ch.highMHz()) + 32;
-				int total = Math.max(settings.getGain().getValue(), seed);
+				int total = TvWatchGainPolicy.seed(ch);
 				lna = GainPolicy.lnaGain(total);
 				vga = GainPolicy.vgaGain(total);
 			}

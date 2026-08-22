@@ -43,11 +43,14 @@ deps: ## Install all build and runtime dependencies (Ubuntu/Debian - recommended
 		libfftw3-dev \
 		libfftw3-bin \
 		openjdk-21-jdk \
-		mingw-w64
+		mingw-w64 \
+		zip \
+		ffmpeg \
+		libpulse0
 
 runtime-deps: ## Install only what's needed to run (after a build)
 	sudo apt update
-	sudo apt install -y openjdk-21-jdk libusb-1.0-0 libfftw3-bin
+	sudo apt install -y openjdk-21-jdk libusb-1.0-0 libfftw3-bin ffmpeg libpulse0
 
 ##@ Build
 build: ## Build the full application (jar + natives + zip). Delegates to subdir.

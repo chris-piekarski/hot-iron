@@ -13,6 +13,7 @@ import jspectrumanalyzer.core.ListenService;
 import jspectrumanalyzer.core.RadioIdentity;
 import jspectrumanalyzer.core.RadioMode;
 import jspectrumanalyzer.core.SweepConfig;
+import jspectrumanalyzer.core.TvWatchDebug;
 import jspectrumanalyzer.mcp.SpectrumSnapshot.FmHit;
 import jspectrumanalyzer.mcp.SpectrumSnapshot.RadioContext;
 
@@ -37,6 +38,8 @@ public final class SpectrumSnapshotStore
 	private boolean tvLocked;
 	private float tvSnrDb;
 	private int tvPackets;
+	private TvWatchDebug tvDebug = TvWatchDebug.empty();
+	private final ArrayDeque<TvWatchDebug> tvDebugRing = new ArrayDeque<TvWatchDebug>(DEFAULT_RING);
 
 	public SpectrumSnapshotStore()
 	{
@@ -114,6 +117,12 @@ public final class SpectrumSnapshotStore
 				auto, autoGain, fm, mode, listenKHz, tvChannel);
 		synchronized (lock)
 		{
+			if (context == null || next.tvChannel != context.tvChannel
+					|| !next.radioMode.equals(context.radioMode))
+			{
+				tvDebug = TvWatchDebug.empty();
+				tvDebugRing.clear();
+			}
 			context = next;
 		}
 	}
@@ -132,6 +141,107 @@ public final class SpectrumSnapshotStore
 			tvSnrDb = snrDb;
 			tvPackets = packets;
 		}
+	}
+
+	public void publishWatchDebug(TvWatchDebug next)
+	{
+		if (next == null)
+			return;
+		synchronized (lock)
+		{
+			if (tvDebug != null && next.timestampMs == tvDebug.timestampMs)
+				return;
+			tvDebug = next;
+			if (tvDebugRing.size() >= DEFAULT_RING)
+				tvDebugRing.removeFirst();
+			tvDebugRing.addLast(next);
+		}
+	}
+
+	public String watchDebugJson()
+	{
+		TvWatchDebug current;
+		int channel;
+		synchronized (lock)
+		{
+			current = tvDebug;
+			channel = context == null ? 0 : context.tvChannel;
+		}
+		StringBuilder sb = new StringBuilder(640);
+		appendWatchDebug(sb, current, channel);
+		return sb.toString();
+	}
+
+	public String watchDebugHistoryJson(Integer maxSamples)
+	{
+		int cap = maxSamples == null ? 50 : Math.max(1, Math.min(DEFAULT_RING, maxSamples.intValue()));
+		List<TvWatchDebug> samples;
+		int channel;
+		synchronized (lock)
+		{
+			samples = List.copyOf(tvDebugRing);
+			channel = context == null ? 0 : context.tvChannel;
+		}
+		if (samples.size() > cap)
+			samples = samples.subList(samples.size() - cap, samples.size());
+		StringBuilder sb = new StringBuilder(64 + samples.size() * 500);
+		sb.append('{');
+		SpectrumSnapshot.Json.appendKey(sb, "tvChannel").append(channel).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "sampleCount").append(samples.size()).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "samples").append('[');
+		for (int i = 0; i < samples.size(); i++)
+		{
+			if (i > 0)
+				sb.append(',');
+			appendWatchDebug(sb, samples.get(i), channel);
+		}
+		sb.append("]}");
+		return sb.toString();
+	}
+
+	private static void appendWatchDebug(StringBuilder sb, TvWatchDebug d, int channel)
+	{
+		if (d == null)
+			d = TvWatchDebug.empty();
+		float badFraction = d.packets > 0 ? (float) ((double) d.badPackets / d.packets) : 0f;
+		float fieldFraction = d.segments > 0 ? (float) ((double) d.fieldSegments / d.segments) : 0f;
+		sb.append('{');
+		SpectrumSnapshot.Json.appendKey(sb, "timestampMs").append(d.timestampMs).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tvChannel").append(channel).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "stage").append(SpectrumSnapshot.Json.quote(d.stage())).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "running").append(d.running).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "nativeAvailable").append(d.nativeAvailable).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "inverted").append(d.inverted).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "locked").append(d.locked).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "hasPat").append(d.hasPat).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "frames").append(d.frames).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "previewFrames").append(d.previewFrames).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "totalIqSamples").append(d.totalIqSamples).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "droppedChunks").append(d.droppedChunks).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "queueDepth").append(d.queueDepth).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "segments").append(d.segments).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "fieldSegments").append(d.fieldSegments).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "fieldSyncFraction")
+				.append(SpectrumSnapshot.Json.num(fieldFraction)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "packets").append(d.packets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "badPackets").append(d.badPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "goodPackets").append(d.goodPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "badPacketFraction")
+				.append(SpectrumSnapshot.Json.num(badFraction)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "rsGoodWindow").append(d.rsGoodWindow).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "rsWindow").append(d.rsWindow).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "rsGoodRatioDb")
+				.append(SpectrumSnapshot.Json.num(d.rsGoodRatioDb)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "agcGain").append(SpectrumSnapshot.Json.num(d.agcGain)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "rmsIq").append(SpectrumSnapshot.Json.num(d.rmsIq)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "rmsBaseband")
+				.append(SpectrumSnapshot.Json.num(d.rmsBaseband)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "pendingBaseband").append(d.pendingBaseband).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "equalizerMainTap")
+				.append(SpectrumSnapshot.Json.num(d.equalizerMainTap)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "equalizerPeakTap")
+				.append(SpectrumSnapshot.Json.num(d.equalizerPeakTap));
+		sb.append('}');
 	}
 
 	public String sweepConfigJson()

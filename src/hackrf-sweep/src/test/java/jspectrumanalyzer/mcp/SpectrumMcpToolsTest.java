@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import jspectrumanalyzer.core.AnalyzerSettings;
 import jspectrumanalyzer.core.DatasetSpectrum;
 import jspectrumanalyzer.core.FrequencyRange;
+import jspectrumanalyzer.core.TvWatchDebug;
 
 class SpectrumMcpToolsTest {
 
@@ -50,6 +51,8 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("spectrum_occupancy"));
 		assertTrue(list.contains("spectrum_history"));
 		assertTrue(list.contains("tv_watch"));
+		assertTrue(list.contains("tv_debug"));
+		assertTrue(list.contains("tv_debug_history"));
 		assertTrue(list.contains("fm_listen"));
 		assertNull(tools.handleRpc("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"));
 	}
@@ -129,6 +132,29 @@ class SpectrumMcpToolsTest {
 		assertTrue(out.contains("tvChannel"));
 		assertTrue(out.contains("31"));
 		assertTrue(out.contains("575"));
+	}
+
+	@Test
+	void tvDebugReportsStageAndHistory() {
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		AnalyzerSettings settings = new AnalyzerSettings();
+		settings.getTvChannel().setValue(28);
+		settings.startWatch();
+		store.publishContext(settings, java.util.List.of(), 0);
+		TvWatchDebug debug = new TvWatchDebug(1000, true, true, false, false, false,
+				1000, 999, 1, 5000, 2500, 8, 1, 64, 40_000_000,
+				0, 2, 0, 20, 500f, 0.15f, 1.4f, -30f, 0.8f, 1.1f);
+		store.publishWatchDebug(debug);
+		SpectrumMcpTools tools = new SpectrumMcpTools(store);
+		String current = tools.call("tv_debug", Map.of());
+		assertTrue(current.contains("rs_unusable"));
+		assertTrue(current.contains("tvChannel"));
+		assertTrue(current.contains("badPackets"));
+		assertTrue(current.contains("999"));
+		assertTrue(current.contains("agcGain"));
+		String history = tools.call("tv_debug_history", Map.of("maxSamples", 1));
+		assertTrue(history.contains("sampleCount"));
+		assertTrue(history.contains("fieldSyncFraction"));
 	}
 
 	@Test

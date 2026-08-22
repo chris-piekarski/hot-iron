@@ -39,10 +39,13 @@ sudo apt install \
   libfftw3-dev \
   libfftw3-bin \
   openjdk-21-jdk \
-  mingw-w64
+  mingw-w64 \
+  zip \
+  ffmpeg \
+  libpulse0
 ```
 
-You will also need the HackRF sources (handled automatically by the build via submodule + patch).
+`build-essential` supplies GCC and G++ (C++17 is required by the ATSC native code). The HackRF submodule must already be initialized (`git clone --recurse-submodules` or `git submodule update --init --recursive`); the build resets it to the pinned version and applies the patch, but does not initialize a missing submodule.
 
 ## Common Targets
 
@@ -78,7 +81,7 @@ Run `make help` inside this directory for advanced / low-level targets:
 After a successful build you will find:
 
 - `src/hackrf-sweep/build/hackrf-spectrum-analyzer/` — runnable tree with launcher + `lib/`
-- `release/` — zipped release artifact (if `zip_file` target ran)
+- `release/` — cross-platform release zip (Linux and Windows launchers/native libraries, if `zip_file` ran)
 
 ## Cross-Compilation Notes
 

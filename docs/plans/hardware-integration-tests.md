@@ -4,9 +4,9 @@
 |---|---|
 | **Status** | Done |
 | **Started** | 2026-08-17 |
-| **Last updated** | 2026-08-17 |
+| **Last updated** | 2026-08-22 |
 | **Finished** | 2026-08-17 |
-| **Measured** | `SpectrumSweepEngine` extracted; analyzer sweep/processing delegates to it. Hardware IT asserts queue + datasetSpectrum. |
+| **Measured** | Eight hardware ITs pass, including analyzer queue/dataset and parked FM IQ → sweep resume. |
 
 ## Goal
 
@@ -36,7 +36,7 @@ This is application integration against a real HackRF, plus a basic board health
 | `src/test/java/jspectrumanalyzer/hw/HardwareConditions.java` | sysfs + `lsusb` detect; find `.so`; usbfs writable check |
 | `src/test/java/jspectrumanalyzer/hw/HardwareSweepSession.java` | start → callback(s) → stop; optional full-sweep + `SpectrumSink` |
 | `core/SpectrumSweepEngine.java` | Real queue + processing loop + native sweep; analyzer UI is a hook |
-| `src/test/java/jspectrumanalyzer/hw/HackRFSweepHardwareIT.java` | 7 gated ITs including engine queue + datasetSpectrum |
+| `src/test/java/jspectrumanalyzer/hw/HackRFSweepHardwareIT.java` | 8 gated ITs including engine queue/dataset and parked FM IQ → sweep resume |
 | `nativebridge/HackRFSweepNativeBridge.java` | `hackrf.sweep.lib.dir` so tests can point at the built `.so` |
 | `pom.xml` | default exclude `*IT` + `hardware` tag; profile `hardware` |
 | Root + `src/hackrf-sweep` Makefiles | `test-hw` target |
@@ -51,6 +51,7 @@ Contracts (when device + `.so` + writable node):
 - `stop` then `start` still produces data
 - antenna port power + Antenna LNA start/stop does not throw
 - restart after FFT bin + frequency change still produces data in the new band
+- parked FM Listen produces IQ, stops cleanly, then sweep resumes
 
 Does **not** launch Swing / `HackRFSweepSpectrumAnalyzer` ctor. Does **not** assert live RF levels (no “LNA made it louder”).
 
@@ -66,6 +67,7 @@ Does **not** launch Swing / `HackRFSweepSpectrumAnalyzer` ctor. Does **not** ass
 - [x] Document WSL `usbipd attach` in `docs/hackrf-setup.md` / `make help`
 - [x] LNA / antenna-power start/stop does not crash
 - [x] Restart after FFT bin / freq change
+- [x] Parked FM Listen IQ then sweep resume
 
 ## How to run
 

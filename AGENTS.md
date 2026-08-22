@@ -8,10 +8,10 @@ This is a Java desktop **HackRF spectrum analyzer with a live MCP interface** fo
 
 Key technologies:
 - Java 21+ (Swing UI + FlatLaf + JFreeChart for plots)
-- Native C (hackrf library v2026.01.3 + custom sweep-as-library patch)
+- Native C/C++ (hackrf library v2026.01.3, sweep-as-library patch, parked IQ, ATSC GNU Radio/libfec DSP)
 - Maven for Java build
 - Custom Makefile for cross-platform native + Java packaging (Linux + Windows)
-- Supports real-time spectrum, waterfall (left-side time scale), peak/persistent display, spur filter, frequency allocations, quick band selectors, Auto gain, Antenna LNA (+14 dB), and an opt-in read-only MCP server.
+- Supports real-time spectrum, waterfall (left-side time scale), peak/persistent display, spur filter, frequency allocations, quick band selectors, Auto gain, Antenna LNA (+14 dB), and an opt-in MCP interface with read-only snapshot/diagnostic tools plus explicit FM Listen and TV Watch controls.
 
 The project is a maintained fork of [pavsa/hackrf-spectrum-analyzer](https://github.com/pavsa/hackrf-spectrum-analyzer) with added quick-select UI and significant test coverage improvements.
 
@@ -31,7 +31,7 @@ This shows all available targets with descriptions and categories (colorized).
 
 - `make build` — Full build (natives + JAR + zip)
 - `make test` — Run unit tests (Maven + JaCoCo). Does **not** require a HackRF.
-- `make test-hw` — Hardware ITs (`*IT`, `@Tag("hardware")`): USB, firmware/USB API/board, `SpectrumSweepEngine` queue + dataset, start/stop/restart, LNA + antenna-power, FFT/freq restart. Skips if no radio.
+- `make test-hw` — Hardware ITs (`*IT`, `@Tag("hardware")`): USB, firmware/USB API/board, `SpectrumSweepEngine` queue + dataset, start/stop/restart, LNA + antenna-power, FFT/freq restart, and parked FM IQ followed by sweep resume. Skips if no radio.
 - `make info` — List attached HackRF devices, the SDK/USB API this app is pinned to, and whether a newer GSG firmware/libhackrf exists. Alias: `make list-devices`
 - `make firmware-update` — Dry-run official GSG SPI flash. Write only with `CONFIRM=1` (optional `VERSION=2026.01.3`). Not part of `build` / `test`.
 - `make udev` — Install persistent udev rules (sudo once) so WSL usbipd nodes stay writable.
@@ -66,7 +66,7 @@ Native build requires:
 - Linux host with mingw-w64 for Windows cross-compilation
 - hackrf submodule pinned to `HACKRF_SDK_PIN` (v2026.01.3) and patched automatically (`src-c/0001-hackrf_sweep-to-library-conversion-v2026.01.3.patch`)
 
-`src/hackrf-sweep` is a **hybrid JNI module**: Maven Standard Directory Layout for Java (`src/main/java`, `src/main/resources`, `src/test/java`); Makefile + `src-c/` + `lib/hackrf` for natives. Do not commit Eclipse `.project` / `.classpath`, put CSVs under `src/main/java`, or vendor Java JARs into `lib/` (Maven owns Java deps). Windows cross-link trees stay under `lib/fftw-3.3.5-dll64` and `lib/libusb-1.0.21`. See [docs/development.md](docs/development.md#module-layout-srchackrf-sweep).
+`src/hackrf-sweep` is a **hybrid JNA module**: Maven Standard Directory Layout for Java (`src/main/java`, `src/main/resources`, `src/test/java`); Makefile + C/C++ under `src-c/` + `lib/hackrf` for natives. Do not commit Eclipse `.project` / `.classpath`, put CSVs under `src/main/java`, or vendor Java JARs into `lib/` (Maven owns Java deps). Windows cross-link trees stay under `lib/fftw-3.3.5-dll64` and `lib/libusb-1.0.21`. See [docs/development.md](docs/development.md#module-layout-srchackrf-sweep).
 
 ## Documentation
 
@@ -111,8 +111,9 @@ The only project overview file is root `README.md`. Do **not** recreate `Readme.
 - Operator settings live in `AnalyzerSettings` (implements `HackRFSettings`). Do not add new `ModelValue` fields on the analyzer JFrame. Mark radio vs display via `isRadioSetting`. Auto gain is display policy; the LNA/VGA values it writes are radio settings.
 - Plot overlays go through `FrequencyAxis` + `BandMark` + `BandHeaderPainter`. Do not invent a second MHz↔pixel map.
 - Native interleaved hops export 5 MHz slices with holes. Pad USB start/stop with `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz) so the requested window (e.g. FM 88–108) is actually filled. Dataset/axis stay on the operator range.
-- Live agent access is `jspectrumanalyzer.mcp` (`SpectrumSnapshotStore` from `onFullSweepProcessed`, `SpectrumMcpServer` JSON-RPC). Tools are read-only (`spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config`, `fm_stations`, `spectrum_occupancy`, `spectrum_history`); occupancy is `SpectrumOccupancy` on filled bins, not a new USB path. Do not restart USB from a snapshot tool. `sweep_config` reports `radioMode` (`sweep`/`listen`/`stopped`). Start with `--mcp` / `make mcp` (localhost 8765). Stdio shim: `scripts/mcp-spectrum-proxy.py`.
+- Live agent access is `jspectrumanalyzer.mcp` (`SpectrumSnapshotStore` from `onFullSweepProcessed`, `SpectrumMcpServer` JSON-RPC). Snapshot/diagnostic tools are read-only (`spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config`, `fm_stations`, `spectrum_occupancy`, `spectrum_history`, `tv_debug`, `tv_debug_history`); occupancy is `SpectrumOccupancy` on filled bins, not a new USB path. Do not restart USB from a snapshot tool. `sweep_config` reports `radioMode` (`sweep`/`listen`/`watch`/`stopped`). Start with `--mcp` / `make mcp` (localhost 8765). Stdio shim: `scripts/mcp-spectrum-proxy.py`.
 - FM listen (`WfmDemodulator`, `src-c/hackrf_fm.c`) is exclusive with the sweep: one HackRF, parked IQ RX, Java mono WFM. Do not time-slice. Demod belongs in `core/` with synthetic IQ tests. `AudioSink` fakes the mixer in unit tests.
+- ATSC Watch parks at 16 MS/s with an 8 MHz analog filter. Keep the PFB RRC, long DC blocker, MMSE timing, field-trained equalizer, SIMD helpers, and double-precision AGC reference-compatible; 20 MS/s or the old 40+32 dB gain seed loses real-time continuity or clips. `tv_debug` should reach `stage=picture` on a usable RF channel (verified on RF 28 and 33).
 - Auto-gain (`AutoGainPolicy`) must not pump: one Wi-Fi packet is not clip; a disappeared burst is not compression; settle after each apply; do not `clearHistory()` on a gain-only restart (`DatasetSpectrum.sameAxisAs`).
 - UI changes should be accompanied by updates to `docs/usage.md`.
 - New Makefile targets must be added to both the root `Makefile` and the detailed `src/hackrf-sweep/Makefile`, with proper `##` descriptions for `make help`.
@@ -146,7 +147,7 @@ GitHub's "ahead/behind" count vs `pavsa/hackrf-spectrum-analyzer` is misleading:
 - `HackrfSweepLibrary` is hand-maintained (`make jnabridge` does not run JNAerator). The UI requires a **headful** JDK 21+.
 - Long runs on WSL/X11 can SIGSEGV in `libawt` while JFreeChart paints the spectrum line (`ChartPanel` / `FillAAPgram`). That is native AWT, not the sweep engine.
 - AGC still restarts USB when it actually changes LNA/VGA; only the waterfall mapping (same MHz/FFT) is preserved across that restart.
-- Listen stops the sweep. WSL audio needs Pulse/PipeWire forwarded to Windows or Java Sound is silent.
+- Listen and Watch stop the sweep and exclusively park the same HackRF. Watch uses 16 MS/s / 8 MHz and needs host `ffmpeg` for MPEG-2/AC-3; WSL audio needs Pulse/PipeWire forwarded to Windows or playback is silent.
 
 ## Questions?
 

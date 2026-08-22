@@ -76,6 +76,14 @@ public final class SpectrumMcpTools
 						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|stopped), listenMHz, tvChannel, plus display flags.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
+				+ tool("tv_debug",
+						"Current ATSC Watch stage diagnostics: IQ, sync, RS errors, AGC, equalizer, PAT, frames, queue.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("tv_debug_history",
+						"Recent ATSC Watch diagnostics for trend comparison. Optional maxSamples (1-200).",
+						"{\"type\":\"object\",\"properties\":{\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}}")
+				+ ","
 				+ tool("fm_stations",
 						"Live FM dial hits for an FM-scale view, or an empty list when zoomed out.",
 						"{\"type\":\"object\",\"properties\":{}}")
@@ -115,6 +123,10 @@ public final class SpectrumMcpTools
 			return textResult(store.context().identityJson(), false);
 		if ("sweep_config".equals(name))
 			return textResult(store.sweepConfigJson(), false);
+		if ("tv_debug".equals(name))
+			return textResult(store.watchDebugJson(), false);
+		if ("tv_debug_history".equals(name))
+			return textResult(store.watchDebugHistoryJson(McpJson.getInt(args, "maxSamples")), false);
 		if ("tv_watch".equals(name))
 			return tvWatchCall(args);
 		if ("fm_listen".equals(name))

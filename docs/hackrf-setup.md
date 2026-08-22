@@ -71,15 +71,15 @@ usbipd list
 usbipd bind --busid <BUSID>          # persist "Shared" across reboots
 ```
 
-**Each Windows logon / after the radio resets** — leave this running to re-attach automatically:
+**Once per Windows logon** — run this in Administrator PowerShell; it stays active and re-attaches after a radio reset or unplug:
 
 ```powershell
 usbipd attach --wsl --auto-attach --hardware-id 1d50:6089
 ```
 
-`--hardware-id` survives bus-id changes. `--auto-attach` re-binds after firmware reset or unplug. `bind` alone does not attach.
+`--hardware-id` survives bus-id changes. `--auto-attach` re-attaches after firmware reset or unplug. `bind` only marks the device shared; it does not attach it to WSL.
 
-**Once in WSL** (this distro already has `systemd=true` in `/etc/wsl.conf`):
+**Once in WSL:**
 
 ```bash
 make udev    # persistent usbfs MODE=0666; no more chmod after each attach
@@ -102,7 +102,7 @@ make test-hw
 
 They skip if no HackRF is enumerated. The sweep IT also needs `libhackrf-sweep.so` from `make build` and a writable usbfs node.
 
-**Listen audio** uses Java Sound (48 kHz mono). On native Linux that is PulseAudio/PipeWire. On WSL2, speakers are silent until Pulse is forwarded to Windows (or you run the JAR on Windows). Demod still runs; only the mixer is missing.
+**Listen and Watch** stop sweeping and exclusively park the same HackRF. Listen uses 4 MS/s mono WFM; Watch uses 16 MS/s with an 8 MHz analog filter and requires host `ffmpeg` for MPEG-2/AC-3. Audio uses Java Sound/PulseAudio/PipeWire. On WSL2, playback is silent until Pulse is forwarded to Windows (or you run the JAR on Windows); demodulation and video can still run.
 
 ## Windows
 
