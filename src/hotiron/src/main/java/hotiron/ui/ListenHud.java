@@ -18,21 +18,11 @@ public final class ListenHud
 	{
 	}
 
-	public static String text(double mhz)
-	{
-		return text(mhz, true);
-	}
-
 	public static String text(double mhz, boolean audioOk)
 	{
 		if (audioOk)
-			return String.format(Locale.US, "Listening %.1f FM — sweep paused", mhz);
-		return String.format(Locale.US, "Listening %.1f FM — sweep paused (no speakers)", mhz);
-	}
-
-	public static void paint(Graphics2D g0, Rectangle2D area, double mhz)
-	{
-		paint(g0, area, mhz, true);
+			return String.format(Locale.US, "Listening %.1f FM — parked IQ", mhz);
+		return String.format(Locale.US, "Listening %.1f FM — parked IQ (no speakers)", mhz);
 	}
 
 	public static void paint(Graphics2D g0, Rectangle2D area, double mhz, boolean audioOk)

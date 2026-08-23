@@ -18,47 +18,25 @@ public final class WatchHud
 	{
 	}
 
-	public static String text(int fccChannel, boolean locked)
-	{
-		return text(fccChannel, locked, 0f);
-	}
-
-	public static String text(int fccChannel, boolean locked, float snrDb)
-	{
-		return text(fccChannel, locked, snrDb, 0, 0);
-	}
-
-	public static String text(int fccChannel, boolean locked, float snrDb, int packets, int frames)
-	{
-		return text(fccChannel, locked, snrDb, packets, frames, 0);
-	}
-
 	public static String text(int fccChannel, boolean locked, float snrDb, int packets, int mpegFrames,
 			int previewFrames)
 	{
 		if (mpegFrames > 0)
-			return String.format(Locale.US, "WATCH ch %d — live", fccChannel);
+			return parked(fccChannel, "live");
 		if (locked && snrDb >= 5f)
-			return String.format(Locale.US, "WATCH ch %d — ATSC lock  %.0f dB", fccChannel, snrDb);
+			return parked(fccChannel, String.format(Locale.US, "ATSC lock  %.0f dB", snrDb));
 		if (locked)
-			return String.format(Locale.US, "WATCH ch %d — 8VSB weak  %.0f dB (no picture)", fccChannel,
-					snrDb);
+			return parked(fccChannel, String.format(Locale.US, "8VSB weak  %.0f dB (no picture)", snrDb));
 		if (previewFrames > 0)
-			return String.format(Locale.US, "WATCH ch %d — IQ video", fccChannel);
+			return parked(fccChannel, "IQ video");
 		if (packets > 0)
-			return String.format(Locale.US, "WATCH ch %d — 8VSB  %d TS pkt (no picture)", fccChannel,
-					packets);
-		return String.format(Locale.US, "WATCH ch %d — no ATSC lock", fccChannel);
+			return parked(fccChannel, String.format(Locale.US, "8VSB  %d TS pkt (no picture)", packets));
+		return parked(fccChannel, "no ATSC lock");
 	}
 
-	public static void paint(Graphics2D g0, Rectangle2D area, int fccChannel, boolean locked)
+	private static String parked(int fccChannel, String detail)
 	{
-		paint(g0, area, fccChannel, locked, 0f);
-	}
-
-	public static void paint(Graphics2D g0, Rectangle2D area, int fccChannel, boolean locked, float snrDb)
-	{
-		paint(g0, area, fccChannel, locked, snrDb, 0, 0, 0);
+		return String.format(Locale.US, "WATCH ch %d — parked IQ · %s", fccChannel, detail);
 	}
 
 	public static void paint(Graphics2D g0, Rectangle2D area, int fccChannel, boolean locked, float snrDb,

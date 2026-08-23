@@ -160,35 +160,6 @@ class SpurFilterTest {
     }
 
     @Test
-    void testDebugPathsViaReflection() throws Exception {
-        DatasetSpectrum input = createSimpleSpectrum(100000f, 2400, 2500, -100f);
-        SpurFilter filter = new SpurFilter(6f, 4f, 5, 3, input);
-
-        // Force some data and calibration
-        float[] arr = input.getSpectrumArray();
-        for (int i = 0; i < arr.length; i++) arr[i] = -80f;
-        for (int iter = 0; iter < 4; iter++) filter.filterDataset();
-
-        // Use reflection to set debug and call filterDatasetExec indirectly
-        java.lang.reflect.Field debugField = SpurFilter.class.getDeclaredField("debug");
-        debugField.setAccessible(true);
-
-        // Normal (0) is already tested; hit others
-        debugField.setInt(filter, 1);
-        filter.filterDataset();  // will use the if(debug) path
-
-        debugField.setInt(filter, 2);
-        filter.filterDataset();
-
-        debugField.setInt(filter, 3);
-        filter.filterDataset();
-
-        // debug=4 does nothing
-        debugField.setInt(filter, 4);
-        filter.filterDataset();
-    }
-
-    @Test
     void testFilterDataAfterCalibration() throws Exception {
         DatasetSpectrum input = createSimpleSpectrum(100000f, 2400, 2500, -100f);
         SpurFilter filter = new SpurFilter(2f, 4f, 3, 3, input);

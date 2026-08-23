@@ -50,6 +50,7 @@ class WfmDemodulatorTest {
 	void engineOffersIqToRecordingSink() throws Exception {
 		RecordingAudioSink sink = new RecordingAudioSink();
 		FmListenEngine engine = new FmListenEngine();
+		engine.setSettleMs(0);
 		engine.setVolume(100);
 		engine.start(sink);
 		byte[] iq = modulate(1000, WfmDemodulator.DEVIATION_HZ, 0.05);

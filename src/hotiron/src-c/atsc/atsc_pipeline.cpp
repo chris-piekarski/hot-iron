@@ -134,11 +134,6 @@ extern "C" int atsc_rx_packets(void* rx)
 	return rx ? static_cast<AtscRx*>(rx)->packets : 0;
 }
 
-extern "C" int atsc_rx_bad_packets(void* rx)
-{
-	return rx ? static_cast<AtscRx*>(rx)->rsd.num_bad_packets() : 0;
-}
-
 extern "C" int atsc_rx_debug(void* rx, int64_t* counters, int counter_cap,
 		float* gauges, int gauge_cap)
 {

@@ -13,7 +13,7 @@ else
 	exit 1
 fi
 
-JAVA_VER=$("$JAVA_BIN" -version 2>&1 | awk -F[\".] '/version/ {print ($2=="1"?$3:$2); exit}')
+JAVA_VER=$("$JAVA_BIN" -version 2>&1 | awk -F[\".] '/version/ {print $2; exit}')
 if [ -z "${JAVA_VER:-}" ] || [ "$JAVA_VER" -lt "$MIN_JAVA" ]; then
 	echo "No copy -- Java $MIN_JAVA+ required (found: $("$JAVA_BIN" -version 2>&1 | head -1))." >&2
 	echo "Install a headful JDK, e.g.: sudo apt install openjdk-21-jdk" >&2

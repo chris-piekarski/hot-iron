@@ -10,7 +10,7 @@
 
   <name>HotIron</name>
   <description>HotIron: HackRF rig — heat on the dial, agents copy the RF bins.</description>
-  <url>https://github.com/chris-piekarski/hotiron</url>
+  <url>https://github.com/chris-piekarski/hackrf-spectrum-analyzer</url>
 
   <licenses>
     <license>
@@ -28,9 +28,9 @@
   </developers>
 
   <scm>
-    <url>https://github.com/chris-piekarski/hotiron</url>
-    <connection>scm:git:https://github.com/chris-piekarski/hotiron.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/chris-piekarski/hotiron.git</developerConnection>
+    <url>https://github.com/chris-piekarski/hackrf-spectrum-analyzer</url>
+    <connection>scm:git:https://github.com/chris-piekarski/hackrf-spectrum-analyzer.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/chris-piekarski/hackrf-spectrum-analyzer.git</developerConnection>
   </scm>
 
   <properties>

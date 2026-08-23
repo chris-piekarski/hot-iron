@@ -64,8 +64,8 @@ public final class AnalyzerSettings implements HackRFSettings
 
 	private final ModelValueBoolean antennaPower = new ModelValueBoolean("Ant power", false);
 	private final ModelValueBoolean antennaLNA = new ModelValueBoolean("Antenna LNA +14dB", false);
-	private final ModelValueInt fftBinHz = new ModelValueInt("FFT Bin [Hz]", 100000);
-	private final ModelValueBoolean filterSpectrum = new ModelValueBoolean("Filter", false);
+	private final ModelValueInt fftBinHz = new ModelValueInt("FFT Bin [Hz]", AutoSweepPolicy.chooseBinHz(
+			WifiChannelPlan.WIFI_24_VIEW_END_MHZ - WifiChannelPlan.WIFI_24_VIEW_START_MHZ));
 	private final ModelValue<FrequencyRange> frequency = new ModelValue<FrequencyRange>("Frequency range",
 			new FrequencyRange(WifiChannelPlan.WIFI_24_VIEW_START_MHZ, WifiChannelPlan.WIFI_24_VIEW_END_MHZ));
 	private final ModelValue<FrequencyAllocationTable> frequencyAllocationTable = new ModelValue<FrequencyAllocationTable>(
@@ -95,6 +95,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValueBoolean showPeaks = new ModelValueBoolean("Show peaks", true);
 	private final ModelValueBoolean powerAutoScale = new ModelValueBoolean("Auto-scale dB axis", true);
 	private final ModelValueBoolean autoGain = new ModelValueBoolean("Auto gain", true);
+	private final ModelValueBoolean autoSweep = new ModelValueBoolean("Auto FFT/samples", true);
 	private final ModelValueBoolean debugDisplay = new ModelValueBoolean("Debug", false);
 	private final ModelValue<BigDecimal> spectrumLineThickness = new ModelValue<BigDecimal>("Spectrum line thickness",
 			new BigDecimal("1"));
@@ -107,13 +108,14 @@ public final class AnalyzerSettings implements HackRFSettings
 			ListenService.FM);
 	private final ModelValueInt listenKHz = new ModelValueInt("Listen [kHz]", 97300, 200,
 			FmChannelPlan.FIRST_CENTER_KHZ, FmChannelPlan.LAST_CENTER_KHZ);
-	private final ModelValueInt tvChannel = new ModelValueInt("TV channel", 14, 1, TvChannelPlan.FIRST_FCC_CHANNEL,
+	private final ModelValueInt tvChannel = new ModelValueInt("TV channel", 33, 1, TvChannelPlan.FIRST_FCC_CHANNEL,
 			TvChannelPlan.LAST_FCC_CHANNEL);
 	private final ModelValueInt listenVolume = new ModelValueInt("Volume", 80, 1, 0, 100);
 	private final ModelValue<List<FmStationHit>> detectedFmStations = new ModelValue<List<FmStationHit>>(
 			"Detected FM", List.of());
 	private final ModelValue<List<TvStationHit>> detectedTvStations = new ModelValue<List<TvStationHit>>(
 			"Detected TV", List.of());
+	private final ModelValue<BandScan> bandScan = new ModelValue<BandScan>("Band scan", BandScan.OFF);
 
 	public void setHardware(Hardware hardware)
 	{
@@ -298,6 +300,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	@Override
 	public void releaseRadio()
 	{
+		stopScan();
 		listening.setValue(false);
 		radioReleased.setValue(true);
 		hardware.releaseRadio();
@@ -306,6 +309,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	@Override
 	public void startListen()
 	{
+		stopScan();
 		listenService.setValue(ListenService.FM);
 		listening.setValue(true);
 		radioReleased.setValue(false);
@@ -315,10 +319,65 @@ public final class AnalyzerSettings implements HackRFSettings
 	@Override
 	public void startWatch()
 	{
+		stopScan();
 		listenService.setValue(ListenService.TV);
 		listening.setValue(true);
 		radioReleased.setValue(false);
 		hardware.startWatch();
+	}
+
+	@Override
+	public void startFmScan()
+	{
+		if (bandScan.getValue() == BandScan.FM)
+		{
+			stopScan();
+			return;
+		}
+		beginScan(BandScan.FM, BandScanSession.fmWindow());
+	}
+
+	@Override
+	public void startTvScan()
+	{
+		if (bandScan.getValue() == BandScan.TV)
+		{
+			stopScan();
+			return;
+		}
+		beginScan(BandScan.TV, BandScanSession.tvVhfWindow());
+	}
+
+	@Override
+	public void stopScan()
+	{
+		if (bandScan.getValue() == BandScan.OFF)
+			return;
+		bandScan.setValue(BandScan.OFF);
+	}
+
+	@Override
+	public ModelValue<BandScan> getBandScan()
+	{
+		return bandScan;
+	}
+
+	private void beginScan(BandScan scan, FrequencyRange window)
+	{
+		stopScan();
+		boolean parked = Boolean.TRUE.equals(listening.getValue());
+		boolean released = Boolean.TRUE.equals(radioReleased.getValue());
+		listening.setValue(false);
+		radioReleased.setValue(false);
+		if (scan == BandScan.FM)
+			detectedFmStations.setValue(List.of());
+		else
+			detectedTvStations.setValue(List.of());
+		if (!window.equals(frequency.getValue()))
+			frequency.setValue(window);
+		bandScan.setValue(scan);
+		if (parked || released)
+			hardware.restartSweep();
 	}
 
 	@Override
@@ -405,9 +464,9 @@ public final class AnalyzerSettings implements HackRFSettings
 	}
 
 	@Override
-	public ModelValueBoolean isFilterSpectrum()
+	public ModelValueBoolean isAutoSweep()
 	{
-		return filterSpectrum;
+		return autoSweep;
 	}
 
 	@Override

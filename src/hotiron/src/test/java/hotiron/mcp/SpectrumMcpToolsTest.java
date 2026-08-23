@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import hotiron.core.AnalyzerSettings;
 import hotiron.core.DatasetSpectrum;
 import hotiron.core.FrequencyRange;
+import hotiron.core.MpegTsPlayer;
+import hotiron.core.MpegTsProbe;
 import hotiron.core.TvWatchDebug;
 
 class SpectrumMcpToolsTest {
@@ -80,6 +82,7 @@ class SpectrumMcpToolsTest {
 		assertTrue(cfg.contains("radio"));
 		assertTrue(cfg.contains("display"));
 		assertTrue(cfg.contains("autoScale"));
+		assertTrue(cfg.contains("autoSweep"));
 		assertTrue(cfg.contains("fftBinHz"));
 		assertTrue(cfg.contains("100000"));
 		assertTrue(cfg.contains("radioMode"));
@@ -168,9 +171,30 @@ class SpectrumMcpToolsTest {
 		assertTrue(current.contains("badPackets"));
 		assertTrue(current.contains("999"));
 		assertTrue(current.contains("agcGain"));
+		assertTrue(current.contains("ffmpeg"));
+		assertTrue(current.contains("lastStderr"));
+		assertTrue(current.contains("videoPid"));
+		assertTrue(current.contains("tsBytesWritten"));
 		String history = tools.call("tv_debug_history", Map.of("maxSamples", 1));
 		assertTrue(history.contains("sampleCount"));
 		assertTrue(history.contains("fieldSyncFraction"));
+		assertTrue(history.contains("pmtPid"), history);
+	}
+
+	@Test
+	void tvDebugSplitsFfmpegStallFromMissingPmt() {
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		MpegTsPlayer.Stats ffmpeg = new MpegTsPlayer.Stats(true, false, true, false,
+				MpegTsPlayer.Stats.EXIT_NONE, 10, 2000, 8000, 8000, 1, MpegTsPlayer.TS_QUEUE_CAP, 0,
+				0, 0, 0, false, "Could not find codec parameters", MpegTsProbe.Snapshot.empty());
+		store.publishWatchDebug(new TvWatchDebug(1000, true, true, true, true, false, 100, 1, 99,
+				5000, 2500, 8, 50, 64, 40_000_000, 0, 2, 0, 20, 500f, 0.15f, 1.4f, -10f, 0.8f,
+				1.1f, ffmpeg));
+		String current = new SpectrumMcpTools(store).call("tv_debug", Map.of());
+		assertTrue(current.contains("no_pmt"), current);
+		assertTrue(current.contains("tsBytesWritten"), current);
+		assertTrue(current.contains("Could not find codec parameters"), current);
+		assertTrue(current.contains("videoAlive"), current);
 	}
 
 	@Test

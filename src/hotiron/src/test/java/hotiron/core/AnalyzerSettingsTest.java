@@ -15,11 +15,12 @@ class AnalyzerSettingsTest {
 		AnalyzerSettings s = new AnalyzerSettings();
 		assertEquals(WifiChannelPlan.WIFI_24_VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
 		assertEquals(WifiChannelPlan.WIFI_24_VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
-		assertEquals(100000, s.getFFTBinHz().getValue());
+		assertEquals(20_000, s.getFFTBinHz().getValue());
 		assertEquals(8192, s.getSamples().getValue());
 		assertTrue(s.isChartsPeaksVisible().getValue());
 		assertTrue(s.isPowerAutoScale().getValue());
 		assertTrue(s.isAutoGain().getValue());
+		assertTrue(s.isAutoSweep().getValue());
 		assertTrue(s.isPersistentDisplayVisible().getValue());
 		assertTrue(s.isWaterfallVisible().getValue());
 		assertEquals(RadioIdentity.ABSENT, s.getRadioIdentity().getValue());
@@ -45,6 +46,7 @@ class AnalyzerSettingsTest {
 		assertFalse(s.isRadioSetting(s.isChartsPeaksVisible()));
 		assertFalse(s.isRadioSetting(s.isPowerAutoScale()));
 		assertFalse(s.isRadioSetting(s.isAutoGain()));
+		assertFalse(s.isRadioSetting(s.isAutoSweep()));
 		assertFalse(s.isRadioSetting(s.isPersistentDisplayVisible()));
 		assertFalse(s.isRadioSetting(s.getSpectrumPaletteStart()));
 	}
@@ -152,7 +154,68 @@ class AnalyzerSettingsTest {
 		s.startWatch();
 		assertEquals(RadioMode.WATCH, s.radioMode());
 		assertEquals(ListenService.TV, s.getListenService().getValue());
-		assertEquals(14, s.getTvChannel().getValue());
+		assertEquals(33, s.getTvChannel().getValue());
+	}
+
+	@Test
+	void fmScanQsyzTheBandAndStopsListen() {
+		AnalyzerSettings s = new AnalyzerSettings();
+		AtomicInteger restarts = new AtomicInteger();
+		s.setHardware(new AnalyzerSettings.Hardware()
+		{
+			@Override
+			public void restartSweep()
+			{
+				restarts.incrementAndGet();
+			}
+
+			@Override
+			public void releaseRadio()
+			{
+			}
+
+			@Override
+			public void startListen()
+			{
+			}
+
+			@Override
+			public void startWatch()
+			{
+			}
+
+			@Override
+			public List<String> listRadioSerials()
+			{
+				return List.of();
+			}
+		});
+		s.getDetectedFmStations().setValue(List.of(
+				new FmStationHit(FmChannelPlan.nearest(97.3), -30f)));
+		s.startListen();
+		s.startFmScan();
+		assertEquals(BandScan.FM, s.getBandScan().getValue());
+		assertFalse(s.isListening().getValue());
+		assertEquals(FmChannelPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(FmChannelPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertTrue(s.getDetectedFmStations().getValue().isEmpty(), "Scan rebuilds the Seek list");
+		assertEquals(1, restarts.get(), "leave Listen before the FM survey");
+		s.startFmScan();
+		assertEquals(BandScan.OFF, s.getBandScan().getValue());
+	}
+
+	@Test
+	void tvScanStartsOnVhfAndClearsSeekList() {
+		AnalyzerSettings s = new AnalyzerSettings();
+		s.getDetectedTvStations().setValue(List.of(
+				new TvStationHit(TvChannelPlan.findByFccChannel(33), -40f)));
+		s.startTvScan();
+		assertEquals(BandScan.TV, s.getBandScan().getValue());
+		assertEquals(TvChannelPlan.VHF_VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(TvChannelPlan.VHF_VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertTrue(s.getDetectedTvStations().getValue().isEmpty());
+		s.startListen();
+		assertEquals(BandScan.OFF, s.getBandScan().getValue(), "Listen cancels Scan");
 	}
 
 	@Test
@@ -188,6 +251,7 @@ class AnalyzerSettingsTest {
 		SweepConfig a = SweepConfig.from(s);
 		s.isPowerAutoScale().setValue(true);
 		s.isChartsPeaksVisible().setValue(false);
+		s.isAutoSweep().setValue(false);
 		assertEquals(a, SweepConfig.from(s));
 		s.getFFTBinHz().setValue(50000);
 		assertNotEquals(a, SweepConfig.from(s));

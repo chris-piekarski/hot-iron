@@ -109,6 +109,11 @@ public final class FmChannelPlan
 		return CHANNELS.get(idx);
 	}
 
+	public static boolean overlapsBroadcast(double startMHz, double endMHz)
+	{
+		return startMHz < VIEW_END_MHZ && endMHz > VIEW_START_MHZ;
+	}
+
 	/**
 	 * Live stations in {@code ds}: local maxima at least
 	 * {@link #DETECT_MARGIN_DB} above the noise floor, snapped to the
@@ -118,6 +123,42 @@ public final class FmChannelPlan
 	public static List<FmStationHit> detectStations(DatasetSpectrum ds, double startMHz, double endMHz)
 	{
 		return detectStations(ds, startMHz, endMHz, DETECT_MARGIN_DB, DETECT_HOLD_DB, List.of());
+	}
+
+	/**
+	 * Same peak test on a parked-IQ row (absolute MHz vs dBFS).
+	 */
+	public static List<FmStationHit> detectStations(float[] mhz, float[] dbfs)
+	{
+		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
+			return List.of();
+		int n = mhz.length;
+		float[] sorted = dbfs.clone();
+		Arrays.sort(sorted);
+		float noise = sorted[Math.min(n - 1, Math.max(0, (int) Math.floor(NOISE_PERCENTILE * (n - 1))))];
+		if (!Float.isFinite(noise))
+			return List.of();
+		float freshThresh = noise + DETECT_MARGIN_DB;
+		Map<Integer, FmStationHit> byFcc = new LinkedHashMap<>();
+		for (int i = 0; i < n; i++)
+		{
+			float p = dbfs[i];
+			if (p < freshThresh)
+				continue;
+			if (i > 0 && p < dbfs[i - 1])
+				continue;
+			if (i + 1 < n && p <= dbfs[i + 1])
+				continue;
+			FmChannel ch = nearest(mhz[i]);
+			if (ch == null)
+				continue;
+			FmStationHit existing = byFcc.get(ch.fccChannel);
+			if (existing == null || p > existing.powerDbm)
+				byFcc.put(ch.fccChannel, new FmStationHit(ch, p));
+		}
+		List<FmStationHit> out = new ArrayList<>(byFcc.values());
+		out.sort((a, b) -> Double.compare(a.channel.centerMHz(), b.channel.centerMHz()));
+		return Collections.unmodifiableList(out);
 	}
 
 	public static List<FmStationHit> detectStations(DatasetSpectrum ds, double startMHz, double endMHz,

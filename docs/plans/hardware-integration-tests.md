@@ -33,14 +33,14 @@ This is application integration against a real HackRF, plus a basic board health
 |---|---|
 | `nativebridge/HackRFDeviceQuery.java` | JNA: `hackrf_init` / `open` / firmware / USB API / board on the same `.so` the app loads |
 | `nativebridge/HackRFDeviceQueryTest.java` | Unit tests for firmware parse / compare (no radio) |
-| `src/test/java/jspectrumanalyzer/hw/HardwareConditions.java` | sysfs + `lsusb` detect; find `.so`; usbfs writable check |
-| `src/test/java/jspectrumanalyzer/hw/HardwareSweepSession.java` | start → callback(s) → stop; optional full-sweep + `SpectrumSink` |
+| `src/hotiron/src/test/java/hotiron/hw/HardwareConditions.java` | sysfs + `lsusb` detect; find `.so`; usbfs writable check |
+| `src/hotiron/src/test/java/hotiron/hw/HardwareSweepSession.java` | start → callback(s) → stop; optional full-sweep + `SpectrumSink` |
 | `core/SpectrumSweepEngine.java` | Real queue + processing loop + native sweep; analyzer UI is a hook |
-| `src/test/java/jspectrumanalyzer/hw/HackRFSweepHardwareIT.java` | 8 gated ITs including engine queue/dataset and parked FM IQ → sweep resume |
+| `src/hotiron/src/test/java/hotiron/hw/HackRFSweepHardwareIT.java` | 8 gated ITs including engine queue/dataset and parked FM IQ → sweep resume |
 | `nativebridge/HackRFSweepNativeBridge.java` | `hackrf.sweep.lib.dir` so tests can point at the built `.so` |
 | `pom.xml` | default exclude `*IT` + `hardware` tag; profile `hardware` |
-| Root + `src/hackrf-sweep` Makefiles | `test-hw` target |
-| `docs/hackrf-setup.md` | WSL `usbipd` + chmod note |
+| Root + `src/hotiron` Makefiles | `test-hw` target |
+| `docs/hardware.md` | WSL `usbipd` + chmod note |
 
 Contracts (when device + `.so` + writable node):
 
@@ -53,7 +53,7 @@ Contracts (when device + `.so` + writable node):
 - restart after FFT bin + frequency change still produces data in the new band
 - parked FM Listen produces IQ, stops cleanly, then sweep resumes
 
-Does **not** launch Swing / `HackRFSweepSpectrumAnalyzer` ctor. Does **not** assert live RF levels (no “LNA made it louder”).
+Does **not** launch Swing / `HotIron` ctor. Does **not** assert live RF levels (no “LNA made it louder”).
 
 ## Checklist
 
@@ -64,7 +64,7 @@ Does **not** launch Swing / `HackRFSweepSpectrumAnalyzer` ctor. Does **not** ass
 - [x] Extract `SpectrumSweepEngine`; IT asserts processing queue fills and `datasetSpectrum` updates (no Swing ctor)
 - [x] Smoke: start → callback → stop → start again
 - [x] Assert Hz range, finite dBm
-- [x] Document WSL `usbipd attach` in `docs/hackrf-setup.md` / `make help`
+- [x] Document WSL `usbipd attach` in `docs/hardware.md` / `make help`
 - [x] LNA / antenna-power start/stop does not crash
 - [x] Restart after FFT bin / freq change
 - [x] Parked FM Listen IQ then sweep resume

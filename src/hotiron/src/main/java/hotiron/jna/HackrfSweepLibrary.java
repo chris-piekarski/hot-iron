@@ -33,6 +33,8 @@ public class HackrfSweepLibrary implements Library {
 
 	public static native void hackrf_fm_lib_config(String serial_number, int clkout_enable);
 
+	public static native int hackrf_fm_lib_set_gains(int lna_gain, int vga_gain);
+
 	public static native Pointer atsc_rx_create(double input_rate_hz);
 
 	public static native void atsc_rx_destroy(Pointer rx);
@@ -45,8 +47,6 @@ public class HackrfSweepLibrary implements Library {
 	public static native int atsc_rx_locked(Pointer rx);
 
 	public static native int atsc_rx_packets(Pointer rx);
-
-	public static native int atsc_rx_bad_packets(Pointer rx);
 
 	public static native int atsc_rx_debug(Pointer rx, long[] counters, int counterCap,
 			float[] gauges, int gaugeCap);

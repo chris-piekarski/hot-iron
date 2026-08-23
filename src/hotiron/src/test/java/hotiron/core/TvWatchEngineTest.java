@@ -18,11 +18,64 @@ class TvWatchEngineTest {
 	}
 
 	@Test
-	void polarityRetryOnlyRunsBeforePacketSync() {
+	void playerWaitsForPmtAudioAndVideoPids() {
+		assertFalse(TvWatchEngine.pmtReadyForPlayer(MpegTsProbe.Snapshot.empty()));
+		assertFalse(TvWatchEngine.pmtReadyForPlayer(
+				new MpegTsProbe.Snapshot(1, 0, 1, 0x30, 1, 0x31, 2, 1, 1, -1, 0, 0, 0)));
+		assertTrue(TvWatchEngine.pmtReadyForPlayer(
+				new MpegTsProbe.Snapshot(1, 0, 1, 0x30, 1, 0x31, 2, 1, 1, 0x34, 0x81, 1, 1)));
+	}
+
+	@Test
+	void decodeStartsOnlyOnAHealthyRsWindow() {
+		assertFalse(TvWatchEngine.rsHealthyForDecode(0, 0));
+		assertFalse(TvWatchEngine.rsHealthyForDecode(19, 32));
+		assertTrue(TvWatchEngine.rsHealthyForDecode(20, 32));
+		assertFalse(TvWatchEngine.rsHealthyForDecode(39, 64));
+		assertTrue(TvWatchEngine.rsHealthyForDecode(40, 64));
+		assertFalse(TvWatchEngine.rsCollapsedForDecode(0, 0));
+		assertFalse(TvWatchEngine.rsCollapsedForDecode(8, 64));
+		assertTrue(TvWatchEngine.rsCollapsedForDecode(7, 64));
+	}
+
+	@Test
+	void stuckReceiverResetNeedsAPriorPatThenDeadRs() {
+		assertFalse(TvWatchEngine.shouldResetStuckReceiver(false, 0, TvWatchEngine.STUCK_RS_RESET_MS));
+		assertFalse(TvWatchEngine.shouldResetStuckReceiver(true, 1, TvWatchEngine.STUCK_RS_RESET_MS));
+		assertFalse(TvWatchEngine.shouldResetStuckReceiver(true, 0, TvWatchEngine.STUCK_RS_RESET_MS - 1));
+		assertTrue(TvWatchEngine.shouldResetStuckReceiver(true, 0, TvWatchEngine.STUCK_RS_RESET_MS));
+	}
+
+	@Test
+	void polarityRetryUsesRollingRsHealth() {
 		assertFalse(TvWatchEngine.shouldRetryPolarity(false, 0, TvWatchEngine.POLARITY_RETRY_MS - 1));
 		assertTrue(TvWatchEngine.shouldRetryPolarity(false, 0, TvWatchEngine.POLARITY_RETRY_MS));
-		assertFalse(TvWatchEngine.shouldRetryPolarity(false, 12, TvWatchEngine.POLARITY_RETRY_MS));
+		assertTrue(TvWatchEngine.shouldRetryPolarity(false, 0, TvWatchEngine.POLARITY_RETRY_MS * 2),
+				"all-bad packet output must not suppress recovery");
+		assertFalse(TvWatchEngine.shouldRetryPolarity(false, 1, TvWatchEngine.POLARITY_RETRY_MS),
+				"a recently RS-valid packet proves the current polarity is usable");
 		assertFalse(TvWatchEngine.shouldRetryPolarity(true, 0, TvWatchEngine.POLARITY_RETRY_MS * 2));
+		assertFalse(TvWatchEngine.shouldRetryPolarity(false, 0, TvWatchEngine.POLARITY_RETRY_MS, true),
+				"a polarity that already produced a healthy RS window must not flip after a drop");
+	}
+
+	@Test
+	void settleWindowIsArmedOnStart() throws Exception {
+		TvWatchEngine engine = new TvWatchEngine();
+		engine.setSettleMs(80);
+		long before = System.currentTimeMillis();
+		engine.start(img -> {
+		}, new RecordingAudioSink());
+		try
+		{
+			java.lang.reflect.Field until = TvWatchEngine.class.getDeclaredField("settleUntilMs");
+			until.setAccessible(true);
+			assertTrue(until.getLong(engine) >= before + 80);
+		}
+		finally
+		{
+			engine.stop();
+		}
 	}
 
 	@Test

@@ -1,7 +1,6 @@
 package hotiron.mvc;
 
-import java.util.Observable;
-import java.util.Observer;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
@@ -10,7 +9,7 @@ import java.util.function.Consumer;
  * 
  * @param <T>
  */
-public class ModelValue<T> extends Observable{
+public class ModelValue<T> {
 	
 	public static class ModelValueInt extends ModelValue<Integer>{
 		protected final boolean isBounded;
@@ -61,6 +60,8 @@ public class ModelValue<T> extends Observable{
 	
 	private T value;
 	protected final String name;
+	private final CopyOnWriteArrayList<Consumer<T>> listeners = new CopyOnWriteArrayList<Consumer<T>>();
+
 	public ModelValue(String name, T initialValue) {
 		this.value	= initialValue;
 		this.name	= name;
@@ -68,11 +69,15 @@ public class ModelValue<T> extends Observable{
 	
 	
 	public void addListener(Consumer<T> listener) {
-		addObserver((Observer) (o, arg) -> listener.accept(getValue()));
+		if (listener == null)
+			throw new IllegalArgumentException("listener");
+		listeners.add(listener);
 	}
 	
 	public void addListener(Runnable listener) {
-		addObserver((Observer) (o, arg) -> listener.run());
+		if (listener == null)
+			throw new IllegalArgumentException("listener");
+		listeners.add(value -> listener.run());
 	}
 	
 	
@@ -91,8 +96,8 @@ public class ModelValue<T> extends Observable{
 	}
 	
 	public void callObservers() {
-		setChanged();
-		notifyObservers();
+		for (int i = listeners.size() - 1; i >= 0; i--)
+			listeners.get(i).accept(value);
 	}
 	
 	public T getValue() {

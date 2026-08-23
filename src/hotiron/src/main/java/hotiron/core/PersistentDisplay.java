@@ -74,10 +74,6 @@ public class PersistentDisplay {
 		setImageSize(320, 240);
 	}
 
-	public void drawSpectrum2(DatasetSpectrum datasetSpectrum, float yMin, float yMax, boolean renderImage) {
-		drawSpectrumFloat(datasetSpectrum, yMin, yMax, renderImage);
-	}
-
 	public void drawSpectrumFloat(DatasetSpectrum datasetSpectrum, float yMin, float yMax, boolean renderImage) {
 		if (!calibrated) {
 			if (!calibrating) {

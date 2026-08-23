@@ -253,6 +253,7 @@ public final class SpectrumSnapshot
 		public final boolean peaks;
 		public final boolean autoScale;
 		public final boolean autoGain;
+		public final boolean autoSweep;
 		public final List<FmHit> fmStations;
 		public final String radioMode;
 		public final int listenKHz;
@@ -261,29 +262,8 @@ public final class SpectrumSnapshot
 		public RadioContext(boolean paused, boolean released, double sweepsPerSec, String board, String serial,
 				String firmware, String usbApi, boolean present, int radioStartMHz, int radioEndMHz, int radioFftBinHz,
 				int samples, int lnaGain, int vgaGain, boolean antennaPower, boolean antennaLna, boolean clkout,
-				String selectedSerial, boolean peaks, boolean autoScale, boolean autoGain, List<FmHit> fmStations)
-		{
-			this(paused, released, sweepsPerSec, board, serial, firmware, usbApi, present, radioStartMHz, radioEndMHz,
-					radioFftBinHz, samples, lnaGain, vgaGain, antennaPower, antennaLna, clkout, selectedSerial, peaks,
-					autoScale, autoGain, fmStations, "sweep", 0, 0);
-		}
-
-		public RadioContext(boolean paused, boolean released, double sweepsPerSec, String board, String serial,
-				String firmware, String usbApi, boolean present, int radioStartMHz, int radioEndMHz, int radioFftBinHz,
-				int samples, int lnaGain, int vgaGain, boolean antennaPower, boolean antennaLna, boolean clkout,
-				String selectedSerial, boolean peaks, boolean autoScale, boolean autoGain, List<FmHit> fmStations,
-				String radioMode, int listenKHz)
-		{
-			this(paused, released, sweepsPerSec, board, serial, firmware, usbApi, present, radioStartMHz, radioEndMHz,
-					radioFftBinHz, samples, lnaGain, vgaGain, antennaPower, antennaLna, clkout, selectedSerial, peaks,
-					autoScale, autoGain, fmStations, radioMode, listenKHz, 0);
-		}
-
-		public RadioContext(boolean paused, boolean released, double sweepsPerSec, String board, String serial,
-				String firmware, String usbApi, boolean present, int radioStartMHz, int radioEndMHz, int radioFftBinHz,
-				int samples, int lnaGain, int vgaGain, boolean antennaPower, boolean antennaLna, boolean clkout,
-				String selectedSerial, boolean peaks, boolean autoScale, boolean autoGain, List<FmHit> fmStations,
-				String radioMode, int listenKHz, int tvChannel)
+				String selectedSerial, boolean peaks, boolean autoScale, boolean autoGain, boolean autoSweep,
+				List<FmHit> fmStations, String radioMode, int listenKHz, int tvChannel)
 		{
 			this.paused = paused;
 			this.released = released;
@@ -306,6 +286,7 @@ public final class SpectrumSnapshot
 			this.peaks = peaks;
 			this.autoScale = autoScale;
 			this.autoGain = autoGain;
+			this.autoSweep = autoSweep;
 			this.fmStations = fmStations == null ? List.of() : List.copyOf(fmStations);
 			this.radioMode = radioMode == null || radioMode.isEmpty() ? "sweep" : radioMode;
 			this.listenKHz = listenKHz;
@@ -346,7 +327,8 @@ public final class SpectrumSnapshot
 			sb.append("},\"display\":{");
 			Json.appendKey(sb, "peaks").append(peaks).append(',');
 			Json.appendKey(sb, "autoScale").append(autoScale).append(',');
-			Json.appendKey(sb, "autoGain").append(autoGain);
+			Json.appendKey(sb, "autoGain").append(autoGain).append(',');
+			Json.appendKey(sb, "autoSweep").append(autoSweep);
 			sb.append("}}");
 			return sb.toString();
 		}

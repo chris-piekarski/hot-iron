@@ -30,6 +30,7 @@ public final class TvWatchDebug
 	public final float rsGoodRatioDb;
 	public final float equalizerMainTap;
 	public final float equalizerPeakTap;
+	public final MpegTsPlayer.Stats ffmpeg;
 
 	public TvWatchDebug(long timestampMs, boolean running, boolean nativeAvailable,
 			boolean hasPat, boolean locked, boolean inverted, long packets,
@@ -38,6 +39,21 @@ public final class TvWatchDebug
 			long droppedChunks, int queueDepth, int frames, int previewFrames,
 			float agcGain, float rmsIq, float rmsBaseband, float rsGoodRatioDb,
 			float equalizerMainTap, float equalizerPeakTap)
+	{
+		this(timestampMs, running, nativeAvailable, hasPat, locked, inverted, packets, badPackets,
+				goodPackets, segments, fieldSegments, pendingBaseband, rsGoodWindow, rsWindow,
+				totalIqSamples, droppedChunks, queueDepth, frames, previewFrames, agcGain, rmsIq,
+				rmsBaseband, rsGoodRatioDb, equalizerMainTap, equalizerPeakTap,
+				MpegTsPlayer.Stats.empty());
+	}
+
+	public TvWatchDebug(long timestampMs, boolean running, boolean nativeAvailable,
+			boolean hasPat, boolean locked, boolean inverted, long packets,
+			long badPackets, long goodPackets, long segments, long fieldSegments,
+			long pendingBaseband, long rsGoodWindow, long rsWindow, long totalIqSamples,
+			long droppedChunks, int queueDepth, int frames, int previewFrames,
+			float agcGain, float rmsIq, float rmsBaseband, float rsGoodRatioDb,
+			float equalizerMainTap, float equalizerPeakTap, MpegTsPlayer.Stats ffmpeg)
 	{
 		this.timestampMs = timestampMs;
 		this.running = running;
@@ -64,6 +80,7 @@ public final class TvWatchDebug
 		this.rsGoodRatioDb = rsGoodRatioDb;
 		this.equalizerMainTap = equalizerMainTap;
 		this.equalizerPeakTap = equalizerPeakTap;
+		this.ffmpeg = ffmpeg == null ? MpegTsPlayer.Stats.empty() : ffmpeg;
 	}
 
 	public static TvWatchDebug empty()
@@ -71,6 +88,16 @@ public final class TvWatchDebug
 		return new TvWatchDebug(0, false, false, false, false, false,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0);
+	}
+
+	TvWatchDebug withPlayer(long now, boolean hasPat, boolean locked, int frames,
+			int previewFrames, MpegTsPlayer.Stats ffmpeg)
+	{
+		return new TvWatchDebug(now, running, nativeAvailable, hasPat, locked, inverted,
+				packets, badPackets, goodPackets, segments, fieldSegments, pendingBaseband,
+				rsGoodWindow, rsWindow, totalIqSamples, droppedChunks, queueDepth, frames,
+				previewFrames, agcGain, rmsIq, rmsBaseband, rsGoodRatioDb, equalizerMainTap,
+				equalizerPeakTap, ffmpeg);
 	}
 
 	public String stage()
@@ -91,8 +118,35 @@ public final class TvWatchDebug
 			return "rs_unusable";
 		if (!hasPat)
 			return "no_pat";
-		if (frames == 0)
-			return "ffmpeg_waiting";
-		return "picture";
+		if (frames == 0 && !ffmpeg.started && rsWindow >= TvWatchEngine.RS_MIN_WINDOW
+				&& !TvWatchEngine.rsHealthyForDecode(rsGoodWindow, rsWindow))
+			return "waiting_rs_health";
+		if (frames > 0)
+			return "picture";
+		MpegTsPlayer.Stats f = ffmpeg;
+		MpegTsProbe.Snapshot ts = f.ts;
+		if (!f.started)
+			return "ffmpeg_not_started";
+		if (f.launchFailed)
+			return "ffmpeg_missing";
+		if (f.writeErrors > 0 && !f.videoAlive)
+			return "ffmpeg_stdin_dead";
+		if (!f.videoAlive)
+			return "ffmpeg_exited";
+		if (f.tsBytesOffered == 0 && f.tsBytesWritten == 0)
+			return "ffmpeg_starved";
+		if (f.tsBytesOffered > 0 && f.tsBytesWritten == 0)
+			return "ffmpeg_blocked";
+		if (ts.pmtPid < 0)
+			return "no_pmt";
+		if (ts.videoPid < 0)
+			return "no_video_pid";
+		if (ts.videoPackets == 0)
+			return "no_video_pes";
+		if (f.stdoutEof && f.stdoutBytes == 0)
+			return "ffmpeg_no_stdout";
+		if (f.stdoutBytes > 0)
+			return "ffmpeg_partial_frame";
+		return "ffmpeg_waiting";
 	}
 }

@@ -45,17 +45,6 @@ public final class BandMark
 		this.intensity = Math.max(0f, Math.min(1f, intensity));
 	}
 
-	public static BandMark header(double lowMHz, double highMHz, double labelMHz, String label, Style style,
-			LabelFit fit)
-	{
-		return new BandMark(lowMHz, highMHz, labelMHz, label, style, false, true, false, fit, 1f);
-	}
-
-	public double midMHz()
-	{
-		return (lowMHz + highMHz) / 2.0;
-	}
-
 	public boolean centerIn(FrequencyAxis axis)
 	{
 		return axis != null && axis.containsMhz(labelMHz);

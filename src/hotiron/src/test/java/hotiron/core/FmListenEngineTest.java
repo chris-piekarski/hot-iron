@@ -20,6 +20,7 @@ class FmListenEngineTest
 			got.set(row);
 			frame.countDown();
 		});
+		engine.setSettleMs(0);
 		engine.start(new RecordingAudioSink());
 		try
 		{
@@ -34,6 +35,33 @@ class FmListenEngineTest
 			assertTrue(frame.await(2, TimeUnit.SECONDS));
 			assertNotNull(got.get());
 			assertEquals(IqSpectrum.FFT_N, got.get().length);
+		}
+		finally
+		{
+			engine.stop();
+		}
+	}
+
+	@Test
+	void settleDropsAudioThenArmsTheDemod() throws Exception
+	{
+		RecordingAudioSink sink = new RecordingAudioSink();
+		FmListenEngine engine = new FmListenEngine();
+		engine.setSettleMs(80);
+		engine.setVolume(100);
+		engine.start(sink);
+		try
+		{
+			byte[] iq = WfmDemodulatorTest.modulate(1000, WfmDemodulator.DEVIATION_HZ, 0.04);
+			assertTrue(engine.offerIq(iq));
+			Thread.sleep(30);
+			assertEquals(0, sink.size(), "PLL-settle window must not play the first IQ");
+			Thread.sleep(80);
+			assertTrue(engine.offerIq(iq));
+			long deadline = System.currentTimeMillis() + 1000;
+			while (sink.size() < 200 && System.currentTimeMillis() < deadline)
+				Thread.sleep(20);
+			assertTrue(sink.size() > 200, "audio should start after settle, got " + sink.size());
 		}
 		finally
 		{

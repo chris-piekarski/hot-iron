@@ -88,6 +88,16 @@ public interface HackRFSettings {
 	/** Leave listen mode and resume the sweep unless Stop was pressed. */
 	public void stopListen();
 
+	/** Sweep the FM band and pin those hits as the Seek list. */
+	public void startFmScan();
+
+	/** Sweep VHF then UHF TV and pin those hits as the Seek list. */
+	public void startTvScan();
+
+	public void stopScan();
+
+	public ModelValue<BandScan> getBandScan();
+
 	public ModelValueBoolean isListening();
 
 	/** US FM dial in kHz (88100–107900, step 200). */
@@ -116,7 +126,8 @@ public interface HackRFSettings {
 	/** Live LNA/VGA AGC. Off = operator sliders. */
 	public ModelValueBoolean isAutoGain();
 
-	public ModelValueBoolean isFilterSpectrum();
+	/** Live FFT Bin / samples from sweep span. Off = operator spinners. */
+	public ModelValueBoolean isAutoSweep();
 
 	public ModelValueBoolean isSpurRemoval();
 

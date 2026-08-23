@@ -44,11 +44,6 @@ public final class SpectrumMcpServer
 		this(store, null, null);
 	}
 
-	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch)
-	{
-		this(store, tvWatch, null);
-	}
-
 	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
 			SpectrumMcpTools.FmListenHook fmListen)
 	{

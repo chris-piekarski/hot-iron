@@ -32,7 +32,7 @@ This shows all available targets with descriptions and categories (colorized).
 - `make build` — Full build (natives + JAR + zip)
 - `make test` — Native C/C++ self-tests (`sweep_power_average` + `atsc_selftest`) with gcov, then Maven + JaCoCo. Does **not** require a HackRF. Native report: `src/hotiron/obj/gcov/coverage.txt`.
 - `make test-hw` — Hardware ITs (`*IT`, `@Tag("hardware")`): USB, firmware/USB API/board, `SpectrumSweepEngine` queue + dataset, start/stop/restart, LNA + antenna-power, FFT/freq restart, and parked FM IQ followed by sweep resume. Skips if no radio.
-- `make info` — List attached HackRF devices, the SDK/USB API this app is pinned to, and whether a newer GSG firmware/libhackrf exists. Alias: `make list-devices`
+- `make info` — List attached HackRF devices, the SDK/USB API this app is pinned to, and whether a newer GSG firmware/libhackrf exists.
 - `make firmware-update` — Dry-run official GSG SPI flash. Write only with `CONFIRM=1` (optional `VERSION=2026.01.3`). Not part of `build` / `test`.
 - `make udev` — Install persistent udev rules (sudo once) so WSL usbipd nodes stay writable.
 - `make lint` — Compile/lint checks
@@ -41,7 +41,6 @@ This shows all available targets with descriptions and categories (colorized).
 - `make start` — Build (if needed) + launch the Linux app
 - `make mcp` — Same as `start`, plus MCP on `127.0.0.1:8765` (`--mcp`)
 - `make clean` — Clean build artifacts
-- `make run` — Alias for `start`
 
 From inside `src/hotiron/` you can also run the detailed native build targets directly (`make help` there too).
 
@@ -79,7 +78,7 @@ All first-class documentation lives under `docs/`:
 - [docs/hardware.md](docs/hardware.md) — Hardware, udev, firmware, Zadig
 - [docs/agents.md](docs/agents.md) — MCP for AI agents (tools, proxy, v1 limits)
 - [docs/operator.md](docs/operator.md) — Running the analyzer, features, quick selects
-- [docs/architecture.md](docs/architecture.md) — High-level design (core, native, UI, MCP)
+- [docs/architecture.md](docs/architecture.md) — Layers, exclusive USB, MVC/hooks, queues, policies, MCP snapshot store
 - [docs/stats.md](docs/stats.md) — generated first-party stats (`make stats`)
 - [docs/contributing.md](docs/contributing.md)
 - [docs/plans/](docs/plans/README.md) — living implementation plans (status + checklists must stay current)
@@ -108,13 +107,14 @@ The only project overview file is root `README.md`. Do **not** recreate `Readme.
 ### Adding Features
 
 - Core DSP changes (SpurFilter, peaks, spectrum datasets, etc.) **must** have corresponding unit tests.
-- Operator settings live in `AnalyzerSettings` (implements `HackRFSettings`). Do not add new `ModelValue` fields on the analyzer JFrame. Mark radio vs display via `isRadioSetting`. Auto gain is display policy; the LNA/VGA values it writes are radio settings.
+- Operator settings live in `AnalyzerSettings` (implements `HackRFSettings`). Do not add new `ModelValue` fields on the analyzer JFrame. Mark radio vs display via `isRadioSetting`. Auto gain is display policy; the LNA/VGA values it writes are radio settings. Auto FFT/samples (`AutoSweepPolicy`) is the same: display policy, default on; the bin/sample values it writes are radio settings. Coalesce those writes with the frequency restart; hysteresis must not thrash USB on pan.
 - Plot overlays go through `FrequencyAxis` + `BandMark` + `BandHeaderPainter`. Do not invent a second MHz↔pixel map.
 - Native interleaved hops export 5 MHz slices with holes. Pad USB start/stop with `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz) so the requested window (e.g. FM 88–108) is actually filled. Dataset/axis stay on the operator range.
 - Live agent access is `hotiron.mcp` (`SpectrumSnapshotStore` from `onFullSweepProcessed`, `SpectrumMcpServer` JSON-RPC). Snapshot/diagnostic tools are read-only (`spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config`, `fm_stations`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `tv_debug`, `tv_debug_history`); occupancy is `SpectrumOccupancy` on filled bins, not a new USB path. Do not restart USB from a snapshot tool. `sweep_config` reports `radioMode` (`sweep`/`listen`/`watch`/`stopped`). Start with `--mcp` / `make mcp` (localhost 8765). Stdio shim: `scripts/mcp-hotiron-proxy.py`.
 - FM listen (`WfmDemodulator`, `src-c/hackrf_fm.c`) is exclusive with the wideband sweep: one HackRF, parked 4 MS/s IQ RX, Java mono WFM. The main chart and `fm_spectrum` use an `IqSpectrum` FFT of that same IQ (local ±2 MHz RF); the waterfall remains 0–16 kHz demodulated audio. Do not time-slice. Demod belongs in `core` with synthetic IQ tests. `AudioSink` fakes the mixer in unit tests.
-- ATSC Watch parks at 16 MS/s with an 8 MHz analog filter. The main chart, VIDEO waterfall, and `tv_spectrum` all derive from that same local ±8 MHz IQ. Keep the PFB RRC, long DC blocker, MMSE timing, field-trained equalizer, SIMD helpers, and double-precision AGC reference-compatible; 20 MS/s or the old 40+32 dB gain seed loses real-time continuity or clips. `tv_debug` should reach `stage=picture` on a usable RF channel (verified on RF 28 and 33).
+- ATSC Watch parks at 16 MS/s with an 8 MHz analog filter. The main chart, VIDEO waterfall, and `tv_spectrum` all derive from that same local ±8 MHz IQ. Keep the PFB RRC, long DC blocker, MMSE timing, field-trained equalizer, SIMD helpers, and double-precision AGC reference-compatible; 20 MS/s or the old 40+32 dB gain seed loses real-time continuity or clips. Auto Watch enables the RF amp for that parked session only and keeps trimming IF toward ~0.5 RMS; do not write the Antenna LNA checkbox (that restarts USB / leaves the amp on after Watch). `tv_debug` should reach `stage=picture` on a usable RF channel (verified on RF 28 and 33). Start host `ffmpeg` only after a healthy rolling RS window (`waiting_rs_health` until then); stop it when RS collapses. When frames stay at 0 after PAT, use `tv_debug.ffmpeg` (process, TS offered/written, PMT/video PID, last stderr) rather than treating all stalls as `ffmpeg_waiting`.
 - Auto-gain (`AutoGainPolicy`) must not pump: one Wi-Fi packet is not clip; a disappeared burst is not compression; settle after each apply; do not `clearHistory()` on a gain-only restart (`DatasetSpectrum.sameAxisAs`).
+- Auto FFT/samples (`AutoSweepPolicy`) biases high waterfall FPS: finest list bin with ≤~4000 dataset points, always 8192 samples, keep the current bin while length stays 1500–6000. Zoomed-in windows go fine; **All** stays ~2 MHz. Manual spinner changes turn Auto off (same as gain).
 - UI changes should be accompanied by updates to `docs/operator.md`.
 - New Makefile targets must be added to both the root `Makefile` and the detailed `src/hotiron/Makefile`, with proper `##` descriptions for `make help`.
 - When touching native code, ensure the patch in `src-c/` and build process still work.
@@ -144,10 +144,10 @@ GitHub's "ahead/behind" count vs `pavsa/hackrf-spectrum-analyzer` is misleading:
 - Full end-to-end testing requires a real HackRF One + proper udev permissions.
 - The native build is Linux-only for cross-compilation (mingw).
 - Some UI components are still difficult to unit test (Swing-heavy). Focus unit tests on `core/` logic (`AutoGainPolicy`, `SpectrumPowerScale`, MCP store/tools without sockets).
-- `HackrfSweepLibrary` is hand-maintained (`make jnabridge` does not run JNAerator). The UI requires a **headful** JDK 21+.
+- `HackrfSweepLibrary` is hand-maintained; JNAerator is not part of the build. The UI requires a **headful** JDK 21+.
 - Long runs on WSL/X11 can SIGSEGV in `libawt` while JFreeChart paints the spectrum line (`ChartPanel` / `FillAAPgram`). That is native AWT, not the sweep engine.
 - AGC still restarts USB when it actually changes LNA/VGA; only the waterfall mapping (same MHz/FFT) is preserved across that restart.
-- Listen and Watch stop the sweep and exclusively park the same HackRF. Watch uses 16 MS/s / 8 MHz and needs host `ffmpeg` for MPEG-2/AC-3; WSL audio needs Pulse/PipeWire forwarded to Windows or playback is silent.
+- Listen and Watch stop the sweep and exclusively park the same HackRF. Watch uses 16 MS/s / 8 MHz and needs host `ffmpeg` for MPEG-2/AC-3; WSL audio needs Pulse/PipeWire forwarded to Windows or playback is silent. Tuner **Scan** leaves Listen/Watch, surveys FM (88–108) or TV (VHF then UHF), and pins those hits as the Seek list.
 
 ## Questions?
 

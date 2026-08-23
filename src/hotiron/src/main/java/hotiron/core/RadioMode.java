@@ -14,11 +14,6 @@ public enum RadioMode
 		return name().toLowerCase(Locale.ROOT);
 	}
 
-	public static RadioMode from(boolean released, boolean listening)
-	{
-		return from(released, listening, ListenService.FM);
-	}
-
 	public static RadioMode from(boolean released, boolean parked, ListenService service)
 	{
 		if (released)

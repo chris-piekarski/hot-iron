@@ -21,7 +21,7 @@ Start it with `make mcp`. Point the agent at `scripts/mcp-hotiron-proxy.py`. Ask
 | Where is the peak, and how loud is the noise? | `spectrum_summary` |
 | Give me the filled bins (optional `maxPoints`, `minDbm`) | `spectrum_snapshot` |
 | What radio is attached (board, serial, firmware, USB API)? | `radio_identity` |
-| What is the radio vs display config (range, FFT, gain, `radioMode`, `tvChannel`, `tvLocked`)? | `sweep_config` |
+| What is the radio vs display config (range, FFT, gain, `autoSweep`, `radioMode`, `tvChannel`, `tvLocked`)? | `sweep_config` |
 | Park Watch on a US ATSC channel (2–36) | `tv_watch` |
 | What is the live local RF spectrum around the TV channel being watched? | `tv_spectrum` |
 | Where is ATSC Watch failing (IQ, segment/field sync, RS, PAT, FFmpeg)? | `tv_debug` |
@@ -32,7 +32,7 @@ Start it with `make mcp`. Point the agent at `scripts/mcp-hotiron-proxy.py`. Ask
 | What is occupying the window (width, fraction, Wi-Fi ch)? | `spectrum_occupancy` |
 | How did peak/noise/occupancy move over the last few seconds? | `spectrum_history` |
 
-Hop holes are **omitted**, not reported as −150 dBm. Snapshots are sampled at most **10 Hz**. `spectrum_history` returns **summaries** from the ring (~20 s), not full bin arrays, and starts a new series when the MHz/FFT window changes. Occupancy is deterministic (noise+8 dB, merge adjacent bins); Wi-Fi views may label `ch 6`. `tv_watch` and `fm_listen` park the same exclusive RF path the operator uses (US TV ch 2–36, or FM 88.1–107.9). Gain and sweep range stay operator-only. `sweep_config` includes `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`, `tvSnrDb`, and `tvPackets`. `fm_spectrum` is the live ±2 MHz dBFS view derived from Listen's parked IQ; `tv_spectrum` is the corresponding ±8 MHz Watch view. Neither opens another USB path. `tv_debug` labels the current failing stage (`no_segment_sync`, `no_field_sync`, `rs_unusable`, `no_pat`, `ffmpeg_waiting`, or `picture`) and exposes queue, AGC, equalizer, and packet-error measurements. `tv_debug_history` returns up to 200 recent diagnostic samples. While listening or watching, wideband sweep snapshots and `fm_stations` are stale.
+Hop holes are **omitted**, not reported as −150 dBm. Snapshots are sampled at most **10 Hz**. `spectrum_history` returns **summaries** from the ring (~20 s), not full bin arrays, and starts a new series when the MHz/FFT window changes. Occupancy is deterministic (noise+8 dB, merge adjacent bins); Wi-Fi views may label `ch 6`. `tv_watch` and `fm_listen` park the same exclusive RF path the operator uses (US TV ch 2–36, or FM 88.1–107.9). Gain and sweep range stay operator-only. `sweep_config` includes `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`, `tvSnrDb`, `tvPackets`, and display `autoSweep`. `fm_spectrum` is the live ±2 MHz dBFS view derived from Listen's parked IQ; `tv_spectrum` is the corresponding ±8 MHz Watch view. Neither opens another USB path. `tv_debug` labels the current failing stage (`no_segment_sync`, `no_field_sync`, `rs_unusable`, `no_pat`, `waiting_rs_health`, then FFmpeg-side `ffmpeg_missing` / `ffmpeg_exited` / `ffmpeg_blocked` / `no_pmt` / `no_video_pid` / `no_video_pes` / `ffmpeg_waiting` / `picture`) and exposes queue, AGC, equalizer, packet-error, and an `ffmpeg` object (process alive/exit, TS bytes offered vs written, queue drops, stdout/partial-frame, last stderr, PAT/PMT/video PID counts). `tv_debug_history` returns up to 200 recent diagnostic samples. The same FFmpeg counters are on the 2 s `ATSC watch:` console line. While listening or watching, wideband sweep snapshots and `fm_stations` are stale.
 
 ## Start
 
@@ -70,4 +70,4 @@ Run the proxy from the repo root (or pass an absolute path to the script).
 
 The operator sidebar (and the status-bar **MCP** field) shows bind address, connected clients (`initialize.clientInfo.name`), and the last tool call. **MCP off** means this process was started without `--mcp`.
 
-Implementation: `hotiron.mcp` (`SpectrumSnapshotStore`, `SpectrumMcpServer`, `SpectrumMcpTools`) plus `McpStatus` for the UI. Design notes: [architecture.md](architecture.md). Operator UI: [usage.md](operator.md).
+Implementation: `hotiron.mcp` (`SpectrumSnapshotStore`, `SpectrumMcpServer`, `SpectrumMcpTools`) plus `McpStatus` for the UI. Writes go through `FmListenHook` / `TvWatchHook` on the EDT (same `AnalyzerSettings` as the operator). Snapshot tools only read the store. Design notes: [architecture.md](architecture.md). Operator UI: [operator.md](operator.md).

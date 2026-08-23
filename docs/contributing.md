@@ -20,7 +20,7 @@ flowchart TD
 
 1. Fork the repository and create a feature branch.
 2. Make your changes.
-3. Add unit tests for any new core logic (see [development.md](develop.md)).
+3. Add unit tests for any new core logic (see [develop.md](develop.md)).
 4. Run `make test` and `make lint`. After doc or diagram changes, run `make mermaid` and `make stats`.
 5. Update documentation under `docs/` as needed. Do not hand-edit `docs/stats.md`.
 6. Submit a pull request.

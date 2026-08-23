@@ -2,6 +2,9 @@ package hotiron.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.awt.Dimension;
+import java.awt.event.MouseEvent;
+
 import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
@@ -16,20 +19,24 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
-    void noArgConstructorDoesNotThrow() {
-        assertDoesNotThrow(() -> { new HackRFSweepSettingsUI(); });
-    }
-
-    @Test
     void bindsFftBinPausePeaksPersistenceAndHardwareStatus() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
         flushEdt();
 
-        assertEquals("100 000", ui.fftBinSpinner().getValue().toString());
+        assertEquals(QuickSelectPreset.WIFI_2.startMHz, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(QuickSelectPreset.WIFI_2.endMHz, settings.getFrequency().getValue().getEndMHz());
+        assertEquals(QuickSelectPreset.WIFI_2.startMHz, ui.frequencyRangePanel().getRange().getStartMHz());
+        assertEquals(QuickSelectPreset.WIFI_2.endMHz, ui.frequencyRangePanel().getRange().getEndMHz());
+        assertTrue(ui.quickFrequencySelector().isHighlighted(QuickSelectPreset.WIFI_2.label),
+                "boot Quick Select is WiFi 2");
+        assertEquals("20 000", ui.fftBinSpinner().getValue().toString());
         assertTrue(ui.autoScaleCheckbox().isSelected(), "dB auto-scale is on so FM/Wi-Fi peaks fill the axis");
         assertTrue(ui.autoGainCheckbox().isSelected(), "auto gain is the default");
+        assertTrue(ui.autoSweepCheckbox().isSelected(), "auto FFT/samples is the default");
         assertFalse(ui.gainSlider().isEnabled(), "gain sliders stay locked while auto is on");
+        assertFalse(ui.fftBinSpinner().isEnabled(), "FFT bin stays locked while auto is on");
+        assertFalse(ui.samplesSpinner().isEnabled(), "samples stay locked while auto is on");
         assertEquals("Pause", ui.pauseButton().getText());
         assertTrue(ui.peakFallSpinner().isVisible());
         assertTrue(ui.decayRateCombo().isVisible());
@@ -49,6 +56,12 @@ class HackRFSweepSettingsUITest {
         assertFalse(settings.isAutoGain().getValue());
         assertTrue(ui.gainSlider().isEnabled(), "unchecking Auto unlocks the gain sliders");
 
+        SwingUtilities.invokeAndWait(() -> ui.autoSweepCheckbox().setSelected(false));
+        flushEdt();
+        assertFalse(settings.isAutoSweep().getValue());
+        assertTrue(ui.fftBinSpinner().isEnabled(), "unchecking Auto FFT unlocks the bin spinner");
+        assertTrue(ui.samplesSpinner().isEnabled(), "unchecking Auto FFT unlocks the samples spinner");
+
         settings.isChartsPeaksVisible().setValue(false);
         flushEdt();
         assertFalse(ui.peakFallSpinner().isVisible());
@@ -65,7 +78,8 @@ class HackRFSweepSettingsUITest {
         assertTrue(ui.connectedLabel().getText().contains("SN e5f60708"));
         assertTrue(ui.connectedLabel().getText().contains("FW 2026.01.3"));
         assertFalse(ui.connectedLabel().getText().contains("HackRF connected"));
-        assertTrue(ui.connectedLabel().getToolTipText().contains("Sweep running"));
+        assertNull(ui.connectedLabel().getToolTipText(), "status hover is an in-panel hint, not a Swing tooltip");
+        assertTrue(ExclusiveToolTip.hintOf(ui.connectedLabel()).contains("Sweep running"));
     }
 
     @Test
@@ -172,6 +186,45 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
+    void fmScanButtonStopsListenAndSweepsTheFmBand() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Scan", ui.tunerPanel().scanButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.listenButton().doClick());
+        flushEdt();
+        assertTrue(settings.isListening().getValue());
+        SwingUtilities.invokeAndWait(() -> ui.tunerPanel().scanButton().doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue());
+        assertEquals(hotiron.core.BandScan.FM, settings.getBandScan().getValue());
+        assertEquals(hotiron.core.FmChannelPlan.VIEW_START_MHZ, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(hotiron.core.FmChannelPlan.VIEW_END_MHZ, settings.getFrequency().getValue().getEndMHz());
+        assertEquals("Scanning…", ui.tunerPanel().scanButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.tunerPanel().scanButton().doClick());
+        flushEdt();
+        assertEquals(hotiron.core.BandScan.OFF, settings.getBandScan().getValue());
+        assertEquals("Scan", ui.tunerPanel().scanButton().getText());
+    }
+
+    @Test
+    void tvScanButtonStopsWatchAndSweepsVhf() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        SwingUtilities.invokeAndWait(() -> ui.watchButton().doClick());
+        flushEdt();
+        assertTrue(settings.isListening().getValue());
+        SwingUtilities.invokeAndWait(() -> ui.tvTunerPanel().scanButton().doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue());
+        assertEquals(hotiron.core.BandScan.TV, settings.getBandScan().getValue());
+        assertEquals(hotiron.core.TvChannelPlan.VHF_VIEW_START_MHZ, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(hotiron.core.TvChannelPlan.VHF_VIEW_END_MHZ, settings.getFrequency().getValue().getEndMHz());
+        assertEquals("Scanning…", ui.tvTunerPanel().scanButton().getText());
+    }
+
+    @Test
     void tuneIsOneChannelAndSeekSkipsToTheNextHit() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         settings.getDetectedFmStations().setValue(java.util.List.of(
@@ -190,12 +243,48 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
+    void quickSelectStopsListenAndSweepsThatBand() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        SwingUtilities.invokeAndWait(() -> ui.listenButton().doClick());
+        flushEdt();
+        assertTrue(settings.isListening().getValue());
+        int restarts = settings.restartSweepCalls;
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.FM.label).doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue(), "Listen audio must stop");
+        assertEquals(QuickSelectPreset.FM.startMHz, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(QuickSelectPreset.FM.endMHz, settings.getFrequency().getValue().getEndMHz());
+        assertEquals(restarts + 1, settings.restartSweepCalls);
+    }
+
+    @Test
+    void quickSelectStopsWatchEvenOnTheSameBand() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        SwingUtilities.invokeAndWait(() -> ui.watchButton().doClick());
+        flushEdt();
+        assertTrue(settings.isListening().getValue());
+        assertEquals(hotiron.core.ListenService.TV, settings.getListenService().getValue());
+        int restarts = settings.restartSweepCalls;
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.WIFI_2.label).doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue(), "Watch must stop");
+        assertEquals(QuickSelectPreset.WIFI_2.startMHz, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(QuickSelectPreset.WIFI_2.endMHz, settings.getFrequency().getValue().getEndMHz());
+        assertEquals(restarts + 1, settings.restartSweepCalls);
+    }
+
+    @Test
     void sweepRangePanelReplacesDigitWheelsAndUpdatesTheModel() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
         flushEdt();
         assertNotNull(ui.frequencyRangePanel());
-        assertEquals(0, countComponents(ui, hotiron.ui.FrequencySelectorPanel.class));
         SwingUtilities.invokeAndWait(() -> ui.frequencyRangePanel().setRange(
                 new hotiron.core.FrequencyRange(88, 108)));
         flushEdt();
@@ -207,14 +296,21 @@ class HackRFSweepSettingsUITest {
         assertEquals(113, settings.getFrequency().getValue().getEndMHz());
     }
 
-    private static int countComponents(java.awt.Container root, Class<?> type) {
-        int n = type.isInstance(root) ? 1 : 0;
-        for (java.awt.Component child : root.getComponents()) {
-            if (child instanceof java.awt.Container)
-                n += countComponents((java.awt.Container) child, type);
-            else if (type.isInstance(child))
-                n++;
-        }
-        return n;
+    @Test
+    void hoverHintDoesNotChangeSettingsColumnSize() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        Dimension before = ui.getPreferredSize();
+        ExclusiveToolTip.dispatchForTest(ui.tunerPanel().scanButton(), MouseEvent.MOUSE_ENTERED);
+        ExclusiveToolTip.dispatchForTest(ui.listenButton(), MouseEvent.MOUSE_ENTERED);
+        ExclusiveToolTip.dispatchForTest(ui.restartButton(), MouseEvent.MOUSE_ENTERED);
+        flushEdt();
+        assertEquals(before, ui.getPreferredSize(), "hover must not reflow the settings column");
+        assertNull(ui.listenButton().getToolTipText());
+        assertNull(ui.restartButton().getToolTipText());
+        assertTrue(ExclusiveToolTip.isShowing());
+        ExclusiveToolTip.hide();
     }
+
 }

@@ -1,21 +1,11 @@
 package hotiron.core;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-
-import org.jfree.data.xy.XYDataItem;
-import org.jfree.data.xy.XYSeries;
 
 import hotiron.core.jfc.XYSeriesImmutable;
 
 public class DatasetSpectrum implements Cloneable
 {
-	/**
-	 * caching decreases GC usage
-	 */
-	private final boolean useCached	= false;
-	protected ArrayList<ArrayList<XYDataItem>> cachedDataItems	= new ArrayList<>();
-	protected int cachedDataItemsIndex	= 0;
 	protected  final float	fftBinSizeHz;
 
 	protected  final long	freqStartHz;
@@ -46,17 +36,6 @@ public class DatasetSpectrum implements Cloneable
 		int datapoints = (int) (Math.ceil(freqStopMHz - freqStartMHz) * 1000000d / fftBinSizeHz);
 		spectrum = new float[datapoints];
 		Arrays.fill(spectrum, spectrumInitPower);
-
-		if (useCached) {
-			for (int j = 0; j < 5; j++) {
-				ArrayList<XYDataItem> list	= new ArrayList<>();
-				for (int i = 0; i < datapoints; i++) {
-					double freq = (freqStartHz + fftBinSizeHz * i) / 1000000;
-					list.add(new XYDataItem(freq, 0));
-				}
-				cachedDataItems.add(list);
-			}
-		}
 	}
 	
 	/**
@@ -190,16 +169,6 @@ public class DatasetSpectrum implements Cloneable
 		return !Float.isFinite(y) || y <= SpectrumPowerScale.EMPTY_CEILING;
 	}
 	
-	/**
-	 * Fills data to {@link XYSeries}, uses x units in MHz
-	 * @param series
-	 */
-	public void fillToXYSeries(XYSeries series)
-	{
-		fillToXYSeriesPriv(series, spectrum);
-	}
-
-
 	public float getFFTBinSizeHz()
 	{
 		return fftBinSizeHz;
@@ -264,26 +233,5 @@ public class DatasetSpectrum implements Cloneable
 		DatasetSpectrum copy	= (DatasetSpectrum) super.clone();
 		copy.spectrum			= spectrum.clone();
 		return copy;
-	}
-	
-	protected void fillToXYSeriesPriv(XYSeries series, float[] spectrum){
-		series.clear();
-		if (!useCached){
-			for (int i = 0; i < spectrum.length; i++)
-			{
-				double freq = (freqStartHz + fftBinSizeHz * i) / 1000000;
-				series.add(freq, spectrum[i]);
-			}
-		}
-		else{
-			ArrayList<XYDataItem> items	= cachedDataItems.get(cachedDataItemsIndex);
-			for (int i = 0; i < spectrum.length; i++)
-			{
-				XYDataItem item	= items.get(i);
-				item.setY(spectrum[i]);
-				series.add(item);
-			}
-			cachedDataItemsIndex	= (cachedDataItemsIndex+1)%cachedDataItems.size();
-		}
 	}
 }

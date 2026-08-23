@@ -106,14 +106,11 @@ class DatasetSpectrumTest {
     }
 
     @Test
-    void testFillToXYSeriesAndCreate() {
+    void testCreateImmutableSeries() {
         DatasetSpectrum ds = new DatasetSpectrum(100000f, 2400, 2401, -100f);
-        org.jfree.data.xy.XYSeries series = new org.jfree.data.xy.XYSeries("test");
-        ds.fillToXYSeries(series);
-        assertTrue(series.getItemCount() > 0);
-
         hotiron.core.jfc.XYSeriesImmutable immutable = ds.createSpectrumDataset("immut");
         assertNotNull(immutable);
+        assertTrue(immutable.getItemCount() > 0);
     }
 
     @Test

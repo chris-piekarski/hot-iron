@@ -25,7 +25,7 @@ The 2026 modernization had **92 `@Test` methods on disk** but CI/dev could not u
 
 **Non-goals (still true):**
 
-- Do not construct `HackRFSweepSpectrumAnalyzer` (static JNA load + maximized `JFrame` + native sweep).
+- Do not construct `HotIron` (static JNA load + maximized `JFrame` + native sweep).
 - Do not invent production APIs to match broken tests.
 - Do not chase 80% of the whole app. The remaining miss is the God-class analyzer + native glue.
 
@@ -35,7 +35,7 @@ The 2026 modernization had **92 `@Test` methods on disk** but CI/dev could not u
 
 ```bash
 make test
-# report: src/hackrf-sweep/target/site/jacoco/index.html
+# report: src/hotiron/target/site/jacoco/index.html
 ```
 
 Rules the suite still follows:
@@ -56,7 +56,7 @@ Rules the suite still follows:
 
 | Change | File | Why |
 |---|---|---|
-| Surefire `argLine` is `@{argLine} -Djava.awt.headless=true` | `src/hackrf-sweep/pom.xml` | `@{argLine}` keeps JaCoCo’s `-javaagent`. Hard-coded `argLine` had dropped it. |
+| Surefire `argLine` is `@{argLine} -Djava.awt.headless=true` | `src/hotiron/pom.xml` | `@{argLine}` keeps JaCoCo’s `-javaagent`. Hard-coded `argLine` had dropped it. |
 
 ### Production fixes that unblocked tests
 
@@ -85,7 +85,7 @@ Existing `PersistentDisplayTest`, `FrequencyAllocationTableTest`, and `DatasetSp
 
 | Test | File | Asserts |
 |---|---|---|
-| `createPeaksDatasetAndFillSeriesUseHold` | `core/DatasetSpectrumPeakTest.java` | `setPeakFalloutMillis(250)`; `createPeaksDataset` item count + Y[0] is hold; `fillPeaksToXYSeries` writes the same hold value |
+| `createPeaksDatasetUsesHold` | `core/DatasetSpectrumPeakTest.java` | `setPeakFalloutMillis(250)`; `createPeaksDataset` item count + Y[0] is hold |
 
 ---
 
@@ -95,9 +95,9 @@ Existing `PersistentDisplayTest`, `FrequencyAllocationTableTest`, and `DatasetSp
 
 ### `FakeHackRFSettings`
 
-`src/test/java/jspectrumanalyzer/FakeHackRFSettings.java`
+`src/hotiron/src/test/java/hotiron/FakeHackRFSettings.java`
 
-In-memory `HackRFSettings` using real `ModelValue*` (same defaults as the fork: peaks on, persistent display on, FFT 100 kHz, 2400–2500 MHz). Stores listeners and can `fireHardwareStatusChanged` / `fireCaptureStateChanged`. Lets Settings UI tests run **without** constructing the analyzer or loading JNA.
+In-memory `HackRFSettings` using real `ModelValue*` (same defaults as the app: peaks on, persistent display on, auto FFT/samples on, FFT 20 kHz on the default Wi-Fi 2 window). Stores listeners and can `fireHardwareStatusChanged` / `fireCaptureStateChanged`. Lets Settings UI tests run **without** constructing the analyzer or loading JNA.
 
 ### Settings UI
 
@@ -105,8 +105,7 @@ Package-private accessors on `HackRFSweepSettingsUI` (same package as the test):
 
 | Test | Asserts |
 |---|---|
-| `noArgConstructorDoesNotThrow` | Designer ctor `this(null)` skips `bindViewToModel`; no headless crash |
-| `bindsFftBinPausePeaksPersistenceAndHardwareStatus` | Spinner shows `"100 000"`; pause label **Pause** → click → model paused + **Resume**; peaks off hides fall spinner; persistence off hides decay combo; identity + sweeping → board / SN / FW (not `"HackRF connected"`) |
+| `bindsFftBinPausePeaksPersistenceAndHardwareStatus` | Spinner shows `"20 000"` (auto FFT default); pause label **Pause** → click → model paused + **Resume**; peaks off hides fall spinner; persistence off hides decay combo; identity + sweeping → board / SN / FW (not `"HackRF connected"`) |
 
 ### Quick Select + range binder
 
@@ -114,21 +113,15 @@ Package-private accessors on `HackRFSweepSettingsUI` (same package as the test):
 
 | Test | Asserts |
 |---|---|
-| `quickSelectButtonsSetKnownRanges` | Every `QuickSelectPreset` button: WiFi 2 → 2402–2472, WiFi 5 → 5170–5895, LTE-1 → 1695–2200, LTE-2 → 617–960, FM → 88–108, NFC → 13–14, HF → 3–30, VHF → 30–300, UHF → 300–3000, V-TV → 54–216, U-TV → 470–608, 6m → 50–54, 2m → 144–148, 70cm → 420–450, 33cm → 902–928; `quick.getValue()` matches the label |
-| `clickingSamePresetAgainRestoresRange` | Second WiFi 2 click restores 2402–2472 after the digits were edited |
+| `quickSelectButtonsSetKnownRanges` | Every `QuickSelectPreset` button: WiFi 2 → 2402–2472, WiFi 5 → 5170–5895, LTE-1 → 1695–2200, LTE-2 → 617–960, FM → 88–108, NFC → 13–14, HF → 3–30, VHF → 30–300, UHF → 300–3000, V-TV → 54–216, U-TV → 470–608, 6m → 50–54, 2m → 144–148, 70cm → 420–450, 33cm → 902–928; `quick.getValue()` matches the label; the clicked button stays highlighted |
+| `clickingSamePresetAgainRestoresRange` | Second WiFi 2 click restores 2402–2472 after the range was edited; an edited range clears the highlight |
+| `defaultRangeHighlightsWifi2` | Binder + default range panel lights **WiFi 2** (2402–2472) |
+| `BandScanSession` | FM finishes after one dwell; TV goes VHF → UHF then finishes |
+| `fmScanQsyzTheBandAndStopsListen` | `startFmScan` QSYs 88–108, clears Seek hits, leaves Listen; second click cancels |
 | `startEndVetoKeepsOrderByNudgingTheOtherSelector` | start 2000→3500 nudges end 3000→4500; end 4500→2500 nudges start 3500→1500 |
 | `startAtMaxCannotCrossEnd` | start cannot jump to 7250 when end is already 7250 (end cannot grow; veto) |
 
 `QuickFrequencySelectorPanelTest.testValueChangeFiresPropertyAndVetoable` now `doClick()`s **NFC** and checks `getValue()` + property change (was a no-op comment).
-
-### Frequency selector digits
-
-`FrequencySelectorPanel` layout is 4 `+`, 4 fields, 4 `-` (thousands … units).
-
-| Test | Asserts |
-|---|---|
-| `testAddSubtractDigits` | +units 1234→1235; +tens →1245; −thousands →245 |
-| `digitButtonsClampAtMinAndMax` | + at max 200 stays 200; − at min 100 stays 100 |
 
 ### MVC combo
 
@@ -142,8 +135,8 @@ The analyzer ctor is still untested. These slices were moved so they *can* be te
 
 ### `GainPolicy`
 
-`src/main/java/jspectrumanalyzer/core/GainPolicy.java`  
-`HackRFSweepSpectrumAnalyzer.recalculateGains` now calls it.
+`src/hotiron/src/main/java/hotiron/core/GainPolicy.java`
+`HotIron.recalculateGains` now calls it.
 
 | Input total | LNA (step 8, cap 40) | VGA (only after LNA=40, step 2 via `& ~1`) |
 |---|---|---|
@@ -178,7 +171,7 @@ Tests: `ui/WaterfallPlotMathTest.java`. The panel ctor (screen-sized images) is 
 
 ---
 
-## Full suite inventory (28 classes, 104 tests)
+## Suite inventory at plan completion
 
 What each class is *for*. Starred items were added or substantially rewritten in this plan.
 
@@ -186,12 +179,11 @@ What each class is *for*. Starred items were added or substantially rewritten in
 |---|---|---|
 | `EMATest` | 4 | Static / instance / time-dependent EMA |
 | `FFTBinsTest` | 1 | Value object holds arrays |
-| `PowerCalibrationTest` | 2 | Offset + `correctPower` |
 | `FrequencyBandTest` | 2 | Getters + `compareTo` by start Hz |
 | `FrequencyRangeTest` | 2 | Getters + `equals` |
-| `SpurFilterTest` | 10 | Calibrate N iterations; spur vs noise; reflection on debug/filter |
-| `DatasetSpectrumTest` * | 10 | Ctor, **Hz** ingest, clone/copy, XY export |
-| `DatasetSpectrumPeakTest` * | 10 | Hold vs EMA threshold, reset, copy, **peaks dataset/fill** |
+| `SpurFilterTest` | — | Calibrate N iterations; spur vs noise; filter values |
+| `DatasetSpectrumTest` * | — | Ctor, **Hz** ingest, clone/copy, immutable chart export |
+| `DatasetSpectrumPeakTest` * | — | Hold vs EMA threshold, reset, copy, immutable peaks dataset |
 | `PersistentDisplayTest` | 9 | `map`; ctor; draw/decay via reflection on calibration clock (needs headless images) |
 | `FrequencyAllocationsTest` * | 1 | Builtin Europe/USA CSV load |
 | `FrequencyAllocationTableTest` | 6 | Lookup, range (incl. below-first-band), draw |
@@ -204,14 +196,13 @@ What each class is *for*. Starred items were added or substantially rewritten in
 | `MVCControllerTest` * | 6 | Generic ctor, view→model, checkbox, slider, list-spinner, **combo** |
 | `HotIronBluePaletteTest` | 4 | Color math |
 | `GraphicsToolkitTest` * | 3 | Opaque/translucent/degenerate size under headless |
-| `FrequencySelectorPanelTest` * | 5 | set/get, veto, **digit +/−**, clamp |
 | `QuickFrequencySelectorPanelTest` * | 3 | Initial value, **NFC click** fires events, binder wiring |
 | `FrequencySelectorRangeBinderTest` * | 4 | Initial range, **all quick bands**, veto nudge, max veto |
-| `HackRFSweepSettingsUITest` * | 2 | No-arg ctor, **bind FFT/pause/peaks/persist/hw status** |
+| `HackRFSweepSettingsUITest` * | Settings binding, Listen/Watch controls, range panel, identity/MCP status |
 | `WaterfallPlotMathTest` * | 3 | normalize / clampX / x→Hz |
 | `GifSequenceWriterTest` | 1 | In-memory GIF header |
 | `VersionTest` | 1 | version string + github URL |
-| `HackRFSweepSpectrumAnalyzerTest` | 2 | `SPECTRUM_PALETTE_SIZE_MIN`; empty main-args placeholder (does **not** construct the app) |
+| `HotIronTest` | 2 | `SPECTRUM_PALETTE_SIZE_MIN`; empty main-args placeholder (does **not** construct the app) |
 
 Helper (not a `*Test`): `FakeHackRFSettings`.
 
@@ -225,7 +216,7 @@ Helper (not a `*Test`): `FakeHackRFSettings`.
 | `GraphicsToolkit.java` | Headless images |
 | `FrequencyAllocationTable.java` | Null-safe range query |
 | `HackRFSweepSettingsUI.java` | `JLabel`; package-private widget accessors |
-| `HackRFSweepSpectrumAnalyzer.java` | Delegates gain + perf watch |
+| `HotIron.java` | Delegates gain + perf watch |
 | `GainPolicy.java` | **New** |
 | `RuntimePerformanceWatch.java` | **New** (was private nested) |
 | `WaterfallPlot.java` | Static math extracted from `addNewData` / mouse map |
@@ -236,7 +227,7 @@ Helper (not a `*Test`): `FakeHackRFSettings`.
 
 | Area | Why it is still out |
 |---|---|
-| `HackRFSweepSpectrumAnalyzer` ctor / `sweep` / `setupChart` | JNA + JFrame + native start |
+| `HotIron` ctor / `sweep` / `setupChart` | JNA + JFrame + native start |
 | `HackRFSweepNativeBridge` / `HackrfSweepLibrary` | Needs `.so` + device; see [hardware-integration-tests.md](hardware-integration-tests.md) |
 | `processingThread` orchestration | Extracted as `SpectrumSweepEngine` (headless + analyzer hooks). Remaining UI-only bits stay in the analyzer. |
 | `WaterfallPlot.paintComponent` / live raster | Pixel-flaky; math is tested |
@@ -248,9 +239,9 @@ Helper (not a `*Test`): `FakeHackRFSettings`.
 ## Checklist (historical — all done)
 
 - [x] Phase 0: compile, JaCoCo, headless, allocation NPE, Label→JLabel
-- [x] Phase 1: existing core tests actually run; peak dataset/fill
-- [x] Phase 2: FakeHackRFSettings, Settings bind, Quick Select table, digit buttons, combo binder
+- [x] Phase 1: existing core tests actually run; peak dataset coverage (superseded mutable fill APIs were removed after 2.0.1)
+- [x] Phase 2: FakeHackRFSettings, Settings bind, Quick Select table, range controls, combo binder
 - [x] Phase 3: GainPolicy, RuntimePerformanceWatch, waterfall math
-- [x] Docs: `docs/development.md`, `AGENTS.md`, this file
+- [x] Docs: `docs/develop.md`, `AGENTS.md`, this file
 
 **Follow-on (not this plan):** gated `make test-hw` — [hardware-integration-tests.md](hardware-integration-tests.md).

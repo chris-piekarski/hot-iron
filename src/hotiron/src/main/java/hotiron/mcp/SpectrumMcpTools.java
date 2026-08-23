@@ -73,11 +73,11 @@ public final class SpectrumMcpTools
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("sweep_config",
-						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|stopped), listenMHz, tvChannel, plus display flags.",
+						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|stopped), listenMHz, tvChannel, plus display flags (autoSweep, autoGain, autoScale, peaks).",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("tv_debug",
-						"Current ATSC Watch stage diagnostics: IQ, sync, RS errors, AGC, equalizer, PAT, frames, queue.",
+						"Current ATSC Watch stage diagnostics: IQ, sync, RS, PAT, plus ffmpeg process/TS/stdout counters when frames stay at 0.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("tv_spectrum",

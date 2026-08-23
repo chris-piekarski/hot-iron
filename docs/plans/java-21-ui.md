@@ -8,7 +8,7 @@
 - Compile and run as **Java 21** (`--release 21`).
 - Bump UI/native-bridge libraries to current patch/minor releases.
 - Install **FlatLaf 3.7.2** dark before any Swing component is created.
-- Drop the **OpenJDK 8 / JNAerator** requirement for `jnabridge`.
+- Drop the **OpenJDK 8 / JNAerator** bridge-generation path.
 - Keep `make test` radio-free and green; re-run `make test-hw` on the attached One.
 
 ## Non-goals
@@ -25,8 +25,8 @@
 - [x] `AnalyzerLookAndFeel.install()` before any widget; tests get it via constructors
 - [x] Strip per-widget `Color.BLACK` / `Color.WHITE` on standard controls
 - [x] Leave chart / waterfall / persistent palettes as custom-painted
-- [x] Hand-maintain `HackrfSweepLibrary`; `make jnabridge` no longer runs JNAerator
-- [x] Launchers + launch4j require Java 21 and a headful AWT
+- [x] Hand-maintain `HackrfSweepLibrary`; remove the obsolete `jnabridge` target
+- [x] Linux and Windows launchers require Java 21 and a headful AWT
 - [x] `make deps` installs `openjdk-21-jdk`
 - [x] Docs / AGENTS.md / CHANGELOG
 - [x] `make test` 119/119, `make test-hw` 7/7, live FlatLaf UI on JDK 21

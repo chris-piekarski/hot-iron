@@ -27,6 +27,8 @@ public class FrequencySelectorRangeBinder
 					applyPreset(preset.startMHz, preset.endMHz));
 		};
 		selFreqQuick.addVetoableChangeListener(freqQuickVetoable);
+		rangePanel.addRangeListener(evt -> highlightCurrentRange());
+		highlightCurrentRange();
 	}
 
 	public void addPropertyChangeListener(PropertyChangeListener propertyChangeListener) {
@@ -47,8 +49,14 @@ public class FrequencySelectorRangeBinder
 		} finally {
 			applyingPreset = false;
 		}
+		highlightCurrentRange();
 		if (rangeListener != null)
 			rangeListener.propertyChange(new PropertyChangeEvent(this, "value", null, getFrequencyRange()));
+	}
+
+	private void highlightCurrentRange() {
+		FrequencyRange range = rangePanel.getRange();
+		selFreqQuick.highlightRange(range.getStartMHz(), range.getEndMHz());
 	}
 
 	public FrequencyRange getFrequencyRange() {

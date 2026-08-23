@@ -41,7 +41,7 @@ Point a local MCP client at the stdio proxy (the GUI must already be listening):
 }
 ```
 
-Tools: `spectrum_summary`, `spectrum_snapshot` (optional `maxPoints`, `minDbm`), `radio_identity`, `sweep_config` (radio vs display, including `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`), `fm_stations`, `fm_spectrum`, `spectrum_occupancy`, `spectrum_history`, `tv_debug`, `tv_debug_history`, plus writes `fm_listen` (`mhz`) and `tv_watch` (`channel`). Unfilled hop holes are omitted, not reported as −150 dBm. Snapshots are sampled at most 10 times per second. The GUI must already hold the radio; MCP does not open a second USB device.
+Tools: `spectrum_summary`, `spectrum_snapshot` (optional `maxPoints`, `minDbm`), `radio_identity`, `sweep_config` (radio vs display, including `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`), `fm_stations`, `fm_spectrum`, `spectrum_occupancy`, `spectrum_history`, `tv_debug` (includes an `ffmpeg` object when Watch is parked), `tv_debug_history`, plus writes `fm_listen` (`mhz`) and `tv_watch` (`channel`). Unfilled hop holes are omitted, not reported as −150 dBm. Snapshots are sampled at most 10 times per second. The GUI must already hold the radio; MCP does not open a second USB device.
 
 The sidebar **MCP** line (and the status-bar `MCP` field) show whether this process is listening (`127.0.0.1:8765`), how many clients are connected, their `initialize` names, and the last tool they called. **MCP off** means the GUI was started without `--mcp` — use `make mcp`. **MCP failed** means the port is already taken.
 
@@ -94,8 +94,8 @@ The **MCP** block under the radio identity is this process’s agent endpoint, n
 |---|---|
 | **Restart** | Stop and start the active RF path. Use this if the plot dies after a setting change (firmware quirk) instead of pressing RESET on the board. Leaves Listen or Watch mode and resumes sweeping. |
 | **Stop** | Halt the native sweep, Listen, or Watch path and release USB so `make info`, another instance, or GNU Radio can open the stick. **Restart** takes it back. |
-| **FM tuner** | Analog-style face: big **97.3** readout. **− / +** (Tune) is one 200 kHz channel. **◀◀ / ▶▶** (Seek) skips to the next **detected** station. The **knob** seeks the same way (clockwise = higher MHz). **Listen** parks the HackRF and stops the RF sweep. Gold cursor on the plot; the waterfall becomes a live **audio** spectrum (0–16 kHz). Click a **97.3** header tag to jump to it. Click **Listening 97.3** again to resume the RF sweep. |
-| **TV tuner** | US ATSC 1.0 channels **2–36** (6 MHz, 47 CFR 73.603). **− / +** Tune skips the FM/aviation gaps. **Seek** jumps occupied 6 MHz bricks. **Watch** parks the HackRF at 16 MS/s with an 8 MHz analog bandwidth. The waterfall stays the **VIDEO · ±8 MHz** IQ strip (same size as Listen). **Decoded video** is the 16:9 box **under Watching ch N** in this tuner — IQ spectrogram until MPEG-2 locks, then the picture. AC-3 on the speakers. Click a **14** header tag to jump to it. Click **Watching ch 14** again to resume the RF sweep. With Auto gain enabled, UHF Watch starts at LNA 40 dB + VGA 22 dB for ADC headroom; manual gain is still honored when Auto is off. HackRF is 8-bit — indoor VHF (ch 2–6) is often too weak; a strong UHF 14–36 brick is the usual bet. |
+| **FM tuner** | Analog-style face: big **97.3** readout. **− / +** (Tune) is one 200 kHz channel. **Scan** leaves Listen, sweeps **88–108 MHz** for a couple of seconds, and pins those stations as the Seek list (button reads **Scanning…**). **◀◀ / ▶▶** (Seek) and the **knob** jump the next scanned station (or one raster step if the list is empty). **Listen** QSYs the HackRF onto parked IQ (HUD: **Listening 97.3 FM — parked IQ**). Gold cursor on the plot; the waterfall becomes a live **audio** spectrum (0–16 kHz). Click a **97.3** header tag to jump to it. Click **Listening 97.3** again to resume the RF sweep. |
+| **TV tuner** | US ATSC 1.0 channels **2–36** (6 MHz, 47 CFR 73.603). **− / +** Tune skips the FM/aviation gaps. **Scan** leaves Watch, sweeps **V-TV** then **U-TV** (~2.5 s each), and pins occupied 6 MHz bricks as the Seek list. **Seek** jumps that list (kept across a later Wi‑Fi sweep) plus live parked-IQ hits in the ±8 MHz window. **Watch** parks the HackRF at 16 MS/s with an 8 MHz analog bandwidth. HUD is **WATCH ch N — parked IQ · …**. The waterfall stays the **VIDEO · ±8 MHz** IQ strip (same size as Listen). **Decoded video** is the 16:9 box **under Watching ch N** in this tuner — IQ spectrogram until MPEG-2 locks, then the picture. AC-3 on the speakers. Click a **14** header tag to jump to it. Click **Watching ch 14** again to resume the RF sweep. With Auto gain enabled, UHF Watch starts at LNA 40 dB + VGA 22 dB, turns on the HackRF RF amp (+14 dB) for that parked session only, and keeps trimming IF toward ~0.5 RMS without restarting USB; uncheck Auto to use the sliders and the Antenna LNA checkbox. HackRF is 8-bit — indoor VHF (ch 2–6) is often too weak; a strong UHF 14–36 brick is the usual bet. |
 | **Radio picker** | Serial of the HackRF to open. *First radio* is libhackrf’s default. |
 | **CLKOUT 10 MHz** | Drive the CLKOUT pin so another radio can lock. CLKIN is selected automatically when a 10 MHz signal is present. |
 
@@ -103,11 +103,11 @@ Gain, LNA, and bias-tee stay in the **HackRF Settings** tab.
 
 ## Quick Select
 
-Integer-MHz survey windows. Hover a button to see the MHz range on the line under the grid (one hint, not a stack of popups). Citations are in this table. They are envelopes, not exclusive licenses.
+Integer-MHz survey windows. The app starts on **WiFi 2** (highlighted) so the first sweep is 2402–2472 MHz. Hover a button to see the MHz range on the reserved line under the grid. Other controls show a hint over the settings column without changing its size or opening another window. Clicking a band while **Listen** or **Watch** is parked stops the audio/video and resumes the sweep on that range. Citations are in this table. They are envelopes, not exclusive licenses.
 
 | Button | MHz | What it is |
 |---|---|---|
-| All | 1–7250 | Full selectable survey range. Start with coarse FFT bins; fine bins across 7.249 GHz produce very large, slow sweeps. |
+| All | 1–7250 | Full selectable survey range. Auto FFT keeps this coarse (~2 MHz bins) so the waterfall stays fast. |
 | WiFi 2 | 2402–2472 | Occupied US 802.11 ch 1–11 (ch 1 starts at 2402, ch 2 at 2407, ch 11 ends at 2472). The 20 MHz channels overlap. |
 | WiFi 5 | 5170–5895 | Occupied US 802.11 20 MHz ch 36–177 (ch 36 starts at 5170, ch 177 ends at 5895). U-NII-1 legally starts at 5150; there is no 20 MHz channel there. The hole after 64 is not Wi-Fi. |
 | LTE-1 | 1695–2200 | 3GPP AWS + PCS + IMT (B70/B66/B4/B3/B2/B25/B1/B65). |
@@ -134,8 +134,9 @@ This app only **receives**. Transmitting on amateur frequencies needs a license 
 |---|---|
 | **Auto gain** | On (default): pick LNA then VGA for the current Quick Select so the peak sits near **−28 dBm**, in **8 dB** steps after a ~2.5 s settle. A single Wi‑Fi packet is not clip (needs three frames near 0 dBm, or a sustained hot streak). Packets are remembered for a few seconds so a quiet gap does not pump the gain. Uncheck to use the sliders. Does not touch Antenna power or the +14 dB RF amp. |
 | **LNA Gain / VGA Gain** | Analog gain on the radio (locked while Auto is on). Raise LNA first if you take over manually. |
-| **FFT Bin** | Resolution bandwidth and output density. Approximate bins = span Hz ÷ FFT Bin Hz: **All** yields ~7,249 bins at 1 MHz, ~72,490 at 100 kHz, or ~724,900 at 10 kHz. Narrower bins resolve closer signals and reduce noise power per bin, but require larger FFTs, more processing/data, and slower display updates. Floor is about 2445 Hz. |
-| **Number of samples** | Samples captured at each 20 MHz tuning step, in 8192-sample hardware blocks. **8192** uses one FFT. Higher choices request 2, 4, 8, 16, or 32 blocks; HotIron averages their **linear power** into one spectrum row. This reduces random variation and catches more activity during each dwell, but scan time and latency grow roughly in proportion. The blocks are separate firmware captures, not one contiguous larger FFT, so frequency resolution still comes from **FFT Bin**. |
+| **Auto FFT / samples** | On (default): pick **FFT Bin** and **Number of samples** from the current sweep span so the waterfall stays snappy. Zoomed-in windows (FM, 2 m, 1 MHz drag) use finer bins (~2.4–10 kHz); **All** stays coarse (~2 MHz). Auto always uses one 8192-sample FFT block per hop. Small pans do not retune the FFT. Uncheck to set both spinners yourself. |
+| **FFT Bin** | Resolution bandwidth and output density. Approximate bins = span Hz ÷ FFT Bin Hz. Narrower bins resolve closer signals and reduce noise power per bin, but require larger FFTs and slower updates. Floor is about 2445 Hz. Locked while Auto is on. |
+| **Number of samples** | Samples captured at each 20 MHz tuning step, in 8192-sample hardware blocks. **8192** uses one FFT. Higher choices request 2, 4, 8, 16, or 32 blocks; HotIron averages their **linear power** into one spectrum row. This reduces random variation and catches more activity during each dwell, but scan time and latency grow roughly in proportion. The blocks are separate firmware captures, not one contiguous larger FFT, so frequency resolution still comes from **FFT Bin**. Locked while Auto is on. |
 | **Antenna power** | Bias tee — DC on the antenna port for a powered preamp. Do not enable into a DC-shorted antenna. |
 | **Antenna LNA +14 dB** | Onboard RF amplifier. Helpful for weak signals; overloads easily next to a broadcast tower. |
 | **Spur removal** | Hides repeating HackRF artifacts. |
@@ -153,4 +154,4 @@ This app only **receives**. Transmitting on amateur frequencies needs a license 
 - If the plot freezes after a setting change, press **RESET** on the radio (or detach/reattach USB). That is a firmware quirk, not a UI hang.
 - `make info` lists serial, firmware, and whether a newer GSG image exists.
 
-See [hackrf-setup.md](hardware.md) for firmware, udev, and Windows drivers.
+See [hardware.md](hardware.md) for firmware, udev, and Windows drivers.

@@ -16,7 +16,7 @@ class DesktopBrowseTest {
 	@Test
 	void homepageUrlIsHttpsGithub() {
 		assertTrue(Version.url.startsWith("https://"));
-		assertTrue(Version.url.contains("github.com/chris-piekarski/hotiron"));
+		assertTrue(Version.url.contains("github.com/chris-piekarski/hackrf-spectrum-analyzer"));
 	}
 
 	@Test

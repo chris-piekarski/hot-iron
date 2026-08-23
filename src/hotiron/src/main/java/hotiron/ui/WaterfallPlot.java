@@ -51,7 +51,6 @@ public class WaterfallPlot extends JPanel {
 	private DatasetSpectrum		lastSpectrum			= null;
 	private ColorPalette		palette					= new HotIronBluePalette();
 	private Rectangle2D.Float	rect					= new Rectangle2D.Float(0f, 0f, 1f, 1f);
-	private int					lastBinCount			= 0;
 	private int					screenWidth;
 	private double				spectrumPaletteSize		= 65;
 	private double				spectrumPaletteStart	= -90;
@@ -67,7 +66,6 @@ public class WaterfallPlot extends JPanel {
 	private float				audioHzMax				= 16_000f;
 	private double				videoCenterHz			= 0;
 	private float				videoSpanHz				= 12_000_000f;
-	private volatile BufferedImage videoStill;
 
 	public WaterfallPlot(ChartPanel chartPanel, int maxHeight) {
 		setPreferredSize(new Dimension(100, 200));
@@ -116,7 +114,6 @@ public class WaterfallPlot extends JPanel {
 		});
 	}
 
-	private EMA newDataTimeEMA =	 new EMA(100);
 	/**
 	 * Adds new data to the waterfall plot and renders it
 	 * 
@@ -125,10 +122,8 @@ public class WaterfallPlot extends JPanel {
 	public synchronized void addNewData(DatasetSpectrum spectrum) {
 		audioMode = false;
 		videoMode = false;
-		long start	= System.nanoTime();
 
 		int size = spectrum.spectrumLength();
-		double startFreq = spectrum.getFreqStartMHz() * 1000000d;
 		double freqRange = (spectrum.getFreqStopMHz() - spectrum.getFreqStartMHz()) * 1000000d;
 		double width = bufferedImages[0].getWidth();
 		this.lastSpectrum = spectrum;
@@ -157,27 +152,13 @@ public class WaterfallPlot extends JPanel {
 		 * draw in two passes - first determines maximum power for the pixel,
 		 * second draws it
 		 */
-		if (true) {
-			//optimized drawing
-			double widthDivSize = (double)width / size;
-			for (int i = 0; i < size; i++) {
-				double power = spectrum.getPower(i);
-				double percentagePower = normalizePower(power, spectrumPaletteStart, spectrumPaletteSize);
-				int pixelX = clampPixelX((int) Math.round(widthDivSize * i), drawMaxBuffer.length);
-				if (percentagePower > drawMaxBuffer[pixelX])
-					drawMaxBuffer[pixelX] = (float) percentagePower;
-			}
-		} else {
-			//unoptimized drawing
-			for (int i = 0; i < size; i++) {
-				double freq = spectrum.getFrequency(i);
-				double power = spectrum.getPower(i);
-				double percentageFreq = (freq - startFreq) / freqRange;
-				double percentagePower = normalizePower(power, spectrumPaletteStart, spectrumPaletteSize);
-				int pixelX = clampPixelX((int) Math.round(width * percentageFreq), drawMaxBuffer.length);
-				if (percentagePower > drawMaxBuffer[pixelX])
-					drawMaxBuffer[pixelX] = (float) percentagePower;
-			}
+		double widthDivSize = (double) width / size;
+		for (int i = 0; i < size; i++) {
+			double power = spectrum.getPower(i);
+			double percentagePower = normalizePower(power, spectrumPaletteStart, spectrumPaletteSize);
+			int pixelX = clampPixelX((int) Math.round(widthDivSize * i), drawMaxBuffer.length);
+			if (percentagePower > drawMaxBuffer[pixelX])
+				drawMaxBuffer[pixelX] = (float) percentagePower;
 		}
 
 		/**
@@ -198,7 +179,6 @@ public class WaterfallPlot extends JPanel {
 			g.draw(rect);
 		}
 
-		lastBinCount = size;
 		fpsRenderedFrames++;
 		if (System.currentTimeMillis() - lastFPSRecalculated > 1000) {
 			double rawfps = fpsRenderedFrames / ((System.currentTimeMillis() - (double) lastFPSRecalculated) / 1000d);
@@ -207,11 +187,6 @@ public class WaterfallPlot extends JPanel {
 			fpsRenderedFrames = 0;
 		}
 		g.dispose();
-
-//		double time	= newDataTimeEMA.addNewValue(((System.nanoTime()-start)/1000));
-//		System.out.println("draw "+(int)time+"us");
-
-//		repaint();
 	}
 
 	/**
@@ -241,10 +216,6 @@ public class WaterfallPlot extends JPanel {
 		g.fillRect(w - thickness, 0, thickness, h);
 		g.fillRect(0, h - thickness, w, thickness);
 		g.dispose();
-	}
-
-	public int getHistorySize() {
-		return bufferedImages[0].getHeight();
 	}
 
 	public double getSpectrumPaletteSize() {
@@ -325,7 +296,6 @@ public class WaterfallPlot extends JPanel {
 			g.setColor(color);
 			g.draw(rect);
 		}
-		lastBinCount = size;
 		fpsRenderedFrames++;
 		if (System.currentTimeMillis() - lastFPSRecalculated > 1000) {
 			double rawfps = fpsRenderedFrames / ((System.currentTimeMillis() - (double) lastFPSRecalculated) / 1000d);
@@ -334,18 +304,6 @@ public class WaterfallPlot extends JPanel {
 			fpsRenderedFrames = 0;
 		}
 		g.dispose();
-	}
-
-	public boolean isAudioMode() {
-		return audioMode;
-	}
-
-	public boolean isVideoMode() {
-		return videoMode;
-	}
-
-	public float getAudioHzMax() {
-		return audioHzMax;
 	}
 
 	public synchronized void setAudioMode(boolean on) {
@@ -366,27 +324,8 @@ public class WaterfallPlot extends JPanel {
 			videoCenterHz = centerHz;
 			videoSpanHz = hotiron.core.IqSpectrum.DISPLAY_HZ;
 		}
-		else
-			videoStill = null;
 		if (was != on)
 			clearHistory();
-	}
-
-	public void setVideoStill(BufferedImage img) {
-		videoStill = img;
-		repaint();
-	}
-
-	public double getLastRbwHz() {
-		if (videoMode)
-			return videoSpanHz / Math.max(1, lastBinCount);
-		if (audioMode)
-			return audioHzMax / Math.max(1, lastBinCount);
-		return lastSpectrum == null ? 0 : lastSpectrum.getFFTBinSizeHz();
-	}
-
-	public int getLastBinCount() {
-		return lastBinCount;
 	}
 
 	public double getFps() {
@@ -404,7 +343,6 @@ public class WaterfallPlot extends JPanel {
 			g.dispose();
 		}
 		lastSpectrum = null;
-		lastBinCount = 0;
 		if (rowEpochMs != null)
 			Arrays.fill(rowEpochMs, 0L);
 	}
@@ -536,15 +474,11 @@ public class WaterfallPlot extends JPanel {
 		return -1;
 	}
 
-	public static String modeBanner(boolean audio) {
-		return modeBanner(audio, false);
-	}
-
 	public static String modeBanner(boolean audio, boolean video) {
 		if (video)
-			return "VIDEO  ·  ±8 MHz";
+			return "parked IQ  ·  VIDEO  ·  ±8 MHz";
 		if (audio)
-			return "AUDIO  ·  0–16 kHz";
+			return "parked IQ  ·  AUDIO  ·  0–16 kHz";
 		return "RF waterfall";
 	}
 
@@ -632,24 +566,6 @@ public class WaterfallPlot extends JPanel {
 		}
 	}
 
-	private void drawVideoStill(Graphics2D g, int x0, int w, int h) {
-		BufferedImage still = videoStill;
-		if (still == null || still.getWidth() < 2 || w < 80 || h < 60)
-			return;
-		int pw = Math.min(w / 3, 280);
-		int ph = (int) Math.round(pw * (still.getHeight() / (double) still.getWidth()));
-		if (ph > h / 2)
-		{
-			ph = h / 2;
-			pw = (int) Math.round(ph * (still.getWidth() / (double) still.getHeight()));
-		}
-		int px = x0 + w - pw - 8;
-		int py = 28;
-		g.drawImage(still, px, py, pw, ph, null);
-		g.setColor(BANNER_AUDIO);
-		g.drawRect(px - 1, py - 1, pw + 1, ph + 1);
-	}
-
 	void drawTimeAxis(Graphics2D g, long[] times, int height) {
 		int gutter = chartXOffset;
 		if (gutter < TIME_AXIS_MIN_GUTTER || height < 8)
@@ -710,7 +626,6 @@ public class WaterfallPlot extends JPanel {
 		else if (videoMode)
 		{
 			drawVideoMhzAxis(g, chartXOffset, w, h);
-			drawVideoStill(g, chartXOffset, w, h);
 		}
 
 		if (displayMarker) {

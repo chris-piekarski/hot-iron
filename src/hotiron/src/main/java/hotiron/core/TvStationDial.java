@@ -1,6 +1,7 @@
 package hotiron.core;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -42,6 +43,38 @@ public final class TvStationDial
 				return stations.get(i);
 		}
 		return stations.get(stations.size() - 1);
+	}
+
+	/**
+	 * Keep remembered stations outside the live IQ window; replace the
+	 * in-window list with what the parked FFT just saw.
+	 */
+	public static List<TvStationHit> mergeLive(List<TvStationHit> remembered, List<TvStationHit> live,
+			double liveStartMHz, double liveEndMHz)
+	{
+		LinkedHashMap<Integer, TvStationHit> byFcc = new LinkedHashMap<Integer, TvStationHit>();
+		if (remembered != null)
+		{
+			for (TvStationHit hit : remembered)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				if (!hit.channel.occupancyOverlaps(liveStartMHz, liveEndMHz))
+					byFcc.put(hit.channel.fccChannel, hit);
+			}
+		}
+		if (live != null)
+		{
+			for (TvStationHit hit : live)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				byFcc.put(hit.channel.fccChannel, hit);
+			}
+		}
+		List<TvStationHit> out = new ArrayList<TvStationHit>(byFcc.values());
+		out.sort((a, b) -> Integer.compare(a.channel.fccChannel, b.channel.fccChannel));
+		return List.copyOf(out);
 	}
 
 	public static boolean sameChannels(List<TvStationHit> a, List<TvStationHit> b)

@@ -25,9 +25,7 @@ if not defined JVER (
   "%JAVA_BIN%" -version
   exit /b 1
 )
-for /f "tokens=1,2 delims=." %%a in ("!JVER!") do (
-  if "%%a"=="1" (set "JMAJ=%%b") else (set "JMAJ=%%a")
-)
+for /f "tokens=1 delims=." %%a in ("!JVER!") do set "JMAJ=%%a"
 if not defined JMAJ (
   echo Could not parse Java version from !JVER!.
   exit /b 1

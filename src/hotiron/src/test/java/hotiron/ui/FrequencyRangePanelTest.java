@@ -11,6 +11,13 @@ import hotiron.core.FrequencyRange;
 class FrequencyRangePanelTest {
 
 	@Test
+	void defaultRangeIsWifi2() {
+		FrequencyRangePanel panel = new FrequencyRangePanel();
+		assertEquals(QuickSelectPreset.WIFI_2.startMHz, panel.getRange().getStartMHz());
+		assertEquals(QuickSelectPreset.WIFI_2.endMHz, panel.getRange().getEndMHz());
+	}
+
+	@Test
 	void panAndZoomButtonsMoveTheWindow() {
 		FrequencyRangePanel panel = new FrequencyRangePanel();
 		panel.setRange(new FrequencyRange(88, 108));

@@ -62,4 +62,10 @@ public final class HackRFFmNativeBridge
 	{
 		HackrfSweepLibrary.hackrf_fm_lib_stop();
 	}
+
+	/** Live LNA/VGA while parked IQ is running. Does not reopen USB. */
+	public static int setGains(int lnaGain, int vgaGain)
+	{
+		return HackrfSweepLibrary.hackrf_fm_lib_set_gains(lnaGain, vgaGain);
+	}
 }

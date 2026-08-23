@@ -18,7 +18,7 @@ One RF path. **Watching stops the sweep.** Pause still only freezes the plot. St
 - [x] `docs/plans/atsc-tv-watch.md` listed as active
 - [x] `TvChannelPlan` + occupancy detect + unit tests
 - [x] Overlay tags + header click Watch
-- [x] TV tuner (Tune / Seek / Watch)
+- [x] TV tuner (Tune / Scan / Seek / Watch)
 - [x] `RadioMode.WATCH` + MCP `tvChannel`
 - [x] Watch parks IQ at 16 MS/s (reuse `hackrf_fm_lib_*`; analog BB filter 8 MHz)
 - [x] HUD lock / no-lock
@@ -34,6 +34,8 @@ One RF path. **Watching stops the sweep.** Pause still only freezes the plot. St
 - [x] Preserve a complete HackRF transfer (about 106 TS packets) and retry IQ polarity before lock
 - [x] Drop stale IQ backlog and reset the complete decoder after any discontinuity
 - [x] Native stage diagnostics + MCP `tv_debug` / `tv_debug_history`
+- [x] FFmpeg/TS decode counters on `tv_debug` + 2 s console line (process, stdin, PMT/video PID, stderr)
+- [x] Start `ffmpeg` only after a healthy RS window; stop it on RS collapse; map PMT PIDs; quiet concealment spam
 - [x] Main chart + MCP `tv_spectrum` show live local ±8 MHz RF from the parked IQ stream
 - [ ] Hardware IT Watch start/stop then resume sweep
 - [x] Live ATSC lock + CRC-valid PAT + decoded MPEG-2 frames on RF channels 28 and 33

@@ -27,6 +27,7 @@ import javax.swing.UIManager;
 
 import hotiron.HotIron;
 import hotiron.Version;
+import hotiron.core.AutoSweepPolicy;
 import hotiron.core.FrequencyAllocationTable;
 import hotiron.core.FrequencyAllocations;
 import hotiron.core.FrequencyRange;
@@ -65,6 +66,7 @@ public class HackRFSweepSettingsUI extends JPanel
 	private JCheckBox chckbxShowPeaks;
 	private JCheckBox chckbxAutoScalePower;
 	private JCheckBox chckbxAutoGain;
+	private JCheckBox chckbxAutoSweep;
 	private JCheckBox chckbxRemoveSpurs;
 	private JButton btnPause;
 	private JButton btnRestart;
@@ -80,7 +82,6 @@ public class HackRFSweepSettingsUI extends JPanel
 	static final String FIRST_RADIO = "First radio";
 	private SpinnerListModel spinnerModelFFTBinHz;
 	private FrequencySelectorRangeBinder frequencyRangeSelector;
-	private JCheckBox chckbxFilterSpectrum;
 	private JSpinner spinnerPeakFallSpeed;
 	private JComboBox<FrequencyAllocationTable> comboBoxFrequencyAllocationBands;
 	private JSlider sliderGainVGA;
@@ -95,16 +96,13 @@ public class HackRFSweepSettingsUI extends JPanel
 	private JLabel lblDebugDisplay;
 	private JCheckBox checkBoxDebugDisplay;
 
-	public HackRFSweepSettingsUI()
-	{
-		this(null);
-	}
-
 	/**
 	 * Create the panel.
 	 */
 	public HackRFSweepSettingsUI(HackRFSettings hackRFSettings)
 	{
+		if (hackRFSettings == null)
+			throw new IllegalArgumentException("hackRFSettings");
 		this.hRF	= hackRFSettings;
 		AnalyzerLookAndFeel.install();
 		setBorder(new EmptyBorder(4, 8, 16, 8));
@@ -126,28 +124,28 @@ public class HackRFSweepSettingsUI extends JPanel
 		
 		txtHackrfConnected = new JLabel();
 		txtHackrfConnected.setText(RadioIdentity.ABSENT.statusHtml());
-		txtHackrfConnected.setToolTipText(RadioIdentity.ABSENT.tooltip(false));
+		ExclusiveToolTip.setText(txtHackrfConnected, RadioIdentity.ABSENT.tooltip(false));
 		txtHackrfConnected.setVerticalAlignment(SwingConstants.TOP);
 		txtHackrfConnected.setBorder(null);
 
 		txtMcpStatus = new JLabel();
 		txtMcpStatus.setText(McpStatus.OFF.statusHtml());
-		txtMcpStatus.setToolTipText(McpStatus.OFF.tooltip(System.currentTimeMillis()));
+		ExclusiveToolTip.setText(txtMcpStatus, McpStatus.OFF.tooltip(System.currentTimeMillis()));
 		txtMcpStatus.setVerticalAlignment(SwingConstants.TOP);
 		txtMcpStatus.setBorder(null);
 
 		comboRadio = new JComboBox<>(new String[] { FIRST_RADIO });
-		comboRadio.setToolTipText("Which HackRF to open. First radio = libhackrf default.");
+		ExclusiveToolTip.setText(comboRadio, "Which HackRF to open. First radio = libhackrf default.");
 
 		checkBoxClkout = new JCheckBox("CLKOUT 10 MHz");
-		checkBoxClkout.setToolTipText("Drive CLKOUT so another radio can lock. CLKIN is used automatically when a 10 MHz signal is present.");
+		ExclusiveToolTip.setText(checkBoxClkout, "Drive CLKOUT so another radio can lock. CLKIN is used automatically when a 10 MHz signal is present.");
 
 		btnRestart = new JButton("Restart");
-		btnRestart.setToolTipText("Stop and start the sweep again. Use this if the plot freezes after a setting change.");
+		ExclusiveToolTip.setText(btnRestart, "Stop and start the sweep again. Use this if the plot freezes after a setting change.");
 		btnStop = new JButton("Stop");
-		btnStop.setToolTipText("Halt the native sweep and release USB so other tools can open the radio.");
+		ExclusiveToolTip.setText(btnStop, "Halt the native sweep and release USB so other tools can open the radio.");
 		btnPause = new JButton("Pause");
-		btnPause.setToolTipText("Freeze the display. The radio keeps sweeping; click Resume to show live data again.");
+		ExclusiveToolTip.setText(btnPause, "Freeze the display. The radio keeps sweeping; click Resume to show live data again.");
 		tunerPanel = new TunerPanel();
 		btnListen = tunerPanel.listenButton();
 		stationKnob = tunerPanel.knob();
@@ -211,13 +209,19 @@ public class HackRFSweepSettingsUI extends JPanel
 		
 
 		JLabel lblFftBinhz = new JLabel("FFT Bin [Hz]");
-		tab1.add(lblFftBinhz, "cell 0 9");
+		tab1.add(lblFftBinhz, "flowx,cell 0 9,growx");
+
+		chckbxAutoSweep = new JCheckBox("Auto");
+		chckbxAutoSweep.setSelected(true);
+		ExclusiveToolTip.setText(chckbxAutoSweep,
+				"Pick FFT bin and samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast.");
+		tab1.add(chckbxAutoSweep, "cell 0 9,alignx right");
 
 		spinnerFFTBinHz = new JSpinner();
 		spinnerFFTBinHz.setFont(new Font("Monospaced", Font.BOLD, 16));
-		spinnerModelFFTBinHz = new SpinnerListModel(new String[] { "2 445", "5 000", "10 000", "20 000", 
-				"50 000", "100 000", "200 000", "500 000", "1 000 000", "2 000 000", "5 000 000" });
+		spinnerModelFFTBinHz = new SpinnerListModel(AutoSweepPolicy.binLabels());
 		spinnerFFTBinHz.setModel(spinnerModelFFTBinHz);
+		ExclusiveToolTip.setText(spinnerFFTBinHz, "Resolution bandwidth. Locked while Auto is on.");
 		tab1.add(spinnerFFTBinHz, "cell 0 10,growx");
 		((ListEditor) spinnerFFTBinHz.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
 		
@@ -227,30 +231,28 @@ public class HackRFSweepSettingsUI extends JPanel
 
 		chckbxAutoGain = new JCheckBox("Auto");
 		chckbxAutoGain.setSelected(true);
-		chckbxAutoGain.setToolTipText("Pick LNA/VGA for this band so the plot is not all blue or all red.");
+		ExclusiveToolTip.setText(chckbxAutoGain, "Pick LNA/VGA for this band so the plot is not all blue or all red.");
 		tab1.add(chckbxAutoGain, "cell 0 0,alignx right");
 
 		sliderGain = new JSlider(JSlider.HORIZONTAL, 0, 100, 2);
 		sliderGain.setFont(new Font("Monospaced", Font.BOLD, 16));
 		tab1.add(sliderGain, "flowy,cell 0 1,growx");
 
-		JLabel lbl_gainValue = new JLabel(hRF == null ? "0" : hRF.getGain() + "dB");
+		JLabel lbl_gainValue = new JLabel(hRF.getGain() + "dB");
 		tab1.add(lbl_gainValue, "cell 0 1,alignx right");
 
-		if (hRF != null) {
-			hRF.getGain().addListener((gain) -> lbl_gainValue.setText(String.format(" %ddB  [LNA: %ddB  VGA: %ddB]", 
-					gain, hRF.getGainLNA().getValue(), hRF.getGainVGA().getValue())));
-		}
+		hRF.getGain().addListener((gain) -> lbl_gainValue.setText(String.format(" %ddB  [LNA: %ddB  VGA: %ddB]",
+				gain, hRF.getGainLNA().getValue(), hRF.getGainVGA().getValue())));
 		
 
 		JLabel lblNumberOfSamples = new JLabel("Number of samples");
-		lblNumberOfSamples.setToolTipText(
-				"Samples captured per tuning step. Higher values average more FFT blocks for a smoother, slower sweep.");
+		ExclusiveToolTip.setText(lblNumberOfSamples,
+				"Samples captured per tuning step. Higher values average more FFT blocks for a smoother, slower sweep. Locked while Auto is on.");
 		tab1.add(lblNumberOfSamples, "cell 0 12");
 
 		spinner_numberOfSamples = new JSpinner();
 		spinner_numberOfSamples.setModel(new SpinnerListModel(new String[] { "8192", "16384", "32768", "65536", "131072", "262144" }));
-		spinner_numberOfSamples.setToolTipText(
+		ExclusiveToolTip.setText(spinner_numberOfSamples,
 				"8192 = one FFT block; each doubling adds linear-power averaging and roughly doubles dwell time.");
 		spinner_numberOfSamples.setFont(new Font("Monospaced", Font.BOLD, 16));
 		((ListEditor) spinner_numberOfSamples.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
@@ -283,8 +285,6 @@ public class HackRFSweepSettingsUI extends JPanel
 		chckbxAntennaLNA = new JCheckBox("");
 		chckbxAntennaLNA.setHorizontalTextPosition(SwingConstants.LEADING);
 		tab1.add(chckbxAntennaLNA, "cell 0 16,alignx right");
-		
-		chckbxFilterSpectrum = new JCheckBox("Filter spectrum");
 		
 		JLabel lblWaterfallEnabled = new JLabel("Waterfall enabled");
 		tab2.add(lblWaterfallEnabled, "flowx,cell 0 0,growx");
@@ -367,7 +367,8 @@ public class HackRFSweepSettingsUI extends JPanel
 		tab2.add(checkBoxWaterfallEnabled, "cell 0 0,alignx right");
 		
 		comboBoxDecayRate = new JComboBox(
-				new Vector<>(IntStream.rangeClosed(hRF != null ? hRF.getPersistentDisplayDecayRate().getMin() : 0, hRF != null ? hRF.getPersistentDisplayDecayRate().getMax() : 1).
+				new Vector<>(IntStream.rangeClosed(hRF.getPersistentDisplayDecayRate().getMin(),
+						hRF.getPersistentDisplayDecayRate().getMax()).
 						boxed().collect(Collectors.toList())));
 		tab2.add(comboBoxDecayRate, "cell 0 16,alignx right");
 		
@@ -378,8 +379,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		tab2.add(checkBoxDebugDisplay, "cell 0 22,alignx right");
 		
 		
-		if (hRF != null)
-			bindViewToModel();
+		bindViewToModel();
 	}
 
 	private void bindViewToModel() {
@@ -396,6 +396,7 @@ public class HackRFSweepSettingsUI extends JPanel
 				});
 		new MVCController(sliderGain, hRF.getGain());
 		new MVCController(chckbxAutoGain, hRF.isAutoGain());
+		new MVCController(chckbxAutoSweep, hRF.isAutoSweep());
 		Runnable syncGainEditors = () -> {
 			boolean manual = !hRF.isAutoGain().getValue();
 			sliderGain.setEnabled(manual);
@@ -404,6 +405,13 @@ public class HackRFSweepSettingsUI extends JPanel
 		};
 		hRF.isAutoGain().addListener(() -> SwingUtilities.invokeLater(syncGainEditors));
 		syncGainEditors.run();
+		Runnable syncSweepEditors = () -> {
+			boolean manual = !hRF.isAutoSweep().getValue();
+			spinnerFFTBinHz.setEnabled(manual);
+			spinner_numberOfSamples.setEnabled(manual);
+		};
+		hRF.isAutoSweep().addListener(() -> SwingUtilities.invokeLater(syncSweepEditors));
+		syncSweepEditors.run();
 		new MVCController(spinner_numberOfSamples, hRF.getSamples(), val -> Integer.parseInt(val.toString()), val -> val.toString());
 		new MVCController(chckbxAntennaPower, hRF.getAntennaPowerEnable());
 		new MVCController(chckbxAntennaLNA, hRF.getAntennaLNA());
@@ -416,10 +424,16 @@ public class HackRFSweepSettingsUI extends JPanel
 										newComponentValue.getEndMHz());
 							},
 							hRF.getFrequency()
-		); 
+		);
+		// After the binder applies the preset (same vetoable list, registered
+		// later) so stopListen restarts the sweep on the new range, not the
+		// parked FM/TV IQ window.
+		quickFrequencySelector.addVetoableChangeListener(evt -> {
+			if (Boolean.TRUE.equals(hRF.isListening().getValue()))
+				hRF.stopListen();
+		}); 
 		new MVCController(chckbxShowPeaks, hRF.isChartsPeaksVisible());
 		new MVCController(chckbxAutoScalePower, hRF.isPowerAutoScale());
-		new MVCController(chckbxFilterSpectrum, hRF.isFilterSpectrum());
 		new MVCController(chckbxRemoveSpurs, hRF.isSpurRemoval());
 		
 		new MVCController((valueChangedCall) -> btnPause.addActionListener((event) -> valueChangedCall.accept(!hRF.isCapturingPaused().getValue())), 
@@ -459,6 +473,7 @@ public class HackRFSweepSettingsUI extends JPanel
 			if (next.centerKHz != hRF.getListenKHz().getValue())
 				hRF.getListenKHz().setValue(next.centerKHz);
 		});
+		tunerPanel.setOnScan(hRF::startFmScan);
 		tvTunerPanel.setOnTune(dir -> {
 			hotiron.core.TvChannel next = hotiron.core.TvStationDial.tune(
 					hRF.getTvChannel().getValue(), dir);
@@ -471,6 +486,7 @@ public class HackRFSweepSettingsUI extends JPanel
 			if (next.fccChannel != hRF.getTvChannel().getValue())
 				hRF.getTvChannel().setValue(next.fccChannel);
 		});
+		tvTunerPanel.setOnScan(hRF::startTvScan);
 		Runnable syncListen = () -> {
 			boolean parked = Boolean.TRUE.equals(hRF.isListening().getValue());
 			boolean released = Boolean.TRUE.equals(hRF.isRadioReleased().getValue());
@@ -486,6 +502,12 @@ public class HackRFSweepSettingsUI extends JPanel
 		};
 		hRF.isListening().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		hRF.getListenService().addListener(s -> SwingUtilities.invokeLater(syncListen));
+		hRF.getBandScan().addListener(scan -> SwingUtilities.invokeLater(() -> {
+			tunerPanel.setScanning(scan == hotiron.core.BandScan.FM);
+			tvTunerPanel.setScanning(scan == hotiron.core.BandScan.TV);
+		}));
+		tunerPanel.setScanning(hRF.getBandScan().getValue() == hotiron.core.BandScan.FM);
+		tvTunerPanel.setScanning(hRF.getBandScan().getValue() == hotiron.core.BandScan.TV);
 		hRF.getListenKHz().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		hRF.getTvChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
 		hRF.getDetectedFmStations().addListener(hits -> SwingUtilities.invokeLater(() -> tunerPanel.setStations(hits)));
@@ -554,10 +576,6 @@ public class HackRFSweepSettingsUI extends JPanel
 		hRF.getMcpStatus().addListener(s -> SwingUtilities.invokeLater(this::refreshMcpStatus));
 		hRF.registerListener(new HackRFSettings.HackRFEventAdapter()
 		{
-			@Override public void captureStateChanged(boolean isCapturing)
-			{
-//				btnPause.setText(isCapturing ? "Pause"  : "Resume");
-			}
 			@Override public void hardwareStatusChanged(boolean hardwareSendingData)
 			{
 				radioSweeping = hardwareSendingData;
@@ -566,27 +584,27 @@ public class HackRFSweepSettingsUI extends JPanel
 		});
 		refreshRadioStatus();
 		refreshMcpStatus();
-		
+		ExclusiveToolTip.bindColumn(this);
 	}
 
 	private void refreshRadioStatus() {
-		RadioIdentity id = RadioIdentity.ABSENT;
-		if (hRF != null && hRF.getRadioIdentity() != null && hRF.getRadioIdentity().getValue() != null)
-			id = hRF.getRadioIdentity().getValue();
+		RadioIdentity id = hRF.getRadioIdentity().getValue();
+		if (id == null)
+			id = RadioIdentity.ABSENT;
 		txtHackrfConnected.setText(id.statusHtml());
 		ExclusiveToolTip.setText(txtHackrfConnected, id.tooltip(radioSweeping));
 	}
 
 	private void refreshMcpStatus() {
-		McpStatus mcp = McpStatus.OFF;
-		if (hRF != null && hRF.getMcpStatus() != null && hRF.getMcpStatus().getValue() != null)
-			mcp = hRF.getMcpStatus().getValue();
+		McpStatus mcp = hRF.getMcpStatus().getValue();
+		if (mcp == null)
+			mcp = McpStatus.OFF;
 		txtMcpStatus.setText(mcp.statusHtml());
 		ExclusiveToolTip.setText(txtMcpStatus, mcp.tooltip(System.currentTimeMillis()));
 	}
 
 	private void refreshRadioCombo() {
-		if (comboRadio == null || hRF == null)
+		if (comboRadio == null)
 			return;
 		syncingRadioCombo = true;
 		try {
@@ -656,6 +674,10 @@ public class HackRFSweepSettingsUI extends JPanel
 		return frequencyRangePanel;
 	}
 
+	QuickFrequencySelectorPanel quickFrequencySelector() {
+		return quickFrequencySelector;
+	}
+
 	JSpinner fftBinSpinner() {
 		return spinnerFFTBinHz;
 	}
@@ -670,6 +692,14 @@ public class HackRFSweepSettingsUI extends JPanel
 
 	JCheckBox autoGainCheckbox() {
 		return chckbxAutoGain;
+	}
+
+	JCheckBox autoSweepCheckbox() {
+		return chckbxAutoSweep;
+	}
+
+	JSpinner samplesSpinner() {
+		return spinner_numberOfSamples;
 	}
 
 	JSlider gainSlider() {

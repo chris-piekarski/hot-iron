@@ -13,6 +13,10 @@ public final class TvChannelPlan
 	public static final int FIRST_FCC_CHANNEL = 2;
 	public static final int LAST_FCC_CHANNEL = 36;
 	public static final int WIDTH_MHZ = 6;
+	public static final int VHF_VIEW_START_MHZ = 54;
+	public static final int VHF_VIEW_END_MHZ = 216;
+	public static final int UHF_VIEW_START_MHZ = 470;
+	public static final int UHF_VIEW_END_MHZ = 608;
 	public static final double PILOT_OFFSET_MHZ = 0.31;
 	/** 16 MS/s with an 8 MHz analog filter leaves 1 MHz guard around the 6 MHz ATSC brick. */
 	public static final int IQ_RATE_HZ = 16_000_000;
@@ -91,6 +95,17 @@ public final class TvChannelPlan
 		return CHANNELS.get(wrap(idx + dir, CHANNELS.size()));
 	}
 
+	/** True when the sweep window overlaps any US TV allocation. */
+	public static boolean overlapsBroadcast(double startMHz, double endMHz)
+	{
+		for (TvChannel ch : CHANNELS)
+		{
+			if (ch.occupancyOverlaps(startMHz, endMHz))
+				return true;
+		}
+		return false;
+	}
+
 	public static List<TvChannel> visibleOccupancy(double startMHz, double endMHz)
 	{
 		if (endMHz < startMHz)
@@ -133,6 +148,33 @@ public final class TvChannelPlan
 		return Collections.unmodifiableList(out);
 	}
 
+	/**
+	 * Same plateau test on a parked-IQ row (absolute MHz vs dBFS).
+	 */
+	public static List<TvStationHit> detectStations(float[] mhz, float[] dbfs)
+	{
+		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
+			return List.of();
+		float[] sorted = dbfs.clone();
+		java.util.Arrays.sort(sorted);
+		float noise = sorted[Math.min(sorted.length - 1,
+				Math.max(0, (int) Math.floor(NOISE_PERCENTILE * (sorted.length - 1))))];
+		if (!Float.isFinite(noise))
+			return List.of();
+		float thresh = noise + DETECT_MARGIN_DB;
+		double start = mhz[0];
+		double end = mhz[mhz.length - 1];
+		List<TvStationHit> out = new ArrayList<>();
+		for (TvChannel ch : visibleOccupancy(start, end))
+		{
+			float mean = meanPowerInChannel(mhz, dbfs, ch);
+			if (!Float.isFinite(mean) || mean < thresh)
+				continue;
+			out.add(new TvStationHit(ch, mean));
+		}
+		return Collections.unmodifiableList(out);
+	}
+
 	static float meanPowerInChannel(DatasetSpectrum ds, TvChannel ch)
 	{
 		long loHz = Math.round(ch.lowMHz * 1_000_000d);
@@ -147,6 +189,28 @@ public final class TvChannelPlan
 				continue;
 			float p = ds.getPower(i);
 			if (p <= SpectrumPowerScale.EMPTY_CEILING || !Float.isFinite(p))
+				continue;
+			sum += p;
+			c++;
+		}
+		if (c == 0)
+			return Float.NaN;
+		return (float) (sum / c);
+	}
+
+	static float meanPowerInChannel(float[] mhz, float[] dbfs, TvChannel ch)
+	{
+		if (mhz == null || dbfs == null || ch == null)
+			return Float.NaN;
+		double sum = 0;
+		int c = 0;
+		int n = Math.min(mhz.length, dbfs.length);
+		for (int i = 0; i < n; i++)
+		{
+			if (mhz[i] < ch.lowMHz || mhz[i] >= ch.highMHz())
+				continue;
+			float p = dbfs[i];
+			if (!Float.isFinite(p) || p <= SpectrumPowerScale.EMPTY_CEILING)
 				continue;
 			sum += p;
 			c++;

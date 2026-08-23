@@ -3,8 +3,8 @@
 ## Getting the Code
 
 ```bash
-git clone --recurse-submodules https://github.com/chris-piekarski/hotiron.git
-cd hotiron
+git clone --recurse-submodules https://github.com/chris-piekarski/hackrf-spectrum-analyzer.git
+cd hackrf-spectrum-analyzer
 make help
 ```
 
@@ -22,10 +22,10 @@ This is a **hybrid JNA desktop module** with C and C++ natives next to Java. Mav
 | `lib/hackrf` | git submodule (SDK pin) |
 | `lib/fftw-3.3.5-dll64`, `lib/libusb-1.0.21` | Vendored headers used by native compilation; Windows also cross-links these trees, while Linux links system libraries |
 | `lib/win32-x86-64/libwinpthread-1.dll` | Shipped next to the Windows sweep DLL |
-| `lib/launchers`, `lib/program.ico`, `lib/program.png` | Start scripts and package icons |
+| `lib/launchers`, `src/main/resources/hotiron/` | Start scripts and packaged application icons |
 | `build/`, `target/`, `obj/` | Generated — not source |
 
-Do **not** put CSVs under `src/main/java`; classpath data belongs in `src/main/resources`, and package icons stay under `lib/`. Do not commit Eclipse `.project` / `.classpath`. Java dependencies come from Maven, not `lib/*.jar`. Do not vendor Ant / JNAerator / 32-bit Windows trees.
+Do **not** put CSVs under `src/main/java`; classpath data and package icons belong in `src/main/resources`. Do not commit Eclipse `.project` / `.classpath`. Java dependencies come from Maven, not `lib/*.jar`. Do not vendor Ant / JNAerator / 32-bit Windows trees.
 
 ## Daily Development Workflow
 
@@ -60,9 +60,9 @@ cd src/hotiron && make native-test
 
 `make test` must stay green and **never** requires a HackRF. Hardware/integration tests live in `hotiron.hw`, are named `*IT`, and each method is marked `@HardwareTest` (`@Tag("hardware")` + `@Test`). Surefire excludes that tag and `*IT`. Run them only with `make test-hw` (skips if the radio is not enumerated). That profile covers USB presence, firmware/USB API/board via the app’s `.so`, a live sweep through `FFTBins` → `DatasetSpectrumPeak`, start/stop/restart, antenna power + LNA, restart after FFT bin / frequency change, and parked FM IQ followed by sweep resume. See [plans/hardware-integration-tests.md](plans/hardware-integration-tests.md).
 
-`make info` (alias `make list-devices`) prints the SDK/USB API this tree is pinned to (libhackrf `v2026.01.3`, USB API from the firmware sources, JNA), attached HackRF USB devices, device firmware when the usbfs node is writable, and whether a newer Great Scott Gadgets release exists (GitHub; skip with `HACKRF_INFO_NO_NET=1`).
+`make info` prints the SDK/USB API this tree is pinned to (libhackrf `v2026.01.3`, USB API from the firmware sources, JNA), attached HackRF USB devices, device firmware when the usbfs node is writable, and whether a newer Great Scott Gadgets release exists (GitHub; skip with `HACKRF_INFO_NO_NET=1`).
 
-`make firmware-update` is a **dry-run** of an official GSG SPI-flash. It only writes with `CONFIRM=1`. It is not part of `make build` or `make test`. See [hackrf-setup.md](hardware.md).
+`make firmware-update` is a **dry-run** of an official GSG SPI-flash. It only writes with `CONFIRM=1`. It is not part of `make build` or `make test`. See [hardware.md](hardware.md).
 
 Coverage:
 
@@ -74,7 +74,7 @@ make test
 
 `hackrf_fm.c` and patched `hackrf_sweep.c` are not in the gcov report until they have self-tests; they are exercised by `make test-hw` with a radio.
 
-**Guideline**: New logic in `hotiron/core/` should come with unit tests. Use synthetic `DatasetSpectrum` / `FFTBins` data. Settings belong on `AnalyzerSettings` (test without a JFrame). Overlay policy belongs on `FrequencyAxis` / `BandMark` layers (test without painting). Auto-gain belongs on `AutoGainPolicy` (inject `nowMs`; do not open USB). MCP belongs on `SpectrumSnapshotStore` / `SpectrumMcpTools` (in-process JSON-RPC; no sockets required). Waterfall tick math belongs on `WaterfallTimeScale`. WFM listen belongs on `WfmDemodulator` (synthetic int8 IQ; `AudioSink` fake). Reflection is acceptable for controlling time-based or internal graphics state in `PersistentDisplay` and `DatasetSpectrumPeak`.
+**Guideline**: New logic in `hotiron/core/` should come with unit tests. Use synthetic `DatasetSpectrum` / `FFTBins` data. Settings belong on `AnalyzerSettings` (test without a JFrame). Overlay policy belongs on `FrequencyAxis` / `BandMark` layers (test without painting). Auto-gain belongs on `AutoGainPolicy` (inject `nowMs`; do not open USB). Auto FFT/samples belongs on `AutoSweepPolicy` (span in, discrete bin + samples out; hysteresis; do not open USB). MCP belongs on `SpectrumSnapshotStore` / `SpectrumMcpTools` (in-process JSON-RPC; no sockets required). Waterfall tick math belongs on `WaterfallTimeScale`. WFM listen belongs on `WfmDemodulator` (synthetic int8 IQ; `AudioSink` fake). Reflection is acceptable for controlling time-based or internal graphics state in `PersistentDisplay` and `DatasetSpectrumPeak`.
 
 ### Test → Coverage Workflow
 
@@ -120,11 +120,13 @@ For the native C/C++ parts, a clang-format command is commented in the Makefile.
 
 ## Architecture Notes
 
-See [architecture.md](architecture.md) for a high-level overview.
+See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool.
 
 Key directories:
-- `src/hotiron/src/main/java/hotiron/core/` — Pure DSP logic (best place for unit tests)
-- `src/hotiron/src/main/java/hotiron/ui/` — Swing UI
+- `src/hotiron/src/main/java/hotiron/core/` — Engines, DSP, policies, channel plans (best place for unit tests)
+- `src/hotiron/src/main/java/hotiron/mvc/` — `ModelValue` + `MVCController` (settings bind; no USB)
+- `src/hotiron/src/main/java/hotiron/ui/` — Swing UI; overlay **paint** only (`BandHeaderPainter`)
+- `src/hotiron/src/main/java/hotiron/mcp/` — Snapshot store + JSON-RPC (same JVM; no second USB)
 - `src/hotiron/src/main/java/hotiron/nativebridge/` — JNA glue
 - `src/hotiron/src-c/` — Sweep library patch, parked-IQ receiver, native headers, and ATSC GNU Radio/libfec C/C++
 - `src/hotiron/lib/hackrf/` — Submodule (automatically patched during build)

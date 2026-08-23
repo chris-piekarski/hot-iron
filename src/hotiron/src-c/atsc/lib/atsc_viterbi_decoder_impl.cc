@@ -8,10 +8,6 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "atsc_types.h"
 #include "atsc_viterbi_decoder_impl.h"
 #include "atsc_viterbi_mux.h"

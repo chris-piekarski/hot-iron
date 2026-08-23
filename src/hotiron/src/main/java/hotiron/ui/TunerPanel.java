@@ -19,8 +19,8 @@ import hotiron.core.FmStationHit;
 import net.miginfocom.swing.MigLayout;
 
 /**
- * Car-radio face: big frequency, Tune (one 200 kHz click), Seek (next
- * detected station), rotary knob, listen, volume.
+ * Car-radio face: big frequency, Tune (one 200 kHz click), Scan (fill
+ * Seek), Seek (next scanned station), rotary knob, listen, volume.
  */
 public final class TunerPanel extends JPanel
 {
@@ -34,6 +34,7 @@ public final class TunerPanel extends JPanel
 	private final JButton tuneUp = new JButton("+");
 	private final JButton seekDown = new JButton("◀◀");
 	private final JButton seekUp = new JButton("▶▶");
+	private final JButton scan = new JButton("Scan");
 	private final JLabel tuneLabel = new JLabel("Tune", SwingConstants.CENTER);
 	private final JLabel seekLabel = new JLabel("Seek", SwingConstants.CENTER);
 	private final StationKnob knob = new StationKnob();
@@ -41,21 +42,23 @@ public final class TunerPanel extends JPanel
 	private final JSlider volume = new JSlider(0, 100, 80);
 	private IntConsumer onTune;
 	private IntConsumer onSeek;
+	private Runnable onScan;
 
 	public TunerPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 6, wrap 1", "[grow,fill]", "[][][][][]"));
+		setLayout(new MigLayout("insets 6, wrap 1", "[grow,fill]", ""));
 		setBorder(BorderFactory.createTitledBorder("FM tuner"));
 		freq.setFont(new Font(Font.MONOSPACED, Font.BOLD, 32));
 		freq.setForeground(LCD_DIM);
 		unit.setForeground(LCD_DIM);
-		tuneDown.setToolTipText("Tune down one channel (200 kHz)");
-		tuneUp.setToolTipText("Tune up one channel (200 kHz)");
-		seekDown.setToolTipText("Seek previous detected station");
-		seekUp.setToolTipText("Seek next detected station");
-		listen.setToolTipText("Park the radio on this station. Stops the sweep.");
-		volume.setToolTipText("Volume");
+		ExclusiveToolTip.setText(tuneDown, "Tune down one channel (200 kHz)");
+		ExclusiveToolTip.setText(tuneUp, "Tune up one channel (200 kHz)");
+		ExclusiveToolTip.setText(seekDown, "Seek previous station from the last Scan");
+		ExclusiveToolTip.setText(seekUp, "Seek next station from the last Scan");
+		ExclusiveToolTip.setText(scan, "Sweep 88–108 MHz and set the stations Seek jumps between");
+		ExclusiveToolTip.setText(listen, "Park the radio on this station. Stops the sweep.");
+		ExclusiveToolTip.setText(volume, "Volume");
 		add(freq);
 		add(unit);
 		JPanel knobRow = new JPanel(new MigLayout("insets 0", "[][grow][]", "[grow]"));
@@ -71,12 +74,20 @@ public final class TunerPanel extends JPanel
 		seekRow.add(seekUp, "growx");
 		add(seekRow, "growx");
 		add(seekLabel);
-		add(listen, "growx");
+		JPanel actionRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
+		actionRow.setOpaque(false);
+		actionRow.add(scan, "growx");
+		actionRow.add(listen, "growx");
+		add(actionRow, "growx");
 		add(volume, "growx");
 		tuneDown.addActionListener(e -> tune(-1));
 		tuneUp.addActionListener(e -> tune(+1));
 		seekDown.addActionListener(e -> seek(-1));
 		seekUp.addActionListener(e -> seek(+1));
+		scan.addActionListener(e -> {
+			if (onScan != null)
+				onScan.run();
+		});
 		knob.setOnStep(this::seek);
 	}
 
@@ -105,6 +116,11 @@ public final class TunerPanel extends JPanel
 		return seekUp;
 	}
 
+	public JButton scanButton()
+	{
+		return scan;
+	}
+
 	public void setOnTune(IntConsumer onTune)
 	{
 		this.onTune = onTune;
@@ -115,10 +131,14 @@ public final class TunerPanel extends JPanel
 		this.onSeek = onSeek;
 	}
 
-	/** @deprecated knob seek; use {@link #setOnSeek} */
-	public void setOnStep(IntConsumer onStep)
+	public void setOnScan(Runnable onScan)
 	{
-		setOnSeek(onStep);
+		this.onScan = onScan;
+	}
+
+	public void setScanning(boolean on)
+	{
+		scan.setText(on ? "Scanning…" : "Scan");
 	}
 
 	public void tune(int direction)

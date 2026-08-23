@@ -26,15 +26,31 @@ public final class TvWatchEngine
 	static final int TS_PACKET_BYTES = 188;
 	static final int TS_OUTPUT_PACKETS = 128;
 	static final long POLARITY_RETRY_MS = 12_000;
+	/**
+	 * v2.0.1 locked in the first 2 s including the PLL/DC ramp.
+	 * Skipping that window delayed PN511 and never helped RS.
+	 */
+	public static final int SETTLE_MS = 0;
 	static final int DEBUG_COUNTERS = 10;
 	static final int DEBUG_GAUGES = 6;
 	static final long DEBUG_INTERVAL_MS = 200;
+	/** Rolling RS window must be this full before we judge decode health. */
+	static final int RS_MIN_WINDOW = 32;
+	/** Start / keep ffmpeg when at least 5/8 of the window is RS-good. */
+	static final int RS_HEALTHY_NUM = 5;
+	static final int RS_HEALTHY_DEN = 8;
+	/** Stop ffmpeg when fewer than 1/8 of the window is RS-good. */
+	static final int RS_COLLAPSED_NUM = 1;
+	static final int RS_COLLAPSED_DEN = 8;
+	/** Recreate the 8VSB receiver if PAT was seen then RS stays at 0. */
+	static final long STUCK_RS_RESET_MS = 4_000;
 
 	private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(QUEUE_CAP);
 	private final AtomicLong bytes = new AtomicLong();
 	private final AtomicLong dropped = new AtomicLong();
 	private final AtomicInteger volume = new AtomicInteger(80);
 	private final MpegTsPlayer player = new MpegTsPlayer();
+	private final MpegTsProbe tsProbe = new MpegTsProbe();
 	private final IqSpectrum iqSpectrum = new IqSpectrum();
 	private final WatchPreview preview = new WatchPreview();
 	private volatile AudioSpectrum.FrameListener spectrumListener;
@@ -53,9 +69,27 @@ public final class TvWatchEngine
 	private long lastPreviewMs;
 	private long startMs;
 	private volatile boolean sawPat;
+	private volatile boolean polarityProved;
+	private long lastHealthyRsMs;
 	private FileOutputStream tsDump;
 	private int dumpLeft;
 	private boolean inverted;
+	private volatile int settleMs = SETTLE_MS;
+	private volatile long settleUntilMs;
+	private volatile int pendingLna = -1;
+	private volatile int pendingVga = -1;
+
+	public void setSettleMs(int ms)
+	{
+		settleMs = Math.max(0, ms);
+	}
+
+	/** Apply LNA/VGA while USB and the 8VSB receiver stay running. */
+	public void requestGains(int lna, int vga)
+	{
+		pendingLna = lna;
+		pendingVga = vga;
+	}
 
 	public synchronized void start(Consumer<BufferedImage> onFrame, AudioSink sink)
 	{
@@ -68,11 +102,17 @@ public final class TvWatchEngine
 		snrDb = 0;
 		packets = 0;
 		sawPat = false;
+		polarityProved = false;
+		tsProbe.reset();
 		lastLogMs = 0;
 		iqSpectrum.reset();
 		preview.reset();
 		lastPreviewMs = 0;
 		startMs = System.currentTimeMillis();
+		lastHealthyRsMs = startMs;
+		settleUntilMs = startMs + settleMs;
+		pendingLna = -1;
+		pendingVga = -1;
 		previewIq.set(null);
 		queue.clear();
 		openDump();
@@ -204,9 +244,43 @@ public final class TvWatchEngine
 		return iqSpectrum;
 	}
 
-	static boolean shouldRetryPolarity(boolean hasPat, int packetCount, long elapsedMs)
+	static boolean shouldRetryPolarity(boolean hasPat, long rsGoodWindow, long elapsedMs)
 	{
-		return !hasPat && packetCount == 0 && elapsedMs >= POLARITY_RETRY_MS;
+		return shouldRetryPolarity(hasPat, rsGoodWindow, elapsedMs, false);
+	}
+
+	static boolean shouldRetryPolarity(boolean hasPat, long rsGoodWindow, long elapsedMs,
+			boolean polarityProved)
+	{
+		/*
+		 * A false trellis/field lock can emit an unlimited number of corrupt
+		 * packets.  The lifetime packet count therefore cannot prove that this
+		 * polarity is usable; only the rolling RS window can. Once a polarity
+		 * has produced a healthy window, do not flip it after an IQ drop.
+		 */
+		return !polarityProved && !hasPat && rsGoodWindow == 0 && elapsedMs >= POLARITY_RETRY_MS;
+	}
+
+	static boolean rsHealthyForDecode(long rsGoodWindow, long rsWindow)
+	{
+		return rsWindow >= RS_MIN_WINDOW
+				&& rsGoodWindow * RS_HEALTHY_DEN >= rsWindow * RS_HEALTHY_NUM;
+	}
+
+	static boolean rsCollapsedForDecode(long rsGoodWindow, long rsWindow)
+	{
+		return rsWindow >= RS_MIN_WINDOW
+				&& rsGoodWindow * RS_COLLAPSED_DEN < rsWindow * RS_COLLAPSED_NUM;
+	}
+
+	static boolean shouldResetStuckReceiver(boolean hasPat, long rsGoodWindow, long unhealthyMs)
+	{
+		return hasPat && rsGoodWindow == 0 && unhealthyMs >= STUCK_RS_RESET_MS;
+	}
+
+	static boolean pmtReadyForPlayer(MpegTsProbe.Snapshot ts)
+	{
+		return ts != null && ts.videoPid >= 0 && ts.audioPid >= 0;
 	}
 
 	public boolean offerIq(byte[] iq)
@@ -239,7 +313,7 @@ public final class TvWatchEngine
 
 	private void pushPreview(float[] row)
 	{
-		if (player.frames() > 0)
+		if (player.running() && player.frames() > 0)
 			return;
 		long now = System.currentTimeMillis();
 		if (now - lastPreviewMs < 33)
@@ -255,6 +329,10 @@ public final class TvWatchEngine
 
 	private void startPlayer()
 	{
+		MpegTsProbe.Snapshot ts = tsProbe.snapshot();
+		System.err.println("ATSC watch: starting ffmpeg after healthy RS"
+				+ (ts.videoPid >= 0 ? " vpid=" + ts.videoPid : "")
+				+ (ts.audioPid >= 0 ? " apid=" + ts.audioPid : ""));
 		player.start(img -> {
 			Consumer<BufferedImage> cb = this.onFrame;
 			if (cb != null)
@@ -270,7 +348,19 @@ public final class TvWatchEngine
 					pcm[i] = (short) (pcm[i] * vol / 100);
 			}
 			s.write(pcm, 0, pcm.length);
-		});
+		}, ts.videoPid, ts.audioPid);
+	}
+
+	private void abandonDecode(PatDetector patDetector)
+	{
+		player.stop();
+		sawPat = false;
+		tsProbe.reset();
+		if (patDetector != null)
+			patDetector.reset();
+		locked = false;
+		snrDb = 0;
+		packets = 0;
 	}
 
 	private void loop()
@@ -286,7 +376,7 @@ public final class TvWatchEngine
 		float[] debugGauges = new float[DEBUG_GAUGES];
 		PatDetector patDetector = new PatDetector();
 		long lastDebugMs = 0;
-		long polaritySince = System.currentTimeMillis();
+		long polaritySince = settleUntilMs;
 		long receiverDrops = dropped.get();
 		while (run)
 		{
@@ -301,6 +391,23 @@ public final class TvWatchEngine
 			}
 			if (chunk == null)
 				continue;
+			if (System.currentTimeMillis() < settleUntilMs)
+				continue;
+			if (pendingLna >= 0)
+			{
+				int lna = pendingLna;
+				int vga = pendingVga;
+				pendingLna = -1;
+				pendingVga = -1;
+				try
+				{
+					HackrfSweepLibrary.hackrf_fm_lib_set_gains(lna, vga);
+					System.err.println("ATSC watch: live IF LNA " + lna + " VGA " + vga);
+				}
+				catch (UnsatisfiedLinkError ignored)
+				{
+				}
+			}
 			Pointer p = rx;
 			long currentDrops = dropped.get();
 			if (p != null && currentDrops != receiverDrops)
@@ -312,13 +419,9 @@ public final class TvWatchEngine
 					HackrfSweepLibrary.atsc_rx_destroy(p);
 					p = replacement;
 					receiverDrops = currentDrops;
-					player.stop();
-					sawPat = false;
-					patDetector.reset();
-					locked = false;
-					snrDb = 0;
-					packets = 0;
-					polaritySince = System.currentTimeMillis();
+					abandonDecode(patDetector);
+					lastHealthyRsMs = System.currentTimeMillis();
+					polaritySince = lastHealthyRsMs;
 					System.err.println("ATSC watch: reset receiver after IQ drop " + currentDrops);
 					continue;
 				}
@@ -337,58 +440,90 @@ public final class TvWatchEngine
 			catch (UnsatisfiedLinkError ignored)
 			{
 			}
+			long now = System.currentTimeMillis();
+			long rsGood = debug.rsGoodWindow;
+			long rsWin = debug.rsWindow;
+			try
+			{
+				if (HackrfSweepLibrary.atsc_rx_debug(p, debugCounters, debugCounters.length,
+						debugGauges, debugGauges.length) > 0)
+				{
+					rsGood = debugCounters[6];
+					rsWin = debugCounters[7];
+					if (rsGood > 0)
+						lastHealthyRsMs = now;
+					if (rsHealthyForDecode(rsGood, rsWin))
+						polarityProved = true;
+					if (now - lastDebugMs >= DEBUG_INTERVAL_MS)
+					{
+						lastDebugMs = now;
+						debug = new TvWatchDebug(now, run, true, sawPat, locked,
+								debugCounters[8] != 0, debugCounters[0], debugCounters[1],
+								debugCounters[2], debugCounters[3], debugCounters[4],
+								debugCounters[5], rsGood, rsWin,
+								debugCounters[9], dropped.get(), queue.size(), player.frames(),
+								preview.frames(), debugGauges[0], debugGauges[1],
+								debugGauges[2], debugGauges[3], debugGauges[4],
+								debugGauges[5], player.stats());
+					}
+				}
+			}
+			catch (UnsatisfiedLinkError ignored)
+			{
+			}
+			if (now - lastDebugMs >= DEBUG_INTERVAL_MS)
+			{
+				lastDebugMs = now;
+				debug = debug.withPlayer(now, sawPat, locked, player.frames(),
+						preview.frames(), player.stats());
+			}
 			if (n >= 188)
 			{
 				int nbytes = n - (n % 188);
 				dumpTs(ts, nbytes);
+				tsProbe.accept(ts, nbytes);
 				if (!sawPat)
 					sawPat = patDetector.accept(ts, nbytes);
-				if (sawPat)
+				if (sawPat && rsHealthyForDecode(rsGood, rsWin)
+						&& pmtReadyForPlayer(tsProbe.snapshot()))
 				{
 					if (!player.running())
 						startPlayer();
 					player.writeTs(ts, nbytes);
 				}
-			}
-			long now = System.currentTimeMillis();
-			if (now - lastDebugMs >= DEBUG_INTERVAL_MS)
-			{
-				lastDebugMs = now;
-				try
+				else if (player.running() && rsCollapsedForDecode(rsGood, rsWin))
 				{
-					if (HackrfSweepLibrary.atsc_rx_debug(p, debugCounters, debugCounters.length,
-							debugGauges, debugGauges.length) > 0)
-					{
-						debug = new TvWatchDebug(now, run, true, sawPat, locked,
-								debugCounters[8] != 0, debugCounters[0], debugCounters[1],
-								debugCounters[2], debugCounters[3], debugCounters[4],
-								debugCounters[5], debugCounters[6], debugCounters[7],
-								debugCounters[9], dropped.get(), queue.size(), player.frames(),
-								preview.frames(), debugGauges[0], debugGauges[1],
-								debugGauges[2], debugGauges[3], debugGauges[4],
-								debugGauges[5]);
-					}
-				}
-				catch (UnsatisfiedLinkError ignored)
-				{
+					player.stop();
+					System.err.println("ATSC watch: stopping ffmpeg (RS " + rsGood + "/" + rsWin + ")");
 				}
 			}
-			if (p != null && shouldRetryPolarity(sawPat, packets, now - polaritySince))
+			if (shouldRetryPolarity(sawPat, rsGood, now - polaritySince, polarityProved))
 			{
-				boolean nextInverted = !inverted;
-				Pointer replacement = createReceiver(nextInverted);
+				Pointer replacement = createReceiver(!inverted);
 				if (replacement != null)
 				{
 					rx = replacement;
 					HackrfSweepLibrary.atsc_rx_destroy(p);
-					inverted = nextInverted;
-					locked = false;
-					snrDb = 0;
-					packets = 0;
-					patDetector.reset();
+					inverted = !inverted;
+					polarityProved = false;
+					abandonDecode(patDetector);
+					lastHealthyRsMs = now;
 					polaritySince = now;
 					System.err.println("ATSC watch: retrying IQ polarity "
 							+ (inverted ? "inverted" : "normal"));
+					continue;
+				}
+			}
+			else if (shouldResetStuckReceiver(sawPat, rsGood, now - lastHealthyRsMs))
+			{
+				Pointer replacement = createReceiver(inverted);
+				if (replacement != null)
+				{
+					rx = replacement;
+					HackrfSweepLibrary.atsc_rx_destroy(p);
+					abandonDecode(patDetector);
+					lastHealthyRsMs = now;
+					System.err.println("ATSC watch: reset receiver after stuck RS");
 				}
 			}
 			if (now - lastLogMs > 2000)
@@ -402,7 +537,8 @@ public final class TvWatchEngine
 						+ " preview=" + preview.frames() + " agc="
 						+ String.format(java.util.Locale.US, "%.1f", d.agcGain)
 						+ " rmsIq=" + String.format(java.util.Locale.US, "%.4f", d.rmsIq)
-						+ " rmsBb=" + String.format(java.util.Locale.US, "%.2f", d.rmsBaseband));
+						+ " rmsBb=" + String.format(java.util.Locale.US, "%.2f", d.rmsBaseband)
+						+ " " + d.ffmpeg.consoleSummary());
 			}
 		}
 	}

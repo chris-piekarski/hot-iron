@@ -5,11 +5,8 @@
 # Use 'make help' for a colorful categorized list of targets.
 
 # ANSI colors for pretty help output (RGB-ish / terminal colors)
-BLUE   := \033[0;34m
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
-RED    := \033[0;31m
-CYAN   := \033[0;36m
 BOLD   := \033[1m
 NC     := \033[0m
 
@@ -81,7 +78,7 @@ OBJECTS_ATSC_WIN= $(addsuffix .$(OBJECT_SUFFIX_WIN), $(addprefix $(BUILD_PATH)/,
 
 HACKRF_SDK_PIN= v2026.01.3
 HACKRF_SWEEP_PATCH= src-c/0001-hackrf_sweep-to-library-conversion-v2026.01.3.patch
-CFLAGS= -DHACKRF_SWEEP_AS_LIBRARY -c -fPIC \
+CFLAGS= -c -fPIC \
 	-DLIBRARY_VERSION=\"$(HACKRF_SDK_PIN)\" -DLIBRARY_RELEASE=\"$(HACKRF_SDK_PIN)\"
 LDFLAGS=  -shared 
 CFLAGS_WIN= $(CFLAGS)
@@ -101,8 +98,6 @@ CFLAGS += -O0 -g #-O2
 LDFLAGS+= -g 
 endif
 
-LDPATHS_STATIC= -L""
-
 #paths
 #path to build dlls
 OUTPUT_DLL_DIR    = $(OUTPUT_PATH)/lib/linux-x86-64
@@ -110,22 +105,21 @@ OUTPUT_DLL_DIR_WIN     = $(OUTPUT_PATH)/lib/win32-x86-64
 
 # Windows build setup
 LDPATHS_WIN= -L"lib/fftw-3.3.5-dll64" -L"$(LIBUSB_DIR)/MinGW64/dll"
-INCLUDE_PATHS_WIN= $(INCLUDE_PATHS) -Ilib/fftw-3.3.5-dll64 
+INCLUDE_PATHS_WIN= $(INCLUDE_PATHS)
 LDLIBS_WIN= -lusb-1.0 -lfftw3f-3 -lpthread 
 DLL_LIB_PTHREAD= lib/win32-x86-64/libwinpthread-1.dll
 DLL_LIB_WIN= $(OUTPUT_DLL_DIR_WIN)/hackrf-sweep.dll
 DLL_LIB_FFTW= lib/fftw-3.3.5-dll64/libfftw3f-3.dll
 DLL_LIB_USB= $(LIBUSB_DIR)/MinGW64/dll/libusb-1.0.dll
-LDFLAGS_WIN+= -Wl,--kill-at  -static-libgcc -static-libstdc++ -shared
+LDFLAGS_WIN+= -Wl,--gc-sections -static-libgcc -static-libstdc++ -shared
 
 # Linux build setup
 # required installed libraries: openjdk-21 (headful), libfftw3, libusb-1.0
 DLL_LIB= $(OUTPUT_DLL_DIR)/libhackrf-sweep.so
-LDLIBS= -lusb-1.0 -lfftw3 -lfftw3f
+LDLIBS= -lusb-1.0 -lfftw3f
 CFLAGS+= -march=x86-64
-LIB_DIR= linux-x86-64
 
-ZIP_FILE= hackrf_spectrum_analyzer.zip
+ZIP_FILE= hotiron.zip
 ZIP_FILE_PATH= $(OUTPUT_PATH)/../
 SWEEP_POWER_AVERAGE_SELFTEST= $(BUILD_PATH)/sweep_power_average_selftest
 GCOV_PATH= $(BUILD_PATH)/gcov
@@ -158,7 +152,7 @@ $(MAIN_JAR): ## (internal) build the fat jar via Maven
 zip_file: $(DLL_LIB) $(DLL_LIB_WIN) ## (internal) create release zip
 	mkdir -p $(RELEASE_DIR)
 	rm -f $(ZIP_FILE_PATH)/$(ZIP_FILE)
-	cd $(ZIP_FILE_PATH) && zip -r $(ZIP_FILE) *
+	cd $(ZIP_FILE_PATH) && zip -r $(ZIP_FILE) $(notdir $(OUTPUT_PATH))
 	yes | cp -rf $(ZIP_FILE_PATH)/$(ZIP_FILE) $(RELEASE_DIR) 
 
 .PHONY: patch_hackrf
@@ -167,24 +161,13 @@ patch_hackrf: ## Re-checkout and patch hackrf sources to library mode for v2026.
 	(cd lib/hackrf/ && git reset --hard $(HACKRF_SDK_PIN) && git apply < ../../$(HACKRF_SWEEP_PATCH))
 
 .PHONY: prepare
-prepare: dirs $(OBJECTS) $(OBJECTS_WIN) $(DLL_LIB_FFTW) ## (internal) prepare output dirs, objects, assets, launchers
+prepare: dirs $(DLL_LIB_FFTW) ## (internal) prepare output dirs, assets, launchers
 	mkdir -p $(OUTPUT_DLL_DIR) $(OUTPUT_DLL_DIR_WIN)
-	cp -f lib/program.ico lib/program.png $(OUTPUT_DLL_DIR)/../
 	cp lib/launchers/hotiron.sh $(OUTPUT_PATH)
 	cp lib/launchers/hotiron.cmd $(OUTPUT_PATH)
 	cp ../../scripts/hotiron-banner.txt $(OUTPUT_PATH)
 	chmod +x $(OUTPUT_PATH)/hotiron.sh
-	cp lib/launchers/hotiron.sh $(OUTPUT_PATH)/../
-	cp lib/launchers/hotiron.cmd $(OUTPUT_PATH)/../
-	cp ../../scripts/hotiron-banner.txt $(OUTPUT_PATH)/../
-	chmod +x $(OUTPUT_PATH)/../hotiron.sh
 	cp -f $(DLL_LIB_FFTW) $(DLL_LIB_PTHREAD) $(DLL_LIB_USB) $(OUTPUT_DLL_DIR_WIN)
-
-# HackrfSweepLibrary.java is hand-maintained (see src-c/hackrf_sweep.h). JNAerator is not used.
-.PHONY: jnabridge
-jnabridge: ## JNA wrapper is source-controlled; does not run JNAerator
-	@echo "hotiron/jna/HackrfSweepLibrary.java is hand-maintained."
-	@echo "Edit it to match src-c/hackrf_sweep.h; do not run JNAerator."
 
 ##@ Native Libraries
 $(DLL_LIB_WIN): $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN)
@@ -230,7 +213,7 @@ clean: ## Clean all build artifacts (mvn + obj + build dirs)
 	rm -rf $(OUTPUT_DLL_DIR) $(BUILD_PATH) $(OUTPUT_PATH)/* bin/*
 
 ##@ Test & Quality
-.PHONY: test native-test native-coverage test-hw lint stats mermaid info list-devices
+.PHONY: test native-test native-coverage test-hw lint stats mermaid info
 test: native-test ## Native self-tests (gcov) then Maven unit tests. No radio.
 	mvn clean test
 
@@ -280,11 +263,9 @@ mermaid: ## Parse-check first-party Mermaid diagrams (uses mmdc if installed)
 	@$(abspath $(CURDIR)/../../scripts/check-mermaid.sh)
 
 ##@ Hardware
-.PHONY: info list-devices firmware-update udev
+.PHONY: info firmware-update udev
 info: ## List HackRF devices, app SDK/API versions, and upstream updates
 	@$(abspath $(CURDIR)/../../scripts/hackrf-info.sh)
-
-list-devices: info ## Alias for info
 
 firmware-update: ## Flash official GSG firmware (dry-run; CONFIRM=1 to write)
 	@CONFIRM=$(CONFIRM) VERSION=$(VERSION) FIRMWARE=$(FIRMWARE) SERIAL=$(SERIAL) \
@@ -299,8 +280,6 @@ start: build ## Build if needed, then start the Linux app
 
 mcp: build ## Start the app and listen for MCP on 127.0.0.1:8765
 	./build/hotiron/hotiron.sh --mcp
-
-run: start ## Alias for 'start'
 
 build: all ## Alias for the default build target
 

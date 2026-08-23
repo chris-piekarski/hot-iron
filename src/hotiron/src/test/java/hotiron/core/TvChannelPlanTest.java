@@ -76,4 +76,27 @@ class TvChannelPlanTest {
 		assertEquals(1, hits.size());
 		assertEquals(14, hits.get(0).channel.fccChannel);
 	}
+
+	@Test
+	void overlapsBroadcastIsUsTvNotWifi() {
+		assertTrue(TvChannelPlan.overlapsBroadcast(470, 608));
+		assertTrue(TvChannelPlan.overlapsBroadcast(54, 88));
+		assertTrue(TvChannelPlan.overlapsBroadcast(174, 216));
+		assertFalse(TvChannelPlan.overlapsBroadcast(88, 108));
+		assertFalse(TvChannelPlan.overlapsBroadcast(2402, 2472));
+	}
+
+	@Test
+	void parkedIqDetectsASixMegahertzBrick() {
+		float[] mhz = new float[160];
+		float[] dbfs = new float[160];
+		for (int i = 0; i < mhz.length; i++)
+		{
+			mhz[i] = 468f + i * 0.1f;
+			dbfs[i] = mhz[i] >= 470f && mhz[i] < 476f ? -48f : -70f;
+		}
+		List<TvStationHit> hits = TvChannelPlan.detectStations(mhz, dbfs);
+		assertEquals(1, hits.size());
+		assertEquals(14, hits.get(0).channel.fccChannel);
+	}
 }

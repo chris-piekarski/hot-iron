@@ -12,6 +12,11 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class FmListenEngine
 {
 	public static final int QUEUE_CAP = 8;
+	/**
+	 * First USB transfers after sweep→4 MS/s are unlocked PLL/DC. Demod
+	 * of that sounds like loud static; skip it, then reset.
+	 */
+	public static final int SETTLE_MS = 200;
 
 	private final WfmDemodulator demod = new WfmDemodulator();
 	private final ArrayBlockingQueue<byte[]> queue = new ArrayBlockingQueue<byte[]>(QUEUE_CAP);
@@ -25,7 +30,15 @@ public final class FmListenEngine
 	private final AudioSpectrum audioSpectrum = new AudioSpectrum();
 	private final IqSpectrum rfSpectrum = new IqSpectrum(WfmDemodulator.IQ_RATE_HZ);
 	private volatile boolean run;
+	private volatile int settleMs = SETTLE_MS;
+	private volatile long settleUntilMs;
+	private volatile boolean armed;
 	private Thread worker;
+
+	public void setSettleMs(int ms)
+	{
+		settleMs = Math.max(0, ms);
+	}
 
 	public synchronized void start(AudioSink sink)
 	{
@@ -37,6 +50,8 @@ public final class FmListenEngine
 		queue.clear();
 		dropped.set(0);
 		offered.set(0);
+		armed = false;
+		settleUntilMs = System.currentTimeMillis() + settleMs;
 		run = true;
 		worker = new Thread(this::loop, "fm-wfm-demod");
 		worker.setDaemon(true);
@@ -141,6 +156,14 @@ public final class FmListenEngine
 			AudioSpectrum.FrameListener rfSpec = rfSpectrumListener;
 			if (rfRow != null && rfSpec != null)
 				rfSpec.onFrame(rfRow);
+			if (System.currentTimeMillis() < settleUntilMs)
+				continue;
+			if (!armed)
+			{
+				demod.reset();
+				audioSpectrum.reset();
+				armed = true;
+			}
 			int n = demod.processIq(chunk, chunk.length, 100, pcm);
 			if (n <= 0)
 				continue;

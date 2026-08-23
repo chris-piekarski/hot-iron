@@ -6,10 +6,8 @@ import os
 import socket
 import sys
 
-HOST = os.environ.get(
-    "HOTIRON_MCP_HOST", os.environ.get("SPECTRUM_MCP_HOST", "127.0.0.1")
-)
-PORT = int(os.environ.get("HOTIRON_MCP_PORT", os.environ.get("SPECTRUM_MCP_PORT", "8765")))
+HOST = os.environ.get("HOTIRON_MCP_HOST", "127.0.0.1")
+PORT = int(os.environ.get("HOTIRON_MCP_PORT", "8765"))
 
 
 def main() -> int:

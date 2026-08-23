@@ -2,7 +2,6 @@ package hotiron;
 
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
-import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -29,7 +28,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.lang.reflect.InvocationTargetException;
-import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,7 +52,6 @@ import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.AxisSpace;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.axis.NumberTickUnit;
-import org.jfree.chart.axis.StandardTickUnitSource;
 import org.jfree.chart.event.ChartChangeEvent;
 import org.jfree.chart.event.ChartChangeListener;
 import org.jfree.chart.event.ChartProgressEvent;
@@ -68,7 +65,6 @@ import org.jfree.chart.plot.ValueMarker;
 import org.jfree.chart.plot.XYPlot;
 import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer;
 import org.jfree.chart.title.TextTitle;
-import org.jfree.data.Range;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 import org.jfree.chart.ui.Align;
@@ -95,12 +91,13 @@ import hotiron.core.FrequencyAllocations;
 import hotiron.core.FrequencyBand;
 import hotiron.core.FrequencyRange;
 import hotiron.core.AutoGainPolicy;
+import hotiron.core.AutoSweepPolicy;
 import hotiron.core.GainPolicy;
+import hotiron.core.FmListenGainPolicy;
 import hotiron.core.TvWatchGainPolicy;
 import hotiron.core.AudioSink;
 import hotiron.core.AudioSinks;
 import hotiron.core.AudioSpectrum;
-import hotiron.core.HackRFSettings;
 import hotiron.core.PersistentDisplay;
 import hotiron.core.RecordingAudioSink;
 import hotiron.core.WfmDemodulator;
@@ -118,24 +115,20 @@ import hotiron.mcp.FmListenSpectrum;
 import hotiron.mcp.TvWatchSpectrum;
 import hotiron.nativebridge.HackRFDeviceQuery;
 import hotiron.nativebridge.HackRFFmNativeBridge;
-import hotiron.nativebridge.HackRFSweepDataCallback;
 import hotiron.nativebridge.HackRFSweepNativeBridge;
 import hotiron.ui.BandHeaderPainter;
 import hotiron.ui.HackRFSweepSettingsUI;
 import hotiron.ui.ListenHud;
 import hotiron.ui.SweepStatusBar;
 import hotiron.ui.WaterfallPlot;
-import hotiron.ui.TvVideoPanel;
 import hotiron.ui.WatchHud;
 import hotiron.ui.FmChannelOverlay;
 import hotiron.ui.QuickSelectBandOverlay;
 import hotiron.ui.SpectrumZoomOverlay;
 import hotiron.ui.WifiChannelOverlay;
 import hotiron.mvc.ModelValue;
-import hotiron.mvc.ModelValue.ModelValueBoolean;
-import hotiron.mvc.ModelValue.ModelValueInt;
 
-public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
+public class HotIron {
 
 	/**
 	 * Color palette for UI
@@ -150,8 +143,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 
 	public static final int	SPECTRUM_PALETTE_SIZE_MIN	= 5;
 	private static boolean	captureGIF					= false;
-
-	private static long		initTime					= System.currentTimeMillis();
 
 	public static void main(String[] args) throws IOException {
 		//		System.out.println(new File("").getAbsolutePath());
@@ -200,6 +191,8 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 	private volatile boolean						flagManualGain						= false;
 	private volatile boolean						flagApplyingAutoGain				= false;
 	private volatile boolean						flagCoalesceGainRestart				= false;
+	private volatile boolean						flagApplyingAutoSweep				= false;
+	private volatile boolean						flagCoalesceAutoSweep				= false;
 	private final AutoGainPolicy.Loop				autoGainLoop						= new AutoGainPolicy.Loop();
 	private volatile boolean						forceStopSweep						= false;
 	/**
@@ -208,13 +201,13 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 	private ScreenCapture							gifCap								= null;
 	private final AnalyzerSettings					settings							= new AnalyzerSettings();
 	private BufferedImage							imageFrequencyAllocationTableBands	= null;
-	private boolean											isChartDrawing						= false;
 	private ReentrantLock							lock								= new ReentrantLock();
 
 	private volatile List<FmStationHit>				fmStations							= List.of();
 	private final FmStationTracker					fmTracker							= new FmStationTracker();
 	private volatile List<hotiron.core.TvStationHit> tvStations = List.of();
 	private final hotiron.core.TvStationTracker tvTracker = new hotiron.core.TvStationTracker();
+	private final hotiron.core.BandScanSession scanSession = new hotiron.core.BandScanSession();
 	private final hotiron.core.TvWatchEngine tvEngine = new hotiron.core.TvWatchEngine();
 	private final AtomicReference<BufferedImage> pendingTvFrame = new AtomicReference<>();
 	private final AtomicBoolean tvFrameUpdateQueued = new AtomicBoolean();
@@ -237,12 +230,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			new Font("Dialog", Font.PLAIN, 11));
 	private RuntimePerformanceWatch					perfWatch							= new RuntimePerformanceWatch();
 	private JFrame									uiFrame;
-	private ValueMarker								waterfallPaletteEndMarker;
-	private ValueMarker								waterfallPaletteStartMarker;
 	private WaterfallPlot							waterfallPlot;
-	private TvVideoPanel							tvVideoPanel;
-	private CardLayout								bottomPlots;
-	private JPanel									bottomPlotHost;
 	private JSplitPane								splitPane;
 	private HackRFSweepSettingsUI					settingsPanel;
 	private JLabel labelMessages;
@@ -252,7 +240,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 
 	public HotIron() {
 		hotiron.ui.AnalyzerLookAndFeel.install();
-		printInit(0);
 		settings.setHardware(new AnalyzerSettings.Hardware() {
 			@Override
 			public void restartSweep() {
@@ -304,6 +291,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			settings.getGain().setValue(60);
 			settings.isSpurRemoval().setValue(true);
 			settings.isPersistentDisplayVisible().setValue(true);
+			settings.isAutoSweep().setValue(false);
 			settings.getFFTBinHz().setValue(500000);
 			settings.getFrequencyAllocationTable().setValue(new FrequencyAllocations().getTable().values().stream().findFirst().get());
 		}
@@ -323,28 +311,11 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		setupSpectrumZoom();
 
 		waterfallPlot = new WaterfallPlot(chartPanel, 300);
-		waterfallPaletteStartMarker = new ValueMarker(waterfallPlot.getSpectrumPaletteStart(), colors.palette2,
-				new BasicStroke(1f));
-		waterfallPaletteEndMarker = new ValueMarker(
-				waterfallPlot.getSpectrumPaletteStart() + waterfallPlot.getSpectrumPaletteSize(), colors.palette2,
-				new BasicStroke(1f));
-		//		chart.getXYPlot().addRangeMarker(waterfallPaletteStartMarker);
-		//		chart.getXYPlot().addRangeMarker(waterfallPaletteEndMarker);
-
-		printInit(2);
 
 		refreshRadioIdentity();
 		settingsPanel = new HackRFSweepSettingsUI(settings);
 
-		printInit(3);
-		
-		
-		tvVideoPanel = new TvVideoPanel();
-		bottomPlots = new CardLayout();
-		bottomPlotHost = new JPanel(bottomPlots);
-		bottomPlotHost.add(waterfallPlot, "rf");
-		bottomPlotHost.add(tvVideoPanel, "tv");
-		splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, chartPanel, bottomPlotHost);
+		splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, chartPanel, waterfallPlot);
 		splitPane.setResizeWeight(0.8);
 		splitPane.setBorder(null);
 
@@ -381,9 +352,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		uiFrame.add(sweepStatusBar, BorderLayout.SOUTH);
 		applyAppIcons(uiFrame);
 		
-		printInit(4);
 		setupFrequencyAllocationTable();
-		printInit(5);
 		
 		uiFrame.pack();
 		uiFrame.setMinimumSize(new Dimension(900, 560));
@@ -391,11 +360,10 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		placeInitialWindow(uiFrame);
 		uiFrame.setVisible(true);
 
-		printInit(6);
-
 		sweepEngine = new SpectrumSweepEngine(settings, spectrumInitValue, new SweepUiHooks());
 		radioApplyTimer.setRepeats(false);
 		startLauncherThread();
+		applyAutoSweep(settings.getFrequency().getValue(), false);
 		restartHackrfSweep();
 
 		/**
@@ -413,110 +381,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 				e.printStackTrace();
 			}
 		}
-	}
-
-	@Override
-	public ModelValueBoolean getAntennaPowerEnable() {
-		return settings.getAntennaPowerEnable();
-	}
-
-	@Override
-	public ModelValueBoolean getAntennaLNA() {
-		return settings.getAntennaLNA();
-	}
-
-	@Override
-	public ModelValueInt getFFTBinHz() {
-		return settings.getFFTBinHz();
-	}
-
-	@Override
-	public ModelValue<FrequencyRange> getFrequency() {
-		return settings.getFrequency();
-	}
-
-	@Override
-	public ModelValue<FrequencyAllocationTable> getFrequencyAllocationTable() {
-		return settings.getFrequencyAllocationTable();
-	}
-
-	@Override
-	public ModelValueInt getGain() {
-		return settings.getGain();
-	}
-
-	@Override
-	public ModelValueInt getGainLNA() {
-		return settings.getGainLNA();
-	}
-
-	@Override
-	public ModelValueInt getGainVGA() {
-		return settings.getGainVGA();
-	}
-
-	@Override
-	public ModelValueInt getPeakFallRate() {
-		return settings.getPeakFallRate();
-	}
-
-	@Override
-	public ModelValueInt getSamples() {
-		return settings.getSamples();
-	}
-
-	@Override
-	public ModelValue<BigDecimal> getSpectrumLineThickness() {
-		return settings.getSpectrumLineThickness();
-	}
-	
-	@Override
-	public ModelValueInt getPersistentDisplayDecayRate() {
-		return settings.getPersistentDisplayDecayRate();
-	}
-
-	@Override
-	public ModelValueInt getSpectrumPaletteSize() {
-		return settings.getSpectrumPaletteSize();
-	}
-
-	@Override
-	public ModelValueInt getSpectrumPaletteStart() {
-		return settings.getSpectrumPaletteStart();
-	}
-
-	@Override
-	public ModelValueBoolean isCapturingPaused() {
-		return settings.isCapturingPaused();
-	}
-
-	@Override
-	public ModelValue<RadioIdentity> getRadioIdentity() {
-		return settings.getRadioIdentity();
-	}
-
-	@Override
-	public ModelValue<hotiron.core.McpStatus> getMcpStatus() {
-		return settings.getMcpStatus();
-	}
-
-	@Override
-	public ModelValue<String> getSelectedSerial() {
-		return settings.getSelectedSerial();
-	}
-
-	@Override
-	public ModelValueBoolean getClkoutEnable() {
-		return settings.getClkoutEnable();
-	}
-
-	@Override
-	public ModelValueBoolean isRadioReleased() {
-		return settings.isRadioReleased();
-	}
-
-	public hotiron.mcp.SpectrumSnapshotStore snapshotStore() {
-		return snapshotStore;
 	}
 
 	public void startMcpTcp(int port) {
@@ -583,129 +447,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		}
 	}
 
-	@Override
-	public void restartSweep() {
-		settings.restartSweep();
-	}
-
-	@Override
-	public void startListen() {
-		settings.startListen();
-	}
-
-	@Override
-	public void startWatch() {
-		settings.startWatch();
-	}
-
-	@Override
-	public void stopListen() {
-		settings.stopListen();
-	}
-
-	@Override
-	public ModelValueBoolean isListening() {
-		return settings.isListening();
-	}
-
-	@Override
-	public ModelValueInt getListenKHz() {
-		return settings.getListenKHz();
-	}
-
-	@Override
-	public ModelValueInt getListenVolume() {
-		return settings.getListenVolume();
-	}
-
-	@Override
-	public ModelValue<hotiron.core.ListenService> getListenService() {
-		return settings.getListenService();
-	}
-
-	@Override
-	public ModelValueInt getTvChannel() {
-		return settings.getTvChannel();
-	}
-
-	@Override
-	public ModelValue<java.util.List<hotiron.core.TvStationHit>> getDetectedTvStations() {
-		return settings.getDetectedTvStations();
-	}
-
-	@Override
-	public ModelValue<java.util.List<FmStationHit>> getDetectedFmStations() {
-		return settings.getDetectedFmStations();
-	}
-
-	@Override
-	public void releaseRadio() {
-		settings.releaseRadio();
-	}
-
-	@Override
-	public java.util.List<String> listRadioSerials() {
-		return settings.listRadioSerials();
-	}
-
-	@Override
-	public ModelValueBoolean isChartsPeaksVisible() {
-		return settings.isChartsPeaksVisible();
-	}
-
-	@Override
-	public ModelValueBoolean isPowerAutoScale() {
-		return settings.isPowerAutoScale();
-	}
-
-	@Override
-	public ModelValueBoolean isAutoGain() {
-		return settings.isAutoGain();
-	}
-	
-	@Override
-	public ModelValueBoolean isDebugDisplay() {
-		return settings.isDebugDisplay();
-	}
-
-	@Override
-	public ModelValueBoolean isFilterSpectrum() {
-		return settings.isFilterSpectrum();
-	}
-
-	@Override
-	public ModelValueBoolean isPersistentDisplayVisible() {
-		return settings.isPersistentDisplayVisible();
-	}
-
-	@Override
-	public ModelValueBoolean isSpurRemoval() {
-		return this.settings.isSpurRemoval();
-	}
-
-	@Override
-	public ModelValueBoolean isWaterfallVisible() {
-		return settings.isWaterfallVisible();
-	}
-
-	@Override
-	public void newSpectrumData(boolean fullSweepDone, double[] frequencyStart, float fftBinWidthHz,
-			float[] signalPowerdBm) {
-		fireHardwareStateChanged(true);
-		if (sweepEngine != null)
-			sweepEngine.accept(fullSweepDone, frequencyStart, fftBinWidthHz, signalPowerdBm);
-	}
-
-	@Override
-	public void registerListener(HackRFEventListener listener) {
-		settings.registerListener(listener);
-	}
-
-	@Override
-	public void removeListener(HackRFEventListener listener) {
-		settings.removeListener(listener);
-	}
-
 	private static void applyAppIcons(JFrame frame) {
 		List<Image> icons = loadAppIcons();
 		if (icons.isEmpty())
@@ -733,15 +474,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			URL url = HotIron.class.getResource(resources[i]);
 			if (url != null)
 				icons.add(new ImageIcon(url).getImage());
-		}
-		if (icons.isEmpty()) {
-			File[] fallbacks = { new File("lib/program.png"), new File("program.png") };
-			for (int i = 0; i < fallbacks.length; i++) {
-				if (fallbacks[i].isFile()) {
-					icons.add(new ImageIcon(fallbacks[i].getAbsolutePath()).getImage());
-					break;
-				}
-			}
 		}
 		return icons;
 	}
@@ -803,6 +535,25 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		return settings.getFrequency().getValue();
 	}
 
+	private void cancelScanIfRangeLeft() {
+		if (!scanSession.active())
+			return;
+		FrequencyRange expected = scanSession.currentWindow();
+		if (expected != null && !expected.equals(getFreq()))
+			settings.stopScan();
+	}
+
+	private void advanceBandScan() {
+		if (!scanSession.active())
+			return;
+		long now = System.currentTimeMillis();
+		if (scanSession.shouldFinish(now)) {
+			settings.stopScan();
+			return;
+		}
+		scanSession.nextWindowIfDue(now).ifPresent(next -> settings.getFrequency().setValue(next));
+	}
+
 	private void publishDetectedStations(java.util.List<FmStationHit> hits) {
 		if (FmStationDial.sameChannels(settings.getDetectedFmStations().getValue(), hits))
 			return;
@@ -813,10 +564,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		if (hotiron.core.TvStationDial.sameChannels(settings.getDetectedTvStations().getValue(), hits))
 			return;
 		settings.getDetectedTvStations().setValue(hits == null ? java.util.List.of() : java.util.List.copyOf(hits));
-	}
-
-	private void printInit(int initNumber) {
-		//		System.out.println("Startup "+(initNumber++)+" in " + (System.currentTimeMillis() - initTime) + "ms");
 	}
 
 	private final class SweepUiHooks implements SpectrumSweepEngine.Hooks {
@@ -851,8 +598,10 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			boolean axisChanged = datasetSpectrum == null || !datasetSpectrum.sameAxisAs(ds);
 			datasetSpectrum = ds;
 			if (axisChanged) {
-				fmTracker.reset();
-				tvTracker.reset();
+				if (FmChannelPlan.overlapsBroadcast(ds.getFreqStartMHz(), ds.getFreqStopMHz()))
+					fmTracker.reset();
+				if (hotiron.core.TvChannelPlan.overlapsBroadcast(ds.getFreqStartMHz(), ds.getFreqStopMHz()))
+					tvTracker.reset();
 				powerScale = null;
 				if (waterfallPlot != null)
 					waterfallPlot.clearHistory();
@@ -860,11 +609,19 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			long nowMs = System.currentTimeMillis();
 			if (snapshotStore.shouldPublish(nowMs)) {
 				FrequencyRange live = getFreq();
-				java.util.List<FmStationHit> hits = fmTracker.update(ds, live.getStartMHz(), live.getEndMHz());
-				fmStations = hits;
-				publishDetectedStations(hits);
-				tvStations = tvTracker.update(ds, live.getStartMHz(), live.getEndMHz());
-				publishDetectedTvStations(tvStations);
+				java.util.List<FmStationHit> hits = fmStations;
+				if (FmChannelPlan.overlapsBroadcast(live.getStartMHz(), live.getEndMHz())) {
+					hits = fmTracker.update(ds, live.getStartMHz(), live.getEndMHz());
+					fmStations = hits;
+					publishDetectedStations(hits);
+				}
+				if (hotiron.core.TvChannelPlan.overlapsBroadcast(live.getStartMHz(), live.getEndMHz())) {
+					tvStations = hotiron.core.TvStationDial.mergeLive(
+							settings.getDetectedTvStations().getValue(),
+							tvTracker.update(ds, live.getStartMHz(), live.getEndMHz()),
+							live.getStartMHz(), live.getEndMHz());
+					publishDetectedTvStations(tvStations);
+				}
 				snapshotStore.publishSweep(hotiron.mcp.SpectrumSnapshot.fromDataset(ds, nowMs,
 						hotiron.mcp.SpectrumSnapshot.DEFAULT_MAX_POINTS, null), nowMs);
 				double sps = waterfallPlot != null ? waterfallPlot.getFps() : 0;
@@ -882,10 +639,18 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			frameCounterChart++;
 
 			FrequencyRange sweepRange = getFreq();
-			fmStations = fmTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz());
-			publishDetectedStations(fmStations);
-			tvStations = tvTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz());
-			publishDetectedTvStations(tvStations);
+			if (FmChannelPlan.overlapsBroadcast(sweepRange.getStartMHz(), sweepRange.getEndMHz())) {
+				fmStations = fmTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz());
+				publishDetectedStations(fmStations);
+			}
+			if (hotiron.core.TvChannelPlan.overlapsBroadcast(sweepRange.getStartMHz(), sweepRange.getEndMHz())) {
+				tvStations = hotiron.core.TvStationDial.mergeLive(
+						settings.getDetectedTvStations().getValue(),
+						tvTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz()),
+						sweepRange.getStartMHz(), sweepRange.getEndMHz());
+				publishDetectedTvStations(tvStations);
+			}
+			advanceBandScan();
 			considerAutoGain(ds, sweepRange);
 
 			if (System.currentTimeMillis() - perfWatch.lastStatisticsRefreshed > 1000) {
@@ -926,7 +691,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			if (settings.isPersistentDisplayVisible().getValue()) {
 				long start = System.nanoTime();
 				boolean redraw = frameCounterChart % limitPersistentRefreshEveryChartFrame == 0;
-				persistentDisplay.drawSpectrum2(datasetSpectrum, (float) yLow, (float) yHigh, redraw);
+				persistentDisplay.drawSpectrumFloat(datasetSpectrum, (float) yLow, (float) yHigh, redraw);
 				synchronized (perfWatch) {
 					perfWatch.persisentDisplay.addDrawingTime(System.nanoTime() - start);
 				}
@@ -991,6 +756,20 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			flagApplyingAutoGain = false;
 			flagCoalesceGainRestart = false;
 		}
+	}
+
+	private void applyAutoSweep(FrequencyRange range, boolean restart) {
+		flagApplyingAutoSweep = true;
+		flagCoalesceAutoSweep = true;
+		boolean changed;
+		try {
+			changed = AutoSweepPolicy.apply(settings, range);
+		} finally {
+			flagApplyingAutoSweep = false;
+			flagCoalesceAutoSweep = false;
+		}
+		if (restart && changed)
+			restartHackrfSweep();
 	}
 
 	private void maybeSeedAutoGain(FrequencyRange range) {
@@ -1058,6 +837,8 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			return;
 		final boolean listen = settings.isListening().getValue();
 		final boolean watch = listen && settings.getListenService().getValue() == hotiron.core.ListenService.TV;
+		if (!listen)
+			applyAutoSweep(settings.getFrequency().getValue(), false);
 		threadHackrfSweep = new Thread(() -> {
 			Thread.currentThread().setName(watch ? "hackrf_tv" : (listen ? "hackrf_fm" : "hackrf_sweep"));
 			try {
@@ -1106,22 +887,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		chartLineRenderer.setAutoPopulateSeriesPaint(false);
 		chartLineRenderer.setSeriesPaint(0, colors.palette2);
 
-		if (false)
-			chart.addProgressListener(new ChartProgressListener() {
-				StandardTickUnitSource tus = new StandardTickUnitSource();
-
-				@Override
-				public void chartProgress(ChartProgressEvent event) {
-					if (event.getType() == ChartProgressEvent.DRAWING_STARTED) {
-						Range r = domainAxis.getRange();
-						domainAxis.setTickUnit((NumberTickUnit) tus.getCeilingTickUnit(r.getLength() / 20));
-						domainAxis.setMinorTickCount(2);
-						domainAxis.setMinorTickMarksVisible(true);
-
-					}
-				}
-			});
-
 		plot.setDomainGridlinesVisible(false);
 		plot.setRenderer(chartLineRenderer);
 
@@ -1156,6 +921,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		chartLineRenderer.setSeriesPaint(1, colors.palette1);
 
 		chartPanel = new ChartPanel(chart);
+		chartPanel.setDisplayToolTips(false);
 		chartPanel.setMaximumDrawWidth(4096);
 		chartPanel.setMaximumDrawHeight(2160);
 		chartPanel.setMouseWheelEnabled(false);
@@ -1163,8 +929,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		chartPanel.setRangeZoomable(false);
 		chartPanel.setPopupMenu(null);
 		chartPanel.setMinimumSize(new Dimension(200, 200));
-
-		printInit(1);
 
 		/**
 		 * Draws overlay of waterfall's color scale next to main spectrum chart
@@ -1203,7 +967,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		/**
 		 * Draw frequency bands as an overlay
 		 */
-		if (true)
 		chartPanel.addOverlay(new Overlay() {
 			@Override
 			public void addChangeListener(OverlayChangeListener listener) {
@@ -1219,8 +982,8 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 				{
 					double start = xy.getDomainAxis().getLowerBound();
 					double end = xy.getDomainAxis().getUpperBound();
-					FmChannelOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-							start, end, java.util.List.of(), settings.getListenKHz().getValue());
+					FmChannelOverlay.paint(g2, area, start, end, java.util.List.of(),
+							settings.getListenKHz().getValue());
 					ListenHud.paint(g2, area, settings.getListenKHz().getValue() / 1000.0, fmAudioOk);
 					return;
 				}
@@ -1230,8 +993,8 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 				{
 					double start = xy.getDomainAxis().getLowerBound();
 					double end = xy.getDomainAxis().getUpperBound();
-					hotiron.ui.TvChannelOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-							start, end, java.util.List.of(), settings.getTvChannel().getValue());
+					hotiron.ui.TvChannelOverlay.paint(g2, area, start, end, java.util.List.of(),
+							settings.getTvChannel().getValue());
 					WatchHud.paint(g2, area, settings.getTvChannel().getValue(), tvEngine.locked(),
 							tvEngine.snrDb(), tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames());
 					return;
@@ -1241,14 +1004,12 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 					g2.drawImage(img, (int) area.getX(), (int) area.getY(), null);
 				}
 				FrequencyRange range = getFreq();
-				QuickSelectBandOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-						range.getStartMHz(), range.getEndMHz());
-				WifiChannelOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-						range.getStartMHz(), range.getEndMHz());
-				FmChannelOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-						range.getStartMHz(), range.getEndMHz(), fmStations, settings.getListenKHz().getValue());
-				hotiron.ui.TvChannelOverlay.paint(g2, area, xy.getDomainAxis(), xy.getDomainAxisEdge(),
-						range.getStartMHz(), range.getEndMHz(), tvStations, settings.getTvChannel().getValue());
+				QuickSelectBandOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz());
+				WifiChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz());
+				FmChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), fmStations,
+						settings.getListenKHz().getValue());
+				hotiron.ui.TvChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), tvStations,
+						settings.getTvChannel().getValue());
 				if (settings.isListening().getValue())
 				{
 					if (settings.getListenService().getValue() == hotiron.core.ListenService.TV)
@@ -1537,9 +1298,23 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 	private void setupParameterObservers() {
 		Runnable restartHackrf = this::restartHackrfSweep;
 		settings.getFrequency().addListener(() -> {
+			cancelScanIfRangeLeft();
 			if (settings.isListening().getValue())
 				return;
+			applyAutoSweep(settings.getFrequency().getValue(), false);
 			scheduleFrequencyRadioApply();
+		});
+		settings.getBandScan().addListener(scan -> {
+			if (scan == hotiron.core.BandScan.OFF)
+			{
+				scanSession.stop();
+				return;
+			}
+			scanSession.start(scan, System.currentTimeMillis());
+			if (scan == hotiron.core.BandScan.FM)
+				fmTracker.reset();
+			else
+				tvTracker.reset();
 		});
 		settings.getFrequency().addListener((range) -> {
 			if (chart != null)
@@ -1551,12 +1326,21 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		settings.getAntennaPowerEnable().addListener(restartHackrf);
 		settings.getAntennaLNA().addListener(restartHackrf);
 		settings.getFFTBinHz().addListener(() -> {
-			if (!settings.isListening().getValue())
+			if (!flagApplyingAutoSweep && settings.isAutoSweep().getValue())
+				settings.isAutoSweep().setValue(false);
+			if (!settings.isListening().getValue() && !flagCoalesceAutoSweep)
 				restartHackrfSweep();
 		});
 		settings.getSamples().addListener(() -> {
-			if (!settings.isListening().getValue())
+			if (!flagApplyingAutoSweep && settings.isAutoSweep().getValue())
+				settings.isAutoSweep().setValue(false);
+			if (!settings.isListening().getValue() && !flagCoalesceAutoSweep)
 				restartHackrfSweep();
+		});
+		settings.isAutoSweep().addListener((on) -> {
+			if (!Boolean.TRUE.equals(on))
+				return;
+			applyAutoSweep(getFreq(), true);
 		});
 		settings.getSelectedSerial().addListener(restartHackrf);
 		settings.getClkoutEnable().addListener(restartHackrf);
@@ -1648,24 +1432,11 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		});
 		settings.getSpectrumPaletteStart().setValue((int) waterfallPlot.getSpectrumPaletteStart());
 		settings.getSpectrumPaletteSize().setValue((int) waterfallPlot.getSpectrumPaletteSize());
-		settings.getSpectrumPaletteStart().addListener((dB) -> {
-			waterfallPlot.setSpectrumPaletteStart(dB);
-			SwingUtilities.invokeLater(() -> {
-				waterfallPaletteStartMarker.setValue(waterfallPlot.getSpectrumPaletteStart());
-				waterfallPaletteEndMarker
-						.setValue(waterfallPlot.getSpectrumPaletteStart() + waterfallPlot.getSpectrumPaletteSize());
-			});
-		});
+		settings.getSpectrumPaletteStart().addListener(waterfallPlot::setSpectrumPaletteStart);
 		settings.getSpectrumPaletteSize().addListener((dB) -> {
 			if (dB < SPECTRUM_PALETTE_SIZE_MIN)
 				return;
 			waterfallPlot.setSpectrumPaletteSize(dB);
-			SwingUtilities.invokeLater(() -> {
-				waterfallPaletteStartMarker.setValue(waterfallPlot.getSpectrumPaletteStart());
-				waterfallPaletteEndMarker
-						.setValue(waterfallPlot.getSpectrumPaletteStart() + waterfallPlot.getSpectrumPaletteSize());
-			});
-
 		});
 		settings.getPeakFallRate().addListener((fallRate) -> {
 			datasetSpectrum.setPeakFalloutMillis(fallRate * 1000l);
@@ -1734,20 +1505,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		threadLauncher.start();
 	}
 
-	private void showBottom(String card) {
-		if (bottomPlots == null || bottomPlotHost == null)
-			return;
-		Runnable r = () -> {
-			bottomPlots.show(bottomPlotHost, card);
-			bottomPlotHost.revalidate();
-			bottomPlotHost.repaint();
-		};
-		if (SwingUtilities.isEventDispatchThread())
-			r.run();
-		else
-			SwingUtilities.invokeLater(r);
-	}
-
 	private void queueTvPreviewFrame(BufferedImage img) {
 		if (img == null)
 			return;
@@ -1776,12 +1533,12 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		hotiron.core.TvChannel ch = hotiron.core.TvChannelPlan
 				.clamp(settings.getTvChannel().getValue());
 		long loHz = ch.centerHz();
-		showBottom("rf");
 		waterfallPlot.setVideoMode(true, loHz);
 		tvEngine.setVolume(settings.getListenVolume().getValue());
 		final long[] lastRowMs = { 0L };
 		final long[] lastSnapshotMs = { 0L };
 		final long[] lastChartMs = { 0L };
+		final long[] lastStationMs = { 0L };
 		tvEngine.setSpectrumListener(row -> {
 			long now = System.currentTimeMillis();
 			if (now - lastRowMs[0] < 33)
@@ -1797,6 +1554,17 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 				{
 					lastChartMs[0] = now;
 					showTvRfSpectrum(snap);
+				}
+				if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
+				{
+					lastStationMs[0] = now;
+					java.util.List<hotiron.core.TvStationHit> live =
+							hotiron.core.TvChannelPlan.detectStations(snap.mhz, snap.dbfs);
+					java.util.List<hotiron.core.TvStationHit> merged = hotiron.core.TvStationDial.mergeLive(
+							settings.getDetectedTvStations().getValue(), live,
+							snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
+					tvStations = merged;
+					publishDetectedTvStations(merged);
 				}
 			}
 			waterfallPlot.addVideoFrame(row, hotiron.core.IqSpectrum.DISPLAY_HZ, loHz);
@@ -1816,6 +1584,19 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			});
 		});
 		AudioSink sink = AudioSinks.openPlayback();
+		int lna = settings.getGainLNA().getValue();
+		int vga = settings.getGainVGA().getValue();
+		if (settings.isAutoGain().getValue())
+		{
+			int total = TvWatchGainPolicy.seed(ch);
+			lna = GainPolicy.lnaGain(total);
+			vga = GainPolicy.vgaGain(total);
+		}
+		final int[] ifTotal = { lna + vga };
+		final long[] lastTrimMs = { 0 };
+		final boolean amp = TvWatchGainPolicy.antennaLna(settings.isAutoGain().getValue(),
+				settings.getAntennaLNA().getValue());
+		final long watchArmedMs = System.currentTimeMillis();
 		tvEngine.start(this::queueTvPreviewFrame, sink);
 		javax.swing.Timer hud = new javax.swing.Timer(200, e -> {
 			boolean locked = tvEngine.locked();
@@ -1827,27 +1608,38 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 						tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames()));
 			if (chartPanel != null)
 				chartPanel.repaint();
+			if (settings.isAutoGain().getValue())
+			{
+				hotiron.core.TvWatchDebug d = tvEngine.debug();
+				long now = System.currentTimeMillis();
+				long sinceArm = now - watchArmedMs;
+				long sinceTrim = lastTrimMs[0] == 0 ? sinceArm : now - lastTrimMs[0];
+				if (sinceArm >= TvWatchGainPolicy.FIRST_TRIM_MS
+						&& sinceTrim >= TvWatchGainPolicy.TRIM_SETTLE_MS
+						&& !TvWatchGainPolicy.shouldHoldIf(d.locked, d.rsGoodWindow, d.rmsIq)
+						&& TvWatchGainPolicy.shouldTrimIf(ifTotal[0], d.rmsIq))
+				{
+					int next = TvWatchGainPolicy.retune(ifTotal[0], d.rmsIq);
+					System.err.println("ATSC watch: IF " + ifTotal[0] + " -> " + next
+							+ String.format(java.util.Locale.US, " (rms=%.3f)", d.rmsIq));
+					ifTotal[0] = next;
+					lastTrimMs[0] = now;
+					tvEngine.requestGains(GainPolicy.lnaGain(next), GainPolicy.vgaGain(next));
+				}
+			}
 		});
 		hud.start();
 		snapshotStore.publishContext(settings, fmStations, 0);
 		if (chartPanel != null)
 			SwingUtilities.invokeLater(chartPanel::repaint);
 		try {
-			int lna = settings.getGainLNA().getValue();
-			int vga = settings.getGainVGA().getValue();
-			if (settings.isAutoGain().getValue())
-			{
-				int total = TvWatchGainPolicy.seed(ch);
-				lna = GainPolicy.lnaGain(total);
-				vga = GainPolicy.vgaGain(total);
-			}
 			System.err.println("ATSC watch: ch " + ch.fccChannel + " LO " + loHz + " Hz LNA " + lna
-					+ " VGA " + vga);
+					+ " VGA " + vga + " amp=" + (amp ? "on" : "off"));
 			HackRFFmNativeBridge.configure(settings.getSelectedSerial().getValue(),
 					settings.getClkoutEnable().getValue());
 			HackRFFmNativeBridge.start(iq -> tvEngine.offerIq(iq), loHz,
 					hotiron.core.TvChannelPlan.IQ_RATE_HZ, lna, vga,
-					settings.getAntennaPowerEnable().getValue(), settings.getAntennaLNA().getValue());
+					settings.getAntennaPowerEnable().getValue(), amp);
 		} finally {
 			hud.stop();
 			tvEngine.setSpectrumListener(null);
@@ -1860,7 +1652,6 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
 			if (settingsPanel != null)
 				SwingUtilities.invokeLater(() -> settingsPanel.tvTunerPanel().setWatching(false));
-			showBottom("rf");
 		}
 	}
 
@@ -1926,6 +1717,7 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		waterfallPlot.setAudioMode(true);
 		final long[] lastRowMs = { 0L };
 		final long[] lastRfMs = { 0L };
+		final long[] lastStationMs = { 0L };
 		fmEngine.setRfSpectrumListener(row -> {
 			long now = System.currentTimeMillis();
 			if (now - lastRfMs[0] < 50)
@@ -1935,6 +1727,16 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 					fmEngine.rfSpectrum().sampleRate(), fmEngine.rfSpectrum().binHz(), row);
 			snapshotStore.publishFmListenSpectrum(snap);
 			showFmRfSpectrum(snap);
+			if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
+			{
+				lastStationMs[0] = now;
+				java.util.List<FmStationHit> live = FmChannelPlan.detectStations(snap.mhz, snap.dbfs);
+				java.util.List<FmStationHit> merged = FmStationDial.mergeLive(
+						settings.getDetectedFmStations().getValue(), live,
+						snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
+				fmStations = merged;
+				publishDetectedStations(merged);
+			}
 		});
 		fmEngine.setSpectrumListener(row -> {
 			long now = System.currentTimeMillis();
@@ -1964,10 +1766,20 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 		if (chartPanel != null)
 			SwingUtilities.invokeLater(chartPanel::repaint);
 		try {
+			int lna = settings.getGainLNA().getValue();
+			int vga = settings.getGainVGA().getValue();
+			if (settings.isAutoGain().getValue())
+			{
+				int total = FmListenGainPolicy.seed(ch);
+				lna = GainPolicy.lnaGain(total);
+				vga = GainPolicy.vgaGain(total);
+			}
+			System.err.println("FM listen: " + String.format(java.util.Locale.US, "%.1f", ch.centerMHz())
+					+ " MHz LO " + loHz + " Hz LNA " + lna + " VGA " + vga);
 			HackRFFmNativeBridge.configure(settings.getSelectedSerial().getValue(),
 					settings.getClkoutEnable().getValue());
 			HackRFFmNativeBridge.start(iq -> fmEngine.offerIq(iq), loHz, WfmDemodulator.IQ_RATE_HZ,
-					settings.getGainLNA().getValue(), settings.getGainVGA().getValue(),
+					lna, vga,
 					settings.getAntennaPowerEnable().getValue(), settings.getAntennaLNA().getValue());
 		} finally {
 			fmEngine.setRfSpectrumListener(null);
@@ -2008,7 +1820,10 @@ public class HotIron implements HackRFSettings, HackRFSweepDataCallback {
 			}
 			threadHackrfSweep = null;
 		}
-		System.out.println("sweep QRT.");
+		if (settings.isListening().getValue())
+			System.out.println("QRX parked IQ.");
+		else
+			System.out.println("sweep QRT.");
 		if (threadProcessing != null) {
 			threadProcessing.interrupt();
 			try {

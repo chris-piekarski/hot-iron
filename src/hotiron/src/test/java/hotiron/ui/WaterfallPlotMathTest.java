@@ -54,9 +54,9 @@ class WaterfallPlotMathTest {
 
     @Test
     void modeBannerNamesRfAndAudio() {
-        assertEquals("RF waterfall", WaterfallPlot.modeBanner(false));
-        assertEquals("AUDIO  ·  0–16 kHz", WaterfallPlot.modeBanner(true));
-        assertEquals("VIDEO  ·  ±8 MHz", WaterfallPlot.modeBanner(false, true));
+        assertEquals("RF waterfall", WaterfallPlot.modeBanner(false, false));
+        assertEquals("parked IQ  ·  AUDIO  ·  0–16 kHz", WaterfallPlot.modeBanner(true, false));
+        assertEquals("parked IQ  ·  VIDEO  ·  ±8 MHz", WaterfallPlot.modeBanner(false, true));
     }
 
     @Test

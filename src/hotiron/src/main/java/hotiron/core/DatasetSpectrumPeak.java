@@ -2,8 +2,6 @@ package hotiron.core;
 
 import java.util.Arrays;
 
-import org.jfree.data.xy.XYSeries;
-
 import hotiron.core.jfc.XYSeriesImmutable;
 
 public class DatasetSpectrumPeak extends DatasetSpectrum
@@ -50,17 +48,6 @@ public class DatasetSpectrumPeak extends DatasetSpectrum
 		System.arraycopy(spectrumPeakHold, 0, filtered.spectrumPeakHold, 0, spectrumPeakHold.length);
 	}
 
-	/**
-	 * Fills data to {@link XYSeries}, uses x units in MHz
-	 * @param series
-	 */
-	public void fillPeaksToXYSeries(XYSeries series)
-	{
-		fillToXYSeriesPriv(series, spectrumPeakHold);
-//		fillToXYSeriesPriv(series, spectrumPeak);
-	}
-	
-
 	public XYSeriesImmutable createPeaksDataset(String name) {
 		return createPeaksDataset(name, Integer.MAX_VALUE);
 	}
@@ -78,24 +65,14 @@ public class DatasetSpectrumPeak extends DatasetSpectrum
 		return powerSum;
 	}
 	
-	private long debugLastPeakRerfreshTime	= 0;
 	public void refreshPeakSpectrum()
 	{
-		if (false) {
-			long debugMinPeakRefreshTime	= 100;
-			if (System.currentTimeMillis()-debugLastPeakRerfreshTime < debugMinPeakRefreshTime)
-				return;
-			debugLastPeakRerfreshTime	= System.currentTimeMillis();
-		}
-		
 		long timeDiffFromPrevValueMillis = System.currentTimeMillis() - lastAdded;
 		if (timeDiffFromPrevValueMillis < 1)
 			timeDiffFromPrevValueMillis = 1;
 		
 		lastAdded = System.currentTimeMillis();
 		
-//		peakFallThreshold = 10;
-//		peakFalloutMillis	= 30000;
 		for (int spectrIndex = 0; spectrIndex < spectrum.length; spectrIndex++)
 		{
 			float spectrumVal = spectrum[spectrIndex];

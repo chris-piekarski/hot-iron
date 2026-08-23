@@ -13,6 +13,37 @@ import org.junit.jupiter.api.Timeout;
 class MpegTsPlayerTest {
 
 	@Test
+	void videoCommandMapsPidAndUsesALargerProbe() {
+		assertTrue(MpegTsPlayer.videoCommand(49).contains("0:i:0x31"));
+		assertTrue(MpegTsPlayer.videoCommand(49).contains(MpegTsPlayer.PROBE_SIZE));
+		assertFalse(MpegTsPlayer.videoCommand(-1).contains("-map"));
+		assertTrue(MpegTsPlayer.audioCommand(52).contains("0:i:0x34"));
+	}
+
+	@Test
+	void concealmentLinesAreDecodeSpam() {
+		assertTrue(MpegTsPlayer.isDecodeSpam("concealing 4830 DC, 4830 AC, 4830 MV errors in P frame"));
+		assertTrue(MpegTsPlayer.isDecodeSpam("Invalid mb type in P-frame at 19 45"));
+		assertTrue(MpegTsPlayer.isDecodeSpam("Warning MVs not available"));
+		assertTrue(MpegTsPlayer.isDecodeSpam("Packet corrupt (stream = 3, dts = 6023484203)."));
+		assertTrue(MpegTsPlayer.isDecodeSpam("non-existing PPS 0 referenced"));
+		assertTrue(MpegTsPlayer.isDecodeSpam("Invalid frame dimensions 0x0."));
+		assertFalse(MpegTsPlayer.isDecodeSpam("Stream mapping:"));
+	}
+
+	@Test
+	void writeTsBeforeStartIsIgnored() {
+		MpegTsPlayer player = new MpegTsPlayer();
+		byte[] ts = new byte[188];
+		ts[0] = 0x47;
+		player.writeTs(ts, ts.length);
+		MpegTsPlayer.Stats s = player.stats();
+		assertFalse(s.started);
+		assertEquals(0, s.tsBytesOffered);
+		assertEquals("", s.lastStderr);
+	}
+
+	@Test
 	@Timeout(30)
 	void decodesMpegTsToAFrameWhenFfmpegExists() throws Exception {
 		org.junit.jupiter.api.Assumptions.assumeTrue(ffmpegOk(), "ffmpeg on PATH");
@@ -41,19 +72,31 @@ class MpegTsPlayerTest {
 			});
 			assertTrue(player.running());
 			Thread.sleep(150);
+			long deadline = System.currentTimeMillis() + 7000;
 			int off = 0;
-			while (off < data.length)
+			while (frame.getCount() > 0 && System.currentTimeMillis() < deadline)
 			{
 				int n = Math.min(188 * 8, data.length - off);
 				byte[] slice = new byte[n];
 				System.arraycopy(data, off, slice, 0, n);
 				player.writeTs(slice, n);
 				off += n;
+				if (off >= data.length)
+					off = 0;
 			}
-			boolean got = frame.await(8, TimeUnit.SECONDS);
+			boolean got = frame.await(1, TimeUnit.SECONDS);
+			MpegTsPlayer.Stats live = player.stats();
+			assertTrue(live.started);
+			assertTrue(live.videoAlive);
+			assertTrue(live.tsBytesOffered > 0);
+			assertTrue(live.tsBytesWritten > 0);
+			assertTrue(live.ts.pmtPid > 0, "ffmpeg muxed a PMT");
+			assertTrue(live.ts.videoPackets > 0, "video PID packets reached the player");
 			player.stop();
 			assertFalse(player.running());
+			assertFalse(player.stats().started);
 			assertTrue(got, "expected a 640x360 frame from ffmpeg");
+			assertTrue(player.frames() >= 1);
 		}
 		finally
 		{

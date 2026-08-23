@@ -19,6 +19,7 @@ public final class AnalyzerLookAndFeel {
 			if (installed)
 				return;
 			FlatDarkLaf.setup();
+			ExclusiveToolTip.installShared();
 			installed = true;
 		}
 	}

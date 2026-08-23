@@ -23,6 +23,7 @@ public final class PulseSimpleAudioSink implements AudioSink
 	private final Pointer stream;
 	private final byte[] bytes = new byte[8192];
 	private final String server;
+	private boolean loggedFirstWrite;
 
 	public static PulseSimpleAudioSink open()
 	{
@@ -112,6 +113,20 @@ public final class PulseSimpleAudioSink implements AudioSink
 			return;
 		int from = Math.max(0, offset);
 		int n = Math.min(length, pcm.length - from);
+		if (!loggedFirstWrite && n > 0)
+		{
+			loggedFirstWrite = true;
+			int peak = 0;
+			for (int s = 0; s < n; s++)
+			{
+				int v = pcm[from + s];
+				if (v < 0)
+					v = -v;
+				if (v > peak)
+					peak = v;
+			}
+			System.err.println("FM listen: PulseAudio first write peak=" + peak + " n=" + n);
+		}
 		int i = 0;
 		IntByReference err = new IntByReference();
 		while (i < n)
@@ -136,6 +151,8 @@ public final class PulseSimpleAudioSink implements AudioSink
 	@Override
 	public void close()
 	{
+		IntByReference err = new IntByReference();
+		lib.pa_simple_flush(stream, err);
 		lib.pa_simple_free(stream);
 	}
 
@@ -145,6 +162,8 @@ public final class PulseSimpleAudioSink implements AudioSink
 				Pointer map, Pointer attr, IntByReference error);
 
 		int pa_simple_write(Pointer s, byte[] data, long bytes, IntByReference error);
+
+		int pa_simple_flush(Pointer s, IntByReference error);
 
 		void pa_simple_free(Pointer s);
 	}

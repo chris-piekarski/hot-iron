@@ -11,9 +11,11 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.beans.PropertyVetoException;
 
-import javax.swing.JButton;
+import javax.swing.AbstractButton;
+import javax.swing.ButtonGroup;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import javax.swing.SwingConstants;
 
 /**
@@ -27,6 +29,7 @@ public class QuickFrequencySelectorPanel extends JPanel
 	private String			value			= QuickSelectPreset.WIFI_2.label;
 	private final JPanel		grid;
 	private final JLabel		hoverHint;
+	private final ButtonGroup	group		= new ButtonGroup();
 
 	public QuickFrequencySelectorPanel()
 	{
@@ -40,10 +43,14 @@ public class QuickFrequencySelectorPanel extends JPanel
 		grid = new JPanel(new GridLayout(rows, cols, 0, 0));
 		for (QuickSelectPreset preset : presets)
 		{
-			JButton button = new JButton(preset.label);
+			JToggleButton button = new JToggleButton(preset.label);
+			button.setFocusPainted(false);
 			button.addActionListener(addListener(preset.label));
-			ExclusiveToolTip.install(button, preset.tooltip());
+			button.addItemListener(e -> button.setFont(button.getFont().deriveFont(
+					button.isSelected() ? Font.BOLD : Font.PLAIN)));
+			ExclusiveToolTip.install(button);
 			button.addMouseListener(new HoverHintListener(preset.tooltip()));
+			group.add(button);
 			grid.add(button);
 		}
 		add(grid, BorderLayout.CENTER);
@@ -52,12 +59,17 @@ public class QuickFrequencySelectorPanel extends JPanel
 		hoverHint.setName(HOVER_HINT_NAME);
 		hoverHint.setFont(hoverHint.getFont().deriveFont(Font.PLAIN, 11f));
 		hoverHint.setHorizontalAlignment(SwingConstants.CENTER);
+		Dimension line = new Dimension(300, 16);
+		hoverHint.setPreferredSize(line);
+		hoverHint.setMinimumSize(line);
+		hoverHint.setMaximumSize(line);
 		add(hoverHint, BorderLayout.SOUTH);
 
 		Dimension d = new Dimension(300, 25 * rows + 16);
 		setPreferredSize(d);
 		setMaximumSize(d);
 		setMinimumSize(d);
+		highlight(QuickSelectPreset.WIFI_2);
 	}
 
 	public String getValue()
@@ -70,20 +82,45 @@ public class QuickFrequencySelectorPanel extends JPanel
 		return hoverHint.getText();
 	}
 
-	JButton findButton(String label)
+	boolean isHighlighted(String label)
+	{
+		AbstractButton button = findButton(label);
+		return button != null && button.isSelected();
+	}
+
+	void highlightRange(int startMHz, int endMHz)
+	{
+		highlight(QuickSelectPreset.findByRange(startMHz, endMHz).orElse(null));
+	}
+
+	void highlight(QuickSelectPreset preset)
+	{
+		if (preset == null)
+		{
+			group.clearSelection();
+			value = "";
+			return;
+		}
+		AbstractButton button = findButton(preset.label);
+		if (button != null)
+			button.setSelected(true);
+		value = preset.label;
+	}
+
+	AbstractButton findButton(String label)
 	{
 		return findButton(this, label);
 	}
 
-	static JButton findButton(Container root, String label)
+	static AbstractButton findButton(Container root, String label)
 	{
 		for (Component child : root.getComponents())
 		{
-			if (child instanceof JButton && label.equals(((JButton) child).getText()))
-				return (JButton) child;
+			if (child instanceof AbstractButton && label.equals(((AbstractButton) child).getText()))
+				return (AbstractButton) child;
 			if (child instanceof Container)
 			{
-				JButton nested = findButton((Container) child, label);
+				AbstractButton nested = findButton((Container) child, label);
 				if (nested != null)
 					return nested;
 			}

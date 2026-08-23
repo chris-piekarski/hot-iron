@@ -55,24 +55,21 @@ sudo apt install \
 |-----------------|--------------------------------------|
 | `build`         | Full build (delegates to subdir)    |
 | `clean`         | Remove all build artifacts          |
-| `test`          | Run unit tests                      |
+| `test`          | Run native and Java unit tests      |
 | `test-hw`       | Hardware ITs (skips if no HackRF)   |
 | `info`          | HackRF USB, app SDK/API, firmware updates |
-| `list-devices`  | Alias for `info`                    |
 | `firmware-update` | Official GSG flash (dry-run; `CONFIRM=1` writes) |
 | `udev`            | Install persistent HackRF udev rules (sudo) |
 | `lint`          | Maven compile check                 |
 | `stats`         | Refresh [docs/stats.md](stats.md) (LOC, packages, tests, git) |
 | `mermaid`       | Parse-check all first-party Mermaid diagrams |
 | `start`         | Launch the Linux app                |
-| `run`           | Alias for `start`                   |
 
 ### Inside `src/hotiron/`
 
 Run `make help` inside this directory for advanced / low-level targets:
 
 - `all` (default)
-- `jnabridge` — no-op; `HackrfSweepLibrary.java` is hand-maintained
 - `patch_hackrf` — re-apply the library-mode patch
 - `clean`, `prepare`, etc.
 
@@ -81,7 +78,7 @@ Run `make help` inside this directory for advanced / low-level targets:
 After a successful build you will find:
 
 - `src/hotiron/build/hotiron/` — runnable tree with launcher + `lib/`
-- `release/` — cross-platform release zip (Linux and Windows launchers/native libraries, if `zip_file` ran)
+- `release/hotiron.zip` — canonical runnable tree with Linux and Windows launchers/native libraries
 
 ## Cross-Compilation Notes
 
@@ -96,6 +93,6 @@ After a successful build you will find:
 - UI fails with a headless JRE → install `openjdk-21-jdk` (not `-headless`).
 - Java older than 21 → the launcher prints the required version and exits.
 - Submodule not initialized → run `git submodule update --init --recursive`.
-- Permission issues on Linux → see [hackrf-setup.md](hardware.md) for udev rules (also needed at runtime).
+- Permission issues on Linux → see [hardware.md](hardware.md) for udev rules (also needed at runtime).
 
 For the most current instructions, always run `make help` rather than relying solely on this document.

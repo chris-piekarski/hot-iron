@@ -1,7 +1,7 @@
 #!/bin/sh
 # List attached HackRF devices, the SDK/API this app is built against,
 # and whether a newer libhackrf / firmware release exists.
-# Invoked by `make info` / `make list-devices`. Always exits 0.
+# Invoked by `make info`. Always exits 0.
 # Set HACKRF_INFO_NO_NET=1 to skip the GitHub latest-release check.
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)

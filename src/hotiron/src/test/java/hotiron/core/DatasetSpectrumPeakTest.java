@@ -81,7 +81,7 @@ class DatasetSpectrumPeakTest {
     }
 
     @Test
-    void createPeaksDatasetAndFillSeriesUseHold() {
+    void createPeaksDatasetUsesHold() {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 1000L);
         peak.spectrumPeakHold[0] = -30f;
         peak.setPeakFalloutMillis(250L);
@@ -89,11 +89,6 @@ class DatasetSpectrumPeakTest {
         hotiron.core.jfc.XYSeriesImmutable series = peak.createPeaksDataset("peaks");
         assertEquals(peak.spectrumLength(), series.getItemCount());
         assertEquals(-30.0, series.getYY(0), 0.001);
-
-        org.jfree.data.xy.XYSeries xy = new org.jfree.data.xy.XYSeries("hold");
-        peak.fillPeaksToXYSeries(xy);
-        assertTrue(xy.getItemCount() > 0);
-        assertEquals(-30.0, xy.getY(0).doubleValue(), 0.001);
     }
 
     @Test

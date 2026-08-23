@@ -32,7 +32,8 @@ public final class FrequencyRangePanel extends JPanel
 	private static final String CARD_READ = "read";
 	private static final String CARD_EDIT = "edit";
 
-	private FrequencyRange range = new FrequencyRange(2402, 2472);
+	private FrequencyRange range = new FrequencyRange(QuickSelectPreset.WIFI_2.startMHz,
+			QuickSelectPreset.WIFI_2.endMHz);
 	private final JLabel readout = new JLabel("", SwingConstants.CENTER);
 	private final JLabel span = new JLabel("", SwingConstants.CENTER);
 	private final JTextField edit = new JTextField();
@@ -53,8 +54,8 @@ public final class FrequencyRangePanel extends JPanel
 		span.setEnabled(false);
 		edit.setFont(readout.getFont());
 		edit.setHorizontalAlignment(SwingConstants.CENTER);
-		edit.setToolTipText("Type a range like 88-108 or 2402 2472, or a center like 97");
-		readout.setToolTipText("Click to type a range. Plot drag/scroll also zooms.");
+		ExclusiveToolTip.setText(edit, "Type a range like 88-108 or 2402 2472, or a center like 97");
+		ExclusiveToolTip.setText(readout, "Click to type a range. Plot drag/scroll also zooms.");
 		JPanel readCard = new JPanel(new MigLayout("insets 2, wrap 1", "[grow,fill]", "[][]"));
 		readCard.add(readout);
 		readCard.add(span);
@@ -66,10 +67,10 @@ public final class FrequencyRangePanel extends JPanel
 		panRight.setName("pan-right");
 		zoomIn.setName("zoom-in");
 		zoomOut.setName("zoom-out");
-		panLeft.setToolTipText("Pan lower in frequency (¼ of the span)");
-		panRight.setToolTipText("Pan higher in frequency (¼ of the span)");
-		zoomIn.setToolTipText("Zoom in (half the span, same center)");
-		zoomOut.setToolTipText("Zoom out (double the span, same center)");
+		ExclusiveToolTip.setText(panLeft, "Pan lower in frequency (¼ of the span)");
+		ExclusiveToolTip.setText(panRight, "Pan higher in frequency (¼ of the span)");
+		ExclusiveToolTip.setText(zoomIn, "Zoom in (half the span, same center)");
+		ExclusiveToolTip.setText(zoomOut, "Zoom out (double the span, same center)");
 		keys.add(panLeft, "growx");
 		keys.add(zoomOut, "growx");
 		keys.add(zoomIn, "growx");

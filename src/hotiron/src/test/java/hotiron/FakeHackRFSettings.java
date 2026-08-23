@@ -194,6 +194,26 @@ public class FakeHackRFSettings implements HackRFSettings {
 	}
 
 	@Override
+	public void startFmScan() {
+		inner.startFmScan();
+	}
+
+	@Override
+	public void startTvScan() {
+		inner.startTvScan();
+	}
+
+	@Override
+	public void stopScan() {
+		inner.stopScan();
+	}
+
+	@Override
+	public ModelValue<hotiron.core.BandScan> getBandScan() {
+		return inner.getBandScan();
+	}
+
+	@Override
 	public ModelValueBoolean isListening() {
 		return inner.isListening();
 	}
@@ -249,8 +269,8 @@ public class FakeHackRFSettings implements HackRFSettings {
 	}
 
 	@Override
-	public ModelValueBoolean isFilterSpectrum() {
-		return inner.isFilterSpectrum();
+	public ModelValueBoolean isAutoSweep() {
+		return inner.isAutoSweep();
 	}
 
 	@Override

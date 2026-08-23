@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import hotiron.core.FmChannelPlan;
+import hotiron.core.TvChannelPlan;
 import hotiron.core.WifiChannelPlan;
 
 /**
@@ -15,7 +16,7 @@ import hotiron.core.WifiChannelPlan;
 public enum QuickSelectPreset
 {
 	ALL("All", 1, 7250,
-			"Full HotIron/HackRF selectable survey range (1–7250 MHz). Very slow at fine FFT bins or high sample averaging."),
+			"Full HotIron/HackRF selectable survey range (1–7250 MHz). Auto FFT keeps this coarse so the waterfall stays fast."),
 	WIFI_2("WiFi 2", WifiChannelPlan.WIFI_24_VIEW_START_MHZ, WifiChannelPlan.WIFI_24_VIEW_END_MHZ,
 			"US 802.11 ch 1–11 occupied 20 MHz (2402–2472). Channel N starts at (2412+5×(N−1))−10; 2402 is ch 1, 2407 is ch 2, 2452–2472 is ch 11. Channels overlap."),
 	WIFI_5("WiFi 5", WifiChannelPlan.WIFI_5_VIEW_START_MHZ, WifiChannelPlan.WIFI_5_VIEW_END_MHZ,
@@ -34,9 +35,9 @@ public enum QuickSelectPreset
 			"ITU VHF (30–300 MHz). Includes 6 m / 2 m amateur plus broadcast, aviation, and land mobile."),
 	UHF("UHF", 300, 3000,
 			"ITU UHF (300–3000 MHz). Includes 70 cm / 33 cm / 23 cm amateur plus cellular, ISM, and TV."),
-	V_TV("V-TV", 54, 216,
+	V_TV("V-TV", TvChannelPlan.VHF_VIEW_START_MHZ, TvChannelPlan.VHF_VIEW_END_MHZ,
 			"US VHF TV envelope, ch 2–13 (54–72, 76–88, 174–216). Includes the 88–174 MHz gap (FM + aviation)."),
-	U_TV("U-TV", 470, 608,
+	U_TV("U-TV", TvChannelPlan.UHF_VIEW_START_MHZ, TvChannelPlan.UHF_VIEW_END_MHZ,
 			"US UHF TV after the 600 MHz repack: ch 14–36 (470–608 MHz). Pre-1983 UHF TV ran to 890; 700/600 MHz were auctioned."),
 	HAM_6M("6m", 50, 54,
 			"Amateur 6 m (47 CFR 97.301: 50.0–54.0 MHz)."),
@@ -135,6 +136,17 @@ public enum QuickSelectPreset
 		for (QuickSelectPreset preset : values())
 		{
 			if (preset.label.equals(label))
+				return Optional.of(preset);
+		}
+		return Optional.empty();
+	}
+
+	/** Exact start/end match for the selected-button highlight. */
+	public static Optional<QuickSelectPreset> findByRange(int startMHz, int endMHz)
+	{
+		for (QuickSelectPreset preset : values())
+		{
+			if (preset.startMHz == startMHz && preset.endMHz == endMHz)
 				return Optional.of(preset);
 		}
 		return Optional.empty();

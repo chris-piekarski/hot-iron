@@ -49,7 +49,7 @@ public final class StationKnob extends JComponent
 		setPreferredSize(new Dimension(108, 108));
 		setMinimumSize(new Dimension(88, 88));
 		setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		setToolTipText("Turn clockwise for a higher station. Each click is one detected FM hit.");
+		ExclusiveToolTip.setText(this, "Turn clockwise for a higher station. Each click is one detected FM hit.");
 		setFocusable(true);
 		MouseAdapter mouse = new MouseAdapter()
 		{

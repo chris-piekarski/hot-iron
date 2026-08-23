@@ -8,7 +8,6 @@
 #include <hackrf.h>
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -45,6 +44,24 @@ void hackrf_fm_lib_config(const char* serial_number, unsigned int clkout_enable)
 void hackrf_fm_lib_stop(void)
 {
 	do_exit = 1;
+}
+
+int hackrf_fm_lib_set_gains(unsigned int lna_gain, unsigned int vga_gain)
+{
+	int result = 0;
+	if (device == NULL)
+		return -1;
+	if (lna_gain > 40)
+		lna_gain = 40;
+	if (vga_gain > 62)
+		vga_gain = 62;
+	result = hackrf_set_lna_gain(device, lna_gain);
+	if (result != HACKRF_SUCCESS)
+		return result;
+	result = hackrf_set_vga_gain(device, vga_gain);
+	if (result == HACKRF_SUCCESS)
+		fprintf(stderr, "hackrf_fm: gains LNA %u VGA %u\n", lna_gain, vga_gain);
+	return result;
 }
 
 static int rx_callback(hackrf_transfer* transfer)

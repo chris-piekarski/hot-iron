@@ -5,11 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import hotiron.core.AnalyzerSettings;
 import hotiron.core.FmBandLayer;
 import hotiron.core.FmStationHit;
 import hotiron.core.HackRFSettings;
 import hotiron.core.ListenService;
+import hotiron.core.MpegTsPlayer;
+import hotiron.core.MpegTsProbe;
 import hotiron.core.RadioIdentity;
 import hotiron.core.RadioMode;
 import hotiron.core.SweepConfig;
@@ -53,7 +54,7 @@ public final class SpectrumSnapshotStore
 		this.ringCap = Math.max(1, ringCap);
 		this.ring = new ArrayDeque<RingEntry>(this.ringCap);
 		this.context = new RadioContext(false, false, 0, null, null, null, null, false, 0, 0, 0, 0, 0, 0, false, false,
-				false, "", false, false, false, List.of());
+				false, "", false, false, false, false, List.of(), "sweep", 0, 0);
 	}
 
 	public boolean shouldPublish(long nowMs)
@@ -107,6 +108,7 @@ public final class SpectrumSnapshotStore
 				&& Boolean.TRUE.equals(settings.isChartsPeaksVisible().getValue());
 		boolean auto = settings.isPowerAutoScale() != null && Boolean.TRUE.equals(settings.isPowerAutoScale().getValue());
 		boolean autoGain = settings.isAutoGain() != null && Boolean.TRUE.equals(settings.isAutoGain().getValue());
+		boolean autoSweep = settings.isAutoSweep() != null && Boolean.TRUE.equals(settings.isAutoSweep().getValue());
 		boolean listening = settings.isListening() != null && Boolean.TRUE.equals(settings.isListening().getValue());
 		int listenKHz = settings.getListenKHz() != null ? settings.getListenKHz().getValue() : 0;
 		ListenService service = settings.getListenService() != null ? settings.getListenService().getValue()
@@ -116,7 +118,7 @@ public final class SpectrumSnapshotStore
 		RadioContext next = new RadioContext(paused, released, sweepsPerSec, id.displayBoard(), id.shortSerial(),
 				id.displayFirmware(), id.usbApi, id.present, radio.startMHz, radio.endMHz, radio.fftBinHz, radio.samples,
 				radio.lnaGain, radio.vgaGain, radio.antennaPower, radio.antennaLna, radio.clkout, radio.serial, peaks,
-				auto, autoGain, fm, mode, listenKHz, tvChannel);
+				auto, autoGain, autoSweep, fm, mode, listenKHz, tvChannel);
 		synchronized (lock)
 		{
 			if (context == null || next.listenKHz != context.listenKHz
@@ -131,12 +133,6 @@ public final class SpectrumSnapshotStore
 			}
 			context = next;
 		}
-	}
-
-	/** Convenience for tests that already have {@link AnalyzerSettings}. */
-	public void publishContext(AnalyzerSettings settings, List<FmStationHit> stations, double sweepsPerSec)
-	{
-		publishContext((HackRFSettings) settings, stations, sweepsPerSec);
 	}
 
 	public void publishWatchStats(boolean locked, float snrDb, int packets)
@@ -282,8 +278,56 @@ public final class SpectrumSnapshotStore
 		SpectrumSnapshot.Json.appendKey(sb, "equalizerMainTap")
 				.append(SpectrumSnapshot.Json.num(d.equalizerMainTap)).append(',');
 		SpectrumSnapshot.Json.appendKey(sb, "equalizerPeakTap")
-				.append(SpectrumSnapshot.Json.num(d.equalizerPeakTap));
+				.append(SpectrumSnapshot.Json.num(d.equalizerPeakTap)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "ffmpeg");
+		appendFfmpeg(sb, d.ffmpeg);
 		sb.append('}');
+	}
+
+	private static void appendFfmpeg(StringBuilder sb, MpegTsPlayer.Stats f)
+	{
+		if (f == null)
+			f = MpegTsPlayer.Stats.empty();
+		MpegTsProbe.Snapshot ts = f.ts;
+		sb.append('{');
+		SpectrumSnapshot.Json.appendKey(sb, "started").append(f.started).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "launchFailed").append(f.launchFailed).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoAlive").append(f.videoAlive).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "audioAlive").append(f.audioAlive).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoExitCode");
+		if (f.videoExitCode == MpegTsPlayer.Stats.EXIT_NONE)
+			sb.append("null");
+		else
+			sb.append(f.videoExitCode);
+		sb.append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "startedMs").append(f.startedMs).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "waitMs").append(f.waitMs).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tsBytesOffered").append(f.tsBytesOffered).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tsBytesWritten").append(f.tsBytesWritten).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tsQueueDepth").append(f.tsQueueDepth).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tsQueueCap").append(f.tsQueueCap).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "tsDropped").append(f.tsDropped).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "writeErrors").append(f.writeErrors).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "stdoutBytes").append(f.stdoutBytes).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "partialFrameBytes").append(f.partialFrameBytes).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "stdoutEof").append(f.stdoutEof).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "lastStderr").append(SpectrumSnapshot.Json.quote(f.lastStderr))
+				.append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "ts").append('{');
+		SpectrumSnapshot.Json.appendKey(sb, "packets").append(ts.packets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "syncErrors").append(ts.syncErrors).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "patPackets").append(ts.patPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "pmtPid").append(ts.pmtPid).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "pmtPackets").append(ts.pmtPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoPid").append(ts.videoPid).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoStreamType").append(ts.videoStreamType).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoPackets").append(ts.videoPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "videoPesStarts").append(ts.videoPesStarts).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "audioPid").append(ts.audioPid).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "audioStreamType").append(ts.audioStreamType).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "audioPackets").append(ts.audioPackets).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "audioPesStarts").append(ts.audioPesStarts);
+		sb.append("}}");
 	}
 
 	public String sweepConfigJson()

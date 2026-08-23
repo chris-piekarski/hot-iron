@@ -5,10 +5,8 @@
 # Run 'make help' for colorful categorized usage.
 
 # Colors (work in most terminals)
-BLUE   := \033[0;34m
 GREEN  := \033[0;32m
 YELLOW := \033[0;33m
-CYAN   := \033[0;36m
 BOLD   := \033[1m
 NC     := \033[0m
 
@@ -81,8 +79,6 @@ mermaid: ## Parse-check all first-party Mermaid diagrams (uses mmdc if installed
 info: ## List HackRF devices, app SDK/API versions, and upstream updates
 	@$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/hackrf-info.sh
 
-list-devices: info ## Alias for info
-
 firmware-update: ## Flash official GSG firmware (dry-run; CONFIRM=1 to write)
 	@CONFIRM=$(CONFIRM) VERSION=$(VERSION) FIRMWARE=$(FIRMWARE) SERIAL=$(SERIAL) \
 		$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/hackrf-firmware-update.sh
@@ -97,6 +93,4 @@ start: build ## Build if needed, then launch the Linux app.
 mcp: build ## Launch the app with a localhost MCP server (127.0.0.1:8765)
 	./src/hotiron/build/hotiron/hotiron.sh --mcp
 
-run: start ## Alias for start.
-
-.PHONY: build clean test native-test test-hw lint stats mermaid info list-devices firmware-update udev start run mcp help deps runtime-deps
+.PHONY: build clean test native-test test-hw lint stats mermaid info firmware-update udev start mcp help deps runtime-deps

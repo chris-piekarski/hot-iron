@@ -11,7 +11,7 @@ import java.beans.PropertyVetoException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.swing.JButton;
+import javax.swing.AbstractButton;
 import javax.swing.JLabel;
 
 import org.junit.jupiter.api.Test;
@@ -22,6 +22,12 @@ class QuickFrequencySelectorPanelTest {
     void testInitialValue() {
         QuickFrequencySelectorPanel panel = new QuickFrequencySelectorPanel();
         assertEquals(QuickSelectPreset.WIFI_2.label, panel.getValue());
+        assertTrue(panel.isHighlighted(QuickSelectPreset.WIFI_2.label));
+        for (QuickSelectPreset preset : QuickSelectPreset.values()) {
+            if (preset == QuickSelectPreset.WIFI_2)
+                continue;
+            assertFalse(panel.isHighlighted(preset.label), preset.label + " must not start selected");
+        }
     }
 
     @Test
@@ -36,11 +42,13 @@ class QuickFrequencySelectorPanelTest {
             }
         });
 
-        JButton nfc = panel.findButton("NFC");
+        AbstractButton nfc = panel.findButton("NFC");
         assertNotNull(nfc);
         nfc.doClick();
         assertEquals("NFC", panel.getValue());
         assertEquals("NFC", lastProperty.get());
+        assertTrue(panel.isHighlighted("NFC"));
+        assertFalse(panel.isHighlighted(QuickSelectPreset.WIFI_2.label));
         assertNull(nfc.getToolTipText(), "Swing tooltips stack; hover is in-panel");
     }
 
@@ -50,8 +58,8 @@ class QuickFrequencySelectorPanelTest {
         assertEquals(1, countNamed(panel, QuickFrequencySelectorPanel.HOVER_HINT_NAME));
         assertEquals(" ", panel.hoverHintText());
 
-        JButton wifi = panel.findButton(QuickSelectPreset.WIFI_2.label);
-        JButton fm = panel.findButton(QuickSelectPreset.FM.label);
+        AbstractButton wifi = panel.findButton(QuickSelectPreset.WIFI_2.label);
+        AbstractButton fm = panel.findButton(QuickSelectPreset.FM.label);
         assertNotNull(wifi);
         assertNotNull(fm);
         assertNull(wifi.getToolTipText());

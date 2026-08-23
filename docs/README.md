@@ -10,7 +10,7 @@ This directory contains the first-class documentation for **HotIron**: a HackRF 
 - [Development Guide](develop.md) (including testing and linting)
 - [HackRF Hardware Setup](hardware.md)
 - [Usage](operator.md) — operator UI (Quick Select, auto-gain, waterfall)
-- [Architecture](architecture.md)
+- [Architecture](architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies, MCP snapshot store
 - [Repository stats](stats.md) — first-party LOC, packages, tests (`make stats`)
 - [Contributing](contributing.md)
 - [Plans](plans/README.md) — living implementation plans (keep status/checklists current)
@@ -20,7 +20,7 @@ This directory contains the first-class documentation for **HotIron**: a HackRF 
 This documentation uses [Mermaid](https://mermaid.js.org/) for UML-style diagrams (flowcharts, sequence diagrams, class diagrams). These render natively on GitHub.
 
 Current diagrams cover:
-- Architecture (high-level, data flow, class, package, build-to-user)
+- Architecture (high-level, exclusive USB, data flow, settings/hooks class, package, build-to-user)
 - Build pipeline
 - Development and test workflows
 - Contributing process

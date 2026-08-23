@@ -24,8 +24,10 @@ class QuickSelectPresetTest {
             assertEquals(preset.startMHz + "–" + preset.endMHz + " MHz", preset.tooltip());
             assertTrue(preset.tooltip().length() < 28, preset.label + " hover is a range, not the citation");
             assertEquals(preset, QuickSelectPreset.findByLabel(preset.label).orElseThrow());
+            assertEquals(preset, QuickSelectPreset.findByRange(preset.startMHz, preset.endMHz).orElseThrow());
         }
         assertTrue(QuickSelectPreset.findByLabel("AM").isEmpty());
+        assertTrue(QuickSelectPreset.findByRange(2412, 2462).isEmpty());
     }
 
     @Test

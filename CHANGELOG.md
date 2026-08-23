@@ -5,10 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Watch `tv_debug` / `tv_debug_history` and the 2 s `ATSC watch:` console line report FFmpeg process health (alive/exit, stdin write errors, stdout bytes / partial frame), TS bytes offered vs written, queue drops, last stderr, and PAT/PMT/video PID counts. `stage` now splits a stuck decode (`ffmpeg_missing`, `ffmpeg_blocked`, `no_pmt`, `no_video_pes`, `ffmpeg_waiting`, …) instead of a single `ffmpeg_waiting` bucket.
+- **Auto FFT / samples** (default on): `AutoSweepPolicy` picks FFT Bin and Number of samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast. Hysteresis avoids USB thrash on pan. Uncheck Auto to override.
+
+### Changed
+- Startup Quick Select is **WiFi 2** (highlighted) and the first sweep/chart opens on 2402–2472 MHz.
+- Quick Select while **Listen** or **Watch** is parked stops FM/TV and resumes the sweep on that band.
+- FM and TV tuners have **Scan**: survey the broadcast band (FM 88–108; TV VHF then UHF) and pin those hits as the list **Seek** jumps between.
+- Button hover tips are painted on the existing frame (no extra X11 window, no sidebar reflow). Quick Select still uses the reserved range line under the grid.
+- Architecture doc now records exclusive USB, MVC/hooks, producer–consumer queues, policy objects, and restart coalescing — not only the component map.
+- Listen/Watch HUD and waterfall banner say **parked IQ** instead of “sweep paused”; the console prints `QRX parked IQ.` while the VFO is parked.
+- TV Seek keeps occupied UHF/VHF hits across a Wi‑Fi sweep and merges live 6 MHz bricks from parked IQ, same as FM Seek.
+- Watch UHF Auto-gain may raise VGA live when parked IQ is short of ~0.5 RMS; the 8VSB receiver keeps running so Reed-Solomon is not reset to the 16-packet flush. Auto Watch also enables the RF amp (+14 dB) for the parked session only and keeps trimming IF after fade, instead of a single 1.5 s pass.
+- Removed superseded Java/UI compatibility paths, unreachable diagnostics, unused native ATSC receive files, legacy Make aliases, and old MCP environment names.
+- Release archives now contain only the canonical `hotiron/` runnable tree and are named `hotiron.zip`.
+
+### Fixed
+- Watch UHF Auto-gain seeds LNA 40 + VGA 22, then trims IF live toward ~0.5 RMS without reopening USB. 0.25 RMS found field sync but Reed-Solomon never left the 16-packet flush; a USB restart to do the same trim threw the lock away; +32 dB clipped ch 33 (~0.69 RMS).
+- Watch no longer starts `ffmpeg` on the first PAT while Reed-Solomon is still mostly failing, and it stops the player when the RS window collapses so a poisoned GOP is not held on screen. FFmpeg maps the PMT video/audio PIDs, uses a larger probe, and the console no longer prints every concealment line (that flood was filling the IQ queue and resetting the 8VSB receiver). Auto Watch holds IF while RS is usable unless the ADC is clipping; a stuck all-bad RS window recreates the native receiver. After a polarity has produced a healthy RS window, Watch will not flip I/Q on a later drop. Watch waits for a PMT video+audio pair before starting `ffmpeg`, maps those PIDs, and prefers main English AC-3 over a visually-impaired / SAP track that the mux lists first.
+- Export the ATSC C API explicitly from Windows builds so JNA can resolve TV Watch symbols.
+
 ## [2.0.1] - 2026-08-22
 
 ### Changed
-- **HotIron 2.0.1 identity.** Product name, GitHub slug `chris-piekarski/hotiron`, Java packages `hotiron.*`, module `src/hotiron`, launchers `hotiron.sh` / `hotiron.cmd`, window title, MCP `serverInfo.name`, and docs IA (`operator.md`, `agents.md`, `hardware.md`, `develop.md`). License stays GPLv3; derived from pavsa’s analyzer. Operator still needs to leave the GitHub fork network and rename the remote repo.
+- **HotIron 2.0.1 identity.** Product name, Java packages `hotiron.*`, module `src/hotiron`, launchers `hotiron.sh` / `hotiron.cmd`, window title, MCP `serverInfo.name`, and docs IA (`operator.md`, `agents.md`, `hardware.md`, `develop.md`). License stays GPLv3; derived from pavsa’s analyzer. Repository links continue to use the live `chris-piekarski/hackrf-spectrum-analyzer` slug.
 - ASCII **HotIron** wordmark on the README, `make help`, `make info`, and the Linux/Windows launchers. Not printed on the MCP stdio proxy.
 - Branding copy and product console lines use ham lingo (QSY / QRV / QRT / copy) without changing MCP tool names.
 

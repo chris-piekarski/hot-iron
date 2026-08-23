@@ -12,7 +12,6 @@ public class SpurFilter
 {
 	private final DatasetSpectrum		avgSpectrum;
 	private boolean						calibrated		= false;
-	private int							debug			= 0;
 	/**
 	 * contains spur correction power values 
 	 */
@@ -198,47 +197,9 @@ public class SpurFilter
 	private void filterDatasetExec()
 	{
 		float input[] = this.input.getSpectrumArray();
-		/**
-		 * 0 = normal operation
-		 * 1 = output averaged spectrum
-		 * 2 = noise floor
-		 * 3 = noise floor + output spur corrections
-		 */
-		debug = 0;
-		if (debug == 0)
+		for (int i = 0; i < input.length; i++)
 		{
-			for (int i = 0; i < input.length; i++)
-			{
-				input[i] -= filter.getSpectrumArray()[i];
-			}
-		}
-		else
-		{
-			if (debug == 1)
-			{
-				for (int i = 0; i < input.length; i++)
-				{
-					input[i] = avgSpectrum.getSpectrumArray()[i];
-				}
-			}
-			else if (debug == 2)
-			{
-				for (int i = 0; i < input.length; i++)
-				{
-					input[i] = noiseFloor.getSpectrumArray()[i];
-				}
-			}
-			else if (debug == 3)
-			{
-				for (int i = 0; i < input.length; i++)
-				{
-					input[i] = noiseFloor.getSpectrumArray()[i] + filter.getSpectrumArray()[i];
-				}
-			}
-			else if (debug == 4)
-			{
-
-			}
+			input[i] -= filter.getSpectrumArray()[i];
 		}
 	}
 }

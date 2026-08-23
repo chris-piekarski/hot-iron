@@ -57,6 +57,30 @@ class FmChannelPlanTest {
 	}
 
 	@Test
+	void overlapsBroadcastIsTheUsFmView() {
+		assertTrue(FmChannelPlan.overlapsBroadcast(88, 108));
+		assertTrue(FmChannelPlan.overlapsBroadcast(74, 1185));
+		assertTrue(FmChannelPlan.overlapsBroadcast(96, 98));
+		assertFalse(FmChannelPlan.overlapsBroadcast(2402, 2472));
+		assertFalse(FmChannelPlan.overlapsBroadcast(470, 476));
+	}
+
+	@Test
+	void detectStationsFromParkedIqBins() {
+		float[] mhz = new float[64];
+		float[] dbfs = new float[64];
+		for (int i = 0; i < 64; i++) {
+			mhz[i] = 96.5f + i * 0.025f;
+			dbfs[i] = -80f;
+		}
+		dbfs[32] = -40f;
+		assertEquals(97.3, mhz[32], 0.01);
+		List<FmStationHit> hits = FmChannelPlan.detectStations(mhz, dbfs);
+		assertEquals(1, hits.size());
+		assertEquals("97.3", hits.get(0).label());
+	}
+
+	@Test
 	void visibleOccupancyFollowsTheSweepWindow() {
 		List<FmChannel> all = FmChannelPlan.visibleOccupancy(88, 108);
 		assertEquals(100, all.size());

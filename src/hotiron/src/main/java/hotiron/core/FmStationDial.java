@@ -1,6 +1,7 @@
 package hotiron.core;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -44,16 +45,42 @@ public final class FmStationDial
 		return stations.get(stations.size() - 1);
 	}
 
-	/** @deprecated use {@link #seek} */
-	public static FmChannel step(List<FmStationHit> hits, int currentKHz, int direction)
-	{
-		return seek(hits, currentKHz, direction);
-	}
-
 	/** Tune: one US 200 kHz channel, wrapping 88.1 ↔ 107.9. */
 	public static FmChannel tune(int currentKHz, int direction)
 	{
 		return stepRaster(currentKHz, direction < 0 ? -1 : 1);
+	}
+
+	/**
+	 * Keep remembered stations outside the live IQ window; replace the
+	 * in-window list with what the parked FFT just saw.
+	 */
+	public static List<FmStationHit> mergeLive(List<FmStationHit> remembered, List<FmStationHit> live,
+			double liveStartMHz, double liveEndMHz)
+	{
+		LinkedHashMap<Integer, FmStationHit> byFcc = new LinkedHashMap<Integer, FmStationHit>();
+		if (remembered != null)
+		{
+			for (FmStationHit hit : remembered)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				if (!hit.channel.occupancyOverlaps(liveStartMHz, liveEndMHz))
+					byFcc.put(hit.channel.fccChannel, hit);
+			}
+		}
+		if (live != null)
+		{
+			for (FmStationHit hit : live)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				byFcc.put(hit.channel.fccChannel, hit);
+			}
+		}
+		List<FmStationHit> out = new ArrayList<FmStationHit>(byFcc.values());
+		out.sort((a, b) -> Integer.compare(a.channel.centerKHz, b.channel.centerKHz));
+		return List.copyOf(out);
 	}
 
 	public static boolean sameChannels(List<FmStationHit> a, List<FmStationHit> b)

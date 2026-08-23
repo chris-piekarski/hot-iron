@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.awt.Graphics2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.ui.RectangleEdge;
@@ -18,22 +16,11 @@ import hotiron.core.WifiChannelPlan;
 class WifiChannelOverlayTest {
 
 	@Test
-	void overlapsDetectsGap() {
-		List<double[]> placed = new ArrayList<>();
-		placed.add(new double[] { 10, 20 });
-		assertTrue(WifiChannelOverlay.overlaps(placed, 15, 25));
-		assertTrue(WifiChannelOverlay.overlaps(placed, 22, 30));
-		assertFalse(WifiChannelOverlay.overlaps(placed, 40, 50));
-	}
-
-	@Test
 	void paintOnWifi2DoesNotThrowAndMarksTheImage() {
 		BufferedImage img = new BufferedImage(800, 300, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
-		NumberAxis axis = new NumberAxis();
-		axis.setRange(2402, 2472);
 		Rectangle2D area = new Rectangle2D.Double(40, 20, 720, 250);
-		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, area, axis, RectangleEdge.BOTTOM, 2402, 2472));
+		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, area, 2402, 2472));
 		g.dispose();
 		boolean painted = false;
 		for (int x = 40; x < 760 && !painted; x++) {
@@ -83,9 +70,7 @@ class WifiChannelOverlayTest {
 	void paintSkipsWhenRangeHasNoWifi() {
 		BufferedImage img = new BufferedImage(200, 100, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
-		NumberAxis axis = new NumberAxis();
-		axis.setRange(88, 108);
-		WifiChannelOverlay.paint(g, new Rectangle2D.Double(0, 0, 200, 100), axis, RectangleEdge.BOTTOM, 88, 108);
+		WifiChannelOverlay.paint(g, new Rectangle2D.Double(0, 0, 200, 100), 88, 108);
 		g.dispose();
 		assertEquals(0, img.getRGB(100, 10));
 	}
@@ -94,9 +79,8 @@ class WifiChannelOverlayTest {
 	void paintNoopsOnBadGeometry() {
 		BufferedImage img = new BufferedImage(10, 10, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
-		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, new Rectangle2D.Double(0, 0, 2, 2), new NumberAxis(),
-				RectangleEdge.BOTTOM, 2400, 2484));
-		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, null, new NumberAxis(), RectangleEdge.BOTTOM, 2400, 2484));
+		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, new Rectangle2D.Double(0, 0, 2, 2), 2400, 2484));
+		assertDoesNotThrow(() -> WifiChannelOverlay.paint(g, null, 2400, 2484));
 		g.dispose();
 	}
 }
