@@ -445,7 +445,7 @@ public final class SpectrumSnapshotStore
 	{
 		if (a == null || b == null)
 			return false;
-		return a.startMHz == b.startMHz && a.endMHz == b.endMHz && Math.abs(a.fftBinHz - b.fftBinHz) < 1f;
+		return a.freqStartHz == b.freqStartHz && a.endMHz == b.endMHz && Math.abs(a.fftBinHz - b.fftBinHz) < 1f;
 	}
 
 	public static final class RingEntry

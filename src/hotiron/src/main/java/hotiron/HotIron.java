@@ -186,6 +186,7 @@ public class HotIron {
 	private ChartPanel								chartPanel;
 	private ColorScheme								colors								= new ColorScheme();
 	private DatasetSpectrumPeak						datasetSpectrum;
+	private SpectrumPowerScale						powerScale;
 	private final hotiron.mcp.SpectrumSnapshotStore snapshotStore = new hotiron.mcp.SpectrumSnapshotStore();
 	private hotiron.mcp.SpectrumMcpServer	mcpServer;
 	private volatile boolean						flagManualGain						= false;
@@ -581,7 +582,6 @@ public class HotIron {
 		private final int limitChartRefreshFPS = 30;
 		private final int limitPersistentRefreshEveryChartFrame = 2;
 		private final XYSeries spectrumPeaksEmpty = new XYSeries("peaks");
-		private SpectrumPowerScale powerScale;
 
 		@Override
 		public void onPacketAccepted() {
@@ -1371,6 +1371,7 @@ public class HotIron {
 		settings.getSelectedSerial().addListener(restartHackrf);
 		settings.getClkoutEnable().addListener(restartHackrf);
 		settings.getListenKHz().addListener(() -> {
+			flushPersistentOverlay();
 			if (settings.isListening().getValue()
 					&& settings.getListenService().getValue() == hotiron.core.ListenService.FM)
 				restartHackrfSweep();
@@ -1379,6 +1380,7 @@ public class HotIron {
 				SwingUtilities.invokeLater(chartPanel::repaint);
 		});
 		settings.getTvChannel().addListener(() -> {
+			flushPersistentOverlay();
 			if (settings.isListening().getValue()
 					&& settings.getListenService().getValue() == hotiron.core.ListenService.TV)
 				restartHackrfSweep();
@@ -1467,7 +1469,9 @@ public class HotIron {
 			waterfallPlot.setSpectrumPaletteSize(dB);
 		});
 		settings.getPeakFallRate().addListener((fallRate) -> {
-			datasetSpectrum.setPeakFalloutMillis(fallRate * 1000l);
+			DatasetSpectrumPeak p = datasetSpectrum;
+			if (p != null)
+				p.setPeakFalloutMillis(fallRate * 1000l);
 		});
 
 		settings.getSpectrumLineThickness().addListener((thickness) -> {
@@ -1686,51 +1690,83 @@ public class HotIron {
 	private void showFmRfSpectrum(FmListenSpectrum snap) {
 		if (snap == null || snap.isEmpty())
 			return;
-		final double high = Math.min(0d, Math.ceil((snap.peakDbfs + 5d) / 10d) * 10d);
-		double candidateLow = Math.floor((snap.noiseDbfs - 10d) / 10d) * 10d;
-		if (!Double.isFinite(candidateLow))
-			candidateLow = -100d;
-		final double low = Math.min(candidateLow, high - 40d);
-		final XYSeriesImmutable rfSeries = new XYSeriesImmutable("FM RF", snap.mhz, snap.dbfs);
-		SwingUtilities.invokeLater(() -> {
-			if (chart == null || !settings.isListening().getValue()
-					|| settings.getListenService().getValue() != hotiron.core.ListenService.FM
-					|| Math.abs(settings.getListenKHz().getValue() / 1000.0 - snap.dialMHz) > 0.001)
-				return;
-			chart.setNotify(false);
-			XYPlot plot = chart.getXYPlot();
-			plot.getDomainAxis().setRange(snap.mhz[0],
-					snap.mhz[snap.mhz.length - 1] + snap.binHz / 1_000_000d);
-			plot.getRangeAxis().setRange(low, high);
-			chartDataset.removeAllSeries();
-			chartDataset.addSeries(parkedRfPeaksEmpty);
-			chartDataset.addSeries(rfSeries);
-			chart.setNotify(true);
-		});
+		paintParkedRf(snap.mhz, snap.dbfs, snap.binHz, () -> settings.isListening().getValue()
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.FM
+				&& Math.abs(settings.getListenKHz().getValue() / 1000.0 - snap.dialMHz) <= 0.001);
 	}
 
 	private void showTvRfSpectrum(TvWatchSpectrum snap) {
 		if (snap == null || snap.isEmpty())
 			return;
-		final double high = Math.min(0d, Math.ceil((snap.peakDbfs + 5d) / 10d) * 10d);
-		double candidateLow = Math.floor((snap.noiseDbfs - 10d) / 10d) * 10d;
-		if (!Double.isFinite(candidateLow))
-			candidateLow = -100d;
-		final double low = Math.min(candidateLow, high - 40d);
-		final XYSeriesImmutable rfSeries = new XYSeriesImmutable("TV RF", snap.mhz, snap.dbfs);
+		paintParkedRf(snap.mhz, snap.dbfs, snap.binHz, () -> settings.isListening().getValue()
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.TV
+				&& settings.getTvChannel().getValue() == snap.tvChannel);
+	}
+
+	/**
+	 * Parked-IQ FFT uses the same peak half-life, persistence overlay, and
+	 * snapshot-history ring as the wideband sweep. Waterfall stays AUDIO/VIDEO.
+	 */
+	private void paintParkedRf(float[] mhz, float[] dbfs, float binHz, java.util.function.BooleanSupplier stillLive) {
+		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
+			return;
+		Integer fallRate = settings.getPeakFallRate().getValue();
+		long fallMs = fallRate == null ? 15_000L : fallRate.longValue() * 1000L;
+		DatasetSpectrumPeak prev = datasetSpectrum;
+		DatasetSpectrumPeak ds = DatasetSpectrumPeak.ingestParkedFrame(prev, mhz, dbfs, binHz, fallMs);
+		if (ds == null)
+			return;
+		if (prev == null || !prev.sameAxisAs(ds))
+			powerScale = null;
+		datasetSpectrum = ds;
+
+		long nowMs = System.currentTimeMillis();
+		if (snapshotStore.shouldPublish(nowMs)) {
+			snapshotStore.publishSweep(hotiron.mcp.SpectrumSnapshot.fromDataset(ds, nowMs,
+					hotiron.mcp.SpectrumSnapshot.DEFAULT_MAX_POINTS, null), nowMs);
+			double sps = waterfallPlot != null ? waterfallPlot.getFps() : 0;
+			snapshotStore.publishContext(settings, fmStations, sps);
+		}
+
+		final double yLow;
+		final double yHigh;
+		if (settings.isPowerAutoScale().getValue()) {
+			SpectrumPowerScale target = SpectrumPowerScale.fromDataset(ds);
+			if (powerScale == null || powerScale.isUnset())
+				powerScale = (target.isUnset() ? SpectrumPowerScale.defaults() : target.displayTicks())
+						.stamped(nowMs);
+			else
+				powerScale = powerScale.follow(target, nowMs);
+			yLow = powerScale.lowDb;
+			yHigh = powerScale.highDb;
+		} else {
+			powerScale = SpectrumPowerScale.defaults();
+			yLow = SpectrumPowerScale.DEFAULT_LOW;
+			yHigh = SpectrumPowerScale.DEFAULT_HIGH;
+		}
+
+		if (settings.isPersistentDisplayVisible().getValue())
+			persistentDisplay.drawSpectrumFloat(ds, (float) yLow, (float) yHigh, true);
+
+		int maxPts = chartVertexBudget();
+		final XYSeries spectrumSeries = ds.createSpectrumDataset("spectrum", maxPts);
+		final XYSeries spectrumPeaks = settings.isChartsPeaksVisible().getValue()
+				? ds.createPeaksDataset("peaks", maxPts)
+				: parkedRfPeaksEmpty;
+		final double domainLo = mhz[0];
+		final double domainHi = mhz[mhz.length - 1] + binHz / 1_000_000d;
 		SwingUtilities.invokeLater(() -> {
-			if (chart == null || !settings.isListening().getValue()
-					|| settings.getListenService().getValue() != hotiron.core.ListenService.TV
-					|| settings.getTvChannel().getValue() != snap.tvChannel)
+			if (chart == null || stillLive == null || !stillLive.getAsBoolean())
 				return;
 			chart.setNotify(false);
 			XYPlot plot = chart.getXYPlot();
-			plot.getDomainAxis().setRange(snap.mhz[0],
-					snap.mhz[snap.mhz.length - 1] + snap.binHz / 1_000_000d);
-			plot.getRangeAxis().setRange(low, high);
+			plot.getDomainAxis().setRange(domainLo, domainHi);
+			NumberAxis yAxis = (NumberAxis) plot.getRangeAxis();
+			if (yAxis.getLowerBound() != yLow || yAxis.getUpperBound() != yHigh)
+				yAxis.setRange(yLow, yHigh);
 			chartDataset.removeAllSeries();
-			chartDataset.addSeries(parkedRfPeaksEmpty);
-			chartDataset.addSeries(rfSeries);
+			chartDataset.addSeries(spectrumPeaks);
+			chartDataset.addSeries(spectrumSeries);
 			chart.setNotify(true);
 		});
 	}

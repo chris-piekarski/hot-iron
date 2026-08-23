@@ -137,4 +137,19 @@ class SpectrumSnapshotStoreTest {
 		String recent = store.historyJson(1.5, 50);
 		assertTrue(recent.contains("\"sampleCount\":2") || recent.contains("\"sampleCount\":1"));
 	}
+
+	@Test
+	void historySeparatesParkedIqWindowsWithTheSameIntegerMHz() {
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore(8);
+		float binHz = 3906.25f;
+		DatasetSpectrum a = new DatasetSpectrum(binHz, 95_200_000L, 64, -150f);
+		a.getSpectrumArray()[4] = -20f;
+		DatasetSpectrum b = new DatasetSpectrum(binHz, 95_400_000L, 64, -150f);
+		b.getSpectrumArray()[4] = -22f;
+		store.publishSweep(SpectrumSnapshot.fromDataset(a, 1000, 64, null), 1000);
+		store.publishSweep(SpectrumSnapshot.fromDataset(b, 1100, 64, null), 1100);
+		String hist = store.historyJson(5.0, 50);
+		assertTrue(hist.contains("\"sampleCount\":1"));
+		assertEquals(95_400_000L, store.latest().freqStartHz);
+	}
 }

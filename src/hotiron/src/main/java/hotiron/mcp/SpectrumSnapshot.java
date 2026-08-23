@@ -17,6 +17,7 @@ public final class SpectrumSnapshot
 	public final long timestampMs;
 	public final int startMHz;
 	public final int endMHz;
+	public final long freqStartHz;
 	public final float fftBinHz;
 	public final float[] mhz;
 	public final float[] dbm;
@@ -29,9 +30,17 @@ public final class SpectrumSnapshot
 	public SpectrumSnapshot(long timestampMs, int startMHz, int endMHz, float fftBinHz, float[] mhz, float[] dbm,
 			int filledBins, int omittedHoles, float noiseDbm, float peakDbm, float peakMhz)
 	{
+		this(timestampMs, startMHz, endMHz, fftBinHz, mhz, dbm, filledBins, omittedHoles, noiseDbm, peakDbm, peakMhz,
+				startMHz * 1_000_000L);
+	}
+
+	public SpectrumSnapshot(long timestampMs, int startMHz, int endMHz, float fftBinHz, float[] mhz, float[] dbm,
+			int filledBins, int omittedHoles, float noiseDbm, float peakDbm, float peakMhz, long freqStartHz)
+	{
 		this.timestampMs = timestampMs;
 		this.startMHz = startMHz;
 		this.endMHz = endMHz;
+		this.freqStartHz = freqStartHz;
 		this.fftBinHz = fftBinHz;
 		this.mhz = mhz == null ? new float[0] : mhz.clone();
 		this.dbm = dbm == null ? new float[0] : dbm.clone();
@@ -99,7 +108,7 @@ public final class SpectrumSnapshot
 		if (filled == 0)
 		{
 			return new SpectrumSnapshot(timestampMs, ds.getFreqStartMHz(), ds.getFreqStopMHz(), ds.getFFTBinSizeHz(),
-					new float[0], new float[0], 0, holes, Float.NaN, Float.NaN, Float.NaN);
+					new float[0], new float[0], 0, holes, Float.NaN, Float.NaN, Float.NaN, ds.getFreqStartHz());
 		}
 		if (filled <= cap && n == filled)
 		{
@@ -168,7 +177,7 @@ public final class SpectrumSnapshot
 			outD = Arrays.copyOf(outD, outN);
 		}
 		return new SpectrumSnapshot(timestampMs, ds.getFreqStartMHz(), ds.getFreqStopMHz(), ds.getFFTBinSizeHz(), outM,
-				outD, filled, holes, noise, filled > 0 ? peak : Float.NaN, peakAt);
+				outD, filled, holes, noise, filled > 0 ? peak : Float.NaN, peakAt, ds.getFreqStartHz());
 	}
 
 	public String toJson()

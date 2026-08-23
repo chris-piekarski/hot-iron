@@ -37,6 +37,22 @@ public class DatasetSpectrum implements Cloneable
 		spectrum = new float[datapoints];
 		Arrays.fill(spectrum, spectrumInitPower);
 	}
+
+	/**
+	 * Exact-Hz axis for a full FFT row (parked IQ). Bin 0 is
+	 * {@code freqStartHz}; length is the live bin count, not a rounded MHz span.
+	 */
+	public DatasetSpectrum(float fftBinSizeHz, long freqStartHz, int binCount, float spectrumInitPower)
+	{
+		this.fftBinSizeHz = fftBinSizeHz;
+		this.freqStartHz = freqStartHz;
+		this.freqStartMHz = (int) Math.floor(freqStartHz / 1_000_000d);
+		double stopHz = freqStartHz + (double) fftBinSizeHz * Math.max(1, binCount);
+		this.freqStopMHz = (int) Math.ceil(stopHz / 1_000_000d);
+		this.spectrumInitPower = spectrumInitPower;
+		spectrum = new float[Math.max(1, binCount)];
+		Arrays.fill(spectrum, spectrumInitPower);
+	}
 	
 	/**
 	 * Adds new data to spectrum's dataset
@@ -184,12 +200,17 @@ public class DatasetSpectrum implements Cloneable
 		return freqStopMHz;
 	}
 
-	/** Same MHz span and bin size — a gain-only restart must not wipe the waterfall. */
+	public long getFreqStartHz()
+	{
+		return freqStartHz;
+	}
+
+	/** Same start Hz, bin size, and length — a gain-only restart must not wipe the waterfall. */
 	public boolean sameAxisAs(DatasetSpectrum other)
 	{
 		if (other == null)
 			return false;
-		return freqStartMHz == other.freqStartMHz && freqStopMHz == other.freqStopMHz
+		return freqStartHz == other.freqStartHz && spectrum.length == other.spectrum.length
 				&& fftBinSizeHz == other.fftBinSizeHz;
 	}
 

@@ -23,19 +23,46 @@ public class DatasetSpectrumPeak extends DatasetSpectrum
 	public DatasetSpectrumPeak(float fftBinSizeHz, int freqStartMHz, int freqStopMHz, float spectrumInitPower, float peakFallThreshold, long peakFalloutMillis)
 	{
 		super(fftBinSizeHz, freqStartMHz, freqStopMHz, spectrumInitPower);
+		initPeaks(spectrumInitPower, peakFallThreshold, peakFalloutMillis);
+	}
 
+	public DatasetSpectrumPeak(float fftBinSizeHz, long freqStartHz, int binCount, float spectrumInitPower,
+			float peakFallThreshold, long peakFalloutMillis)
+	{
+		super(fftBinSizeHz, freqStartHz, binCount, spectrumInitPower);
+		initPeaks(spectrumInitPower, peakFallThreshold, peakFalloutMillis);
+	}
+
+	private void initPeaks(float spectrumInitPower, float peakFallThreshold, long peakFalloutMillis)
+	{
 		this.peakFalloutMillis = peakFalloutMillis;
 		this.spectrumInitPower = spectrumInitPower;
 		this.peakFallThreshold = peakFallThreshold;
-		int datapoints = (int) (Math.ceil(freqStopMHz - freqStartMHz) * 1000000d / fftBinSizeHz);
-		spectrum = new float[datapoints];
-		Arrays.fill(spectrum, spectrumInitPower);
-		spectrumPeak = new float[datapoints];
+		spectrumPeak = new float[spectrum.length];
 		Arrays.fill(spectrumPeak, spectrumInitPower);
-		spectrumPeakHold = new float[datapoints];
+		spectrumPeakHold = new float[spectrum.length];
 		Arrays.fill(spectrumPeakHold, spectrumInitPower);
-		
+	}
 
+	/**
+	 * Copy a parked-IQ FFT into the live bins and age the peak hold.
+	 * Reuses {@code current} when the Hz axis matches.
+	 */
+	public static DatasetSpectrumPeak ingestParkedFrame(DatasetSpectrumPeak current, float[] mhz, float[] dbfs,
+			float binHz, long peakFalloutMillis)
+	{
+		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length || !(binHz > 0f))
+			return current;
+		long startHz = Math.round((double) mhz[0] * 1_000_000d);
+		DatasetSpectrumPeak ds = current;
+		if (ds == null || ds.getFreqStartHz() != startHz || ds.spectrumLength() != dbfs.length
+				|| ds.getFFTBinSizeHz() != binHz)
+			ds = new DatasetSpectrumPeak(binHz, startHz, dbfs.length, -150f, 15f, peakFalloutMillis);
+		else
+			ds.setPeakFalloutMillis(peakFalloutMillis);
+		System.arraycopy(dbfs, 0, ds.spectrum, 0, dbfs.length);
+		ds.refreshPeakSpectrum();
+		return ds;
 	}
 
 	public void setPeakFalloutMillis(long peakFalloutMillis) {

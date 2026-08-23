@@ -124,6 +124,36 @@ class DatasetSpectrumPeakTest {
     }
 
     @Test
+    void ingestParkedFrameReusesAxisAndDecaysPeaks() {
+        float binHz = 15625f;
+        float[] mhz = new float[8];
+        float[] dbfs = new float[8];
+        for (int i = 0; i < mhz.length; i++)
+        {
+            mhz[i] = 597f + i * (binHz / 1_000_000f);
+            dbfs[i] = -40f;
+        }
+        dbfs[3] = -10f;
+        DatasetSpectrumPeak first = DatasetSpectrumPeak.ingestParkedFrame(null, mhz, dbfs, binHz, 1000L);
+        assertNotNull(first);
+        assertEquals(8, first.spectrumLength());
+        assertEquals(-10f, first.spectrumPeakHold[3], 0.001f);
+        assertSame(first, DatasetSpectrumPeak.ingestParkedFrame(first, mhz, dbfs, binHz, 1000L));
+
+        dbfs[3] = -70f;
+        first.lastAdded = System.currentTimeMillis() - 1000;
+        DatasetSpectrumPeak aged = DatasetSpectrumPeak.ingestParkedFrame(first, mhz, dbfs, binHz, 1000L);
+        assertSame(first, aged);
+        assertEquals(-40f, aged.spectrumPeakHold[3], 0.05f);
+
+        float[] shifted = mhz.clone();
+        shifted[0] += 0.2f;
+        DatasetSpectrumPeak retuned = DatasetSpectrumPeak.ingestParkedFrame(first, shifted, dbfs, binHz, 1000L);
+        assertNotSame(first, retuned);
+        assertFalse(first.sameAxisAs(retuned));
+    }
+
+    @Test
     void testResetPeaksAndRecalcPowerEdgeCases() {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 1000L);
         peak.resetPeaks();

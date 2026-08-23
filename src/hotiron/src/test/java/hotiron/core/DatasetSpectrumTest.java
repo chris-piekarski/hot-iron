@@ -89,6 +89,18 @@ class DatasetSpectrumTest {
     }
 
     @Test
+    void parkedIqAxisUsesExactStartHz() {
+        float binHz = 3906.25f;
+        DatasetSpectrum a = new DatasetSpectrum(binHz, 95_200_000L, 1024, -150f);
+        DatasetSpectrum same = new DatasetSpectrum(binHz, 95_200_000L, 1024, -150f);
+        DatasetSpectrum shifted = new DatasetSpectrum(binHz, 95_400_000L, 1024, -150f);
+        assertEquals(95_200_000L, a.getFreqStartHz());
+        assertEquals(1024, a.spectrumLength());
+        assertTrue(a.sameAxisAs(same));
+        assertFalse(a.sameAxisAs(shifted));
+    }
+
+    @Test
     void testCopyTo() {
         DatasetSpectrum src = new DatasetSpectrum(100000f, 2400, 2401, -100f);
         src.getSpectrumArray()[0] = -50f;

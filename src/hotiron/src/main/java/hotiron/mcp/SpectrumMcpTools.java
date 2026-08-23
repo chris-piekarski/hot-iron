@@ -310,7 +310,7 @@ public final class SpectrumMcpTools
 		System.arraycopy(m, 0, mo, 0, out);
 		System.arraycopy(d, 0, do_, 0, out);
 		return new SpectrumSnapshot(src.timestampMs, src.startMHz, src.endMHz, src.fftBinHz, mo, do_, src.filledBins,
-				src.omittedHoles, src.noiseDbm, src.peakDbm, src.peakMhz);
+				src.omittedHoles, src.noiseDbm, src.peakDbm, src.peakMhz, src.freqStartHz);
 	}
 
 	private static String textResult(String json, boolean isError)
