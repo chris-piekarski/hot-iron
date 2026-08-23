@@ -165,4 +165,86 @@ class PersistentDisplayTest {
 
         assertNotNull(pd.getDisplayImage().getValue());
     }
+
+    @Test
+    void persistenceDecaysByHalfLifeAndSkipsAPauseGap() throws Exception {
+        PersistentDisplay pd = new PersistentDisplay();
+        pd.setImageSize(8, 8);
+        pd.setPersistenceTime(1);
+
+        DatasetSpectrum ds = new DatasetSpectrum(1_000_000f, 2400, 2401, SpectrumPowerScale.EMPTY_CEILING);
+        ds.getSpectrumArray()[0] = -50f;
+
+        java.lang.reflect.Field calField = PersistentDisplay.class.getDeclaredField("calibrated");
+        calField.setAccessible(true);
+        calField.setBoolean(pd, true);
+        java.lang.reflect.Field lastField = PersistentDisplay.class.getDeclaredField("lastDecayMillis");
+        lastField.setAccessible(true);
+        lastField.setLong(pd, System.currentTimeMillis());
+
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        float peak = max(accum(pd));
+        assertTrue(peak > 0.5f);
+
+        ds.getSpectrumArray()[0] = SpectrumPowerScale.EMPTY_CEILING;
+        lastField.setLong(pd, System.currentTimeMillis() - 1000);
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        float afterHalf = max(accum(pd));
+        assertEquals(peak * 0.5f, afterHalf, peak * 0.05f);
+
+        lastField.setLong(pd, System.currentTimeMillis() - 5000);
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        assertEquals(afterHalf, max(accum(pd)), 0.01f);
+    }
+
+    @Test
+    void flushFadesToZeroAndIgnoresNewHits() throws Exception {
+        PersistentDisplay pd = new PersistentDisplay();
+        pd.setImageSize(8, 8);
+        pd.setPersistenceTime(30);
+
+        DatasetSpectrum ds = new DatasetSpectrum(1_000_000f, 2400, 2401, SpectrumPowerScale.EMPTY_CEILING);
+        ds.getSpectrumArray()[0] = -50f;
+
+        java.lang.reflect.Field calField = PersistentDisplay.class.getDeclaredField("calibrated");
+        calField.setAccessible(true);
+        calField.setBoolean(pd, true);
+
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        float peak = pd.maxAccumulated();
+        assertTrue(peak > 0.5f);
+
+        long t0 = 1_000_000L;
+        pd.beginFlush(t0);
+        assertTrue(pd.isFlushing(t0));
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        assertEquals(peak, pd.maxAccumulated(), 0.01f);
+
+        assertTrue(pd.tickFlush(t0 + PersistentDisplay.FLUSH_HALF_LIFE_MS));
+        assertEquals(peak * 0.5f, pd.maxAccumulated(), peak * 0.08f);
+
+        assertFalse(pd.tickFlush(t0 + PersistentDisplay.FLUSH_MAX_MS));
+        assertEquals(0f, pd.maxAccumulated(), 0.001f);
+        assertFalse(pd.isFlushing(t0 + PersistentDisplay.FLUSH_MAX_MS));
+
+        pd.drawSpectrumFloat(ds, -120f, -30f, false);
+        assertTrue(pd.maxAccumulated() > 0.5f, "after flush, new hits accumulate again");
+    }
+
+    private static float[] accum(PersistentDisplay pd) throws Exception {
+        java.lang.reflect.Field accumField = PersistentDisplay.class.getDeclaredField("imagePowerAccumulated");
+        accumField.setAccessible(true);
+        Object accum = accumField.get(pd);
+        java.lang.reflect.Field dataField = accum.getClass().getDeclaredField("data");
+        dataField.setAccessible(true);
+        return (float[]) dataField.get(accum);
+    }
+
+    private static float max(float[] data) {
+        float m = 0;
+        for (float v : data)
+            if (v > m)
+                m = v;
+        return m;
+    }
 }

@@ -10,12 +10,13 @@ public class DatasetSpectrumPeak extends DatasetSpectrum
 	protected long		peakFalloutMillis	= 1000;
 	protected float		peakFallThreshold;
 	/**
-	 * stores EMA decaying peaks
+	 * Decaying peak (same samples as {@link #spectrumPeakHold}).
 	 */
 	protected float[]	spectrumPeak;
 
 	/**
-	 * stores real peaks and if {@link #spectrumPeak} falls more than preset value below it, start using values from {@link #spectrumPeak}
+	 * Plotted peak hold: snaps up to a new high, then falls toward live
+	 * with half-life {@link #peakFalloutMillis}.
 	 */
 	protected float[]	spectrumPeakHold;
 	
@@ -67,26 +68,20 @@ public class DatasetSpectrumPeak extends DatasetSpectrum
 	
 	public void refreshPeakSpectrum()
 	{
-		long timeDiffFromPrevValueMillis = System.currentTimeMillis() - lastAdded;
-		if (timeDiffFromPrevValueMillis < 1)
-			timeDiffFromPrevValueMillis = 1;
-		
-		lastAdded = System.currentTimeMillis();
-		
+		long now = System.currentTimeMillis();
+		long dt = now - lastAdded;
+		if (dt < 1)
+			dt = 1;
+		lastAdded = now;
+
 		for (int spectrIndex = 0; spectrIndex < spectrum.length; spectrIndex++)
 		{
-			float spectrumVal = spectrum[spectrIndex];
-			if (spectrumVal > spectrumPeakHold[spectrIndex])
-			{
-				spectrumPeakHold[spectrIndex] = spectrumPeak[spectrIndex] = spectrumVal;
-			}
-
-			spectrumPeak[spectrIndex] = (float) EMA.calculateTimeDependent(spectrumVal, spectrumPeak[spectrIndex], timeDiffFromPrevValueMillis,
-					peakFalloutMillis);
-			if (spectrumPeakHold[spectrIndex] - spectrumPeak[spectrIndex] > peakFallThreshold)
-			{
-				spectrumPeakHold[spectrIndex] = spectrumPeak[spectrIndex];
-			}
+			float live = spectrum[spectrIndex];
+			if (isChartHole(live))
+				continue;
+			float next = EMA.decayToward(live, spectrumPeakHold[spectrIndex], dt, peakFalloutMillis);
+			spectrumPeakHold[spectrIndex] = next;
+			spectrumPeak[spectrIndex] = next;
 		}
 	}
 

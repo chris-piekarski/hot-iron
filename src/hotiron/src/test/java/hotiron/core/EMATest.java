@@ -33,6 +33,16 @@ class EMATest {
     }
 
     @Test
+    void decayTowardIsAHalfLifeAndSnapsUpOrOnZero() {
+        assertEquals(-60f, EMA.decayToward(-90f, -30f, 1000, 1000), 0.01f);
+        assertEquals(-75f, EMA.decayToward(-90f, -30f, 2000, 1000), 0.01f);
+        assertEquals(-20f, EMA.decayToward(-20f, -40f, 1000, 1000), 0.01f);
+        assertEquals(-80f, EMA.decayToward(-80f, -30f, 100, 0), 0.01f);
+        assertEquals(1.0, EMA.decayFactor(0, 1000), 1e-9);
+        assertEquals(0.5, EMA.decayFactor(1000, 1000), 1e-9);
+    }
+
+    @Test
     void testGetEmaAfterAdds() {
         EMA ema = new EMA(3);
         ema.addNewValue(10);

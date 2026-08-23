@@ -69,12 +69,68 @@ public class PersistentDisplay {
 	private HotIronBluePalette			palette				= new HotIronBluePalette();
 	private int							persistenceTimeSecs	= 5;
 	private float						updatesPerSecond	= 1;
+	private long						lastDecayMillis		= 0;
+	private long						flushUntilMillis	= 0;
+	private static final long			PAUSE_DECAY_SKIP_MS	= 2000;
+	static final long					FLUSH_HALF_LIFE_MS	= 55;
+	static final long					FLUSH_MAX_MS		= 350;
+	private static final float			ZERO_THRESHOLD		= 0.01f;
 
 	public PersistentDisplay() {
 		setImageSize(320, 240);
 	}
 
+	public void beginFlush() {
+		beginFlush(System.currentTimeMillis());
+	}
+
+	void beginFlush(long nowMs) {
+		flushUntilMillis = nowMs + FLUSH_MAX_MS;
+		lastDecayMillis = nowMs;
+	}
+
+	public boolean isFlushing() {
+		return isFlushing(System.currentTimeMillis());
+	}
+
+	boolean isFlushing(long nowMs) {
+		return flushUntilMillis > 0 && nowMs < flushUntilMillis;
+	}
+
+	/**
+	 * Fast-fade the overlay toward black. Returns true while the flush
+	 * still has frames to show. Does not accumulate new spectrum.
+	 */
+	public boolean tickFlush(long nowMs) {
+		BufferedImage image;
+		FloatImage accum;
+		synchronized (imageLock) {
+			image = this.drawImage;
+			accum = this.imagePowerAccumulated;
+			if (image == null || accum == null) {
+				flushUntilMillis = 0;
+				return false;
+			}
+			if (lastDecayMillis <= 0)
+				lastDecayMillis = nowMs;
+			long dt = nowMs - lastDecayMillis;
+			lastDecayMillis = nowMs;
+			if (dt > 0)
+				accum.multiplyAllValues((float) EMA.decayFactor(dt, FLUSH_HALF_LIFE_MS));
+			boolean done = nowMs >= flushUntilMillis || max(accum.data) < ZERO_THRESHOLD;
+			if (done) {
+				java.util.Arrays.fill(accum.data, 0);
+				flushUntilMillis = 0;
+			}
+			renderLocked(image, accum);
+		}
+		publishImage(image);
+		return flushUntilMillis > 0;
+	}
+
 	public void drawSpectrumFloat(DatasetSpectrum datasetSpectrum, float yMin, float yMax, boolean renderImage) {
+		if (flushUntilMillis > 0)
+			return;
 		if (!calibrated) {
 			if (!calibrating) {
 				calibrating = true;
@@ -111,16 +167,17 @@ public class PersistentDisplay {
 		if (image == null || imagePowerAccumulated == null)
 			return;
 
-		float rawImagePowerArr[] = imagePowerAccumulated.data;
-
-		/**
-		 * EMA
-		 */
-		float order = persistenceTimeSecs * updatesPerSecond;
-		float k = 2f / (order + 1f);
-		//		double result = currentValue * k + previousEMA * (1 - k);
-		float kM1 = 1 - k; /* apply decay only */
-		imagePowerAccumulated.multiplyAllValues(kM1);
+		long now = System.currentTimeMillis();
+		if (lastDecayMillis <= 0)
+			lastDecayMillis = now;
+		long dt = now - lastDecayMillis;
+		if (dt > 0 && dt <= PAUSE_DECAY_SKIP_MS)
+		{
+			imagePowerAccumulated.multiplyAllValues(
+					(float) EMA.decayFactor(dt, persistenceTimeSecs * 1000L));
+			updatesPerSecond = 0.8f * updatesPerSecond + 0.2f * (1000f / dt);
+		}
+		lastDecayMillis = now;
 
 		float[] spectrum = datasetSpectrum.getSpectrumArray();
 		int width = image.getWidth();
@@ -157,65 +214,49 @@ public class PersistentDisplay {
 		 * render image only when requested
 		 */
 		if (renderImage) {
-			/**
-			 * Find the max value to properly scale
-			 */
-			float maxValue = Float.MIN_NORMAL;
-			for (int i = 0; i < rawImagePowerArr.length; i++) {
-				float value = rawImagePowerArr[i];
-				if (value > maxValue)
-					maxValue = value;
-			}
-
-			/**
-			 * Fill the image with black color
-			 */
-			//			Graphics2D g	= image.createGraphics();
-			//			g.setColor(Color.red);
-			//			g.fillRect(0, 0, width, height);
-			//			g.dispose();
-			//			renderImage	= false;
-			//			
-
-			float setToZeroThreshold = 0.01f;
-			float minOutToLog = 1.0f;
-			float maxOutToLog = 100;
-			float logMin = (float) Math.log10(minOutToLog);
-			float logMax = (float) Math.log10(maxOutToLog);
-			for (int x = 0; x < width; x++) {
-				for (int y = 0; y < height; y++) {
-					float val = imagePowerAccumulated.get(x, y);
-					if (val < setToZeroThreshold) {
-						imagePowerAccumulated.set(x, y, 0);
-						val = 0;
-					}
-
-					if (val == 0) {
-						image.setRGB(x, y, Color.black.getRGB());
-					} else {
-						float outPower = val;
-
-						/**
-						 * Log compressed values
-						 */
-						outPower = (float) Math.log10(map(outPower, 0, maxValue, minOutToLog, maxOutToLog));
-						float normalized = map(outPower, logMin, logMax, 0.15f, 0.95f); //(imagePowerAccumulated.get(x, y)) / (maxValue);
-
-						/**
-						 * linear values
-						 */
-						//						float normalized	= map(outPower, 0, maxValue, 0.4f, 0.9f); //(imagePowerAccumulated.get(x, y)) / (maxValue);
-
-						Color color = palette.getColorNormalized(normalized);
-
-						image.setRGB(x, y, color.getRGB());
-						//						g.setColor(color);
-						//						g.drawLine(x, y, x, y);
-					}
-				}
-			}
+			renderLocked(image, imagePowerAccumulated);
 			publishImage(image);
 		}
+	}
+
+	private void renderLocked(BufferedImage image, FloatImage accum) {
+		float[] raw = accum.data;
+		float maxValue = Float.MIN_NORMAL;
+		for (int i = 0; i < raw.length; i++) {
+			if (raw[i] > maxValue)
+				maxValue = raw[i];
+		}
+		int width = image.getWidth();
+		int height = image.getHeight();
+		float minOutToLog = 1.0f;
+		float maxOutToLog = 100;
+		float logMin = (float) Math.log10(minOutToLog);
+		float logMax = (float) Math.log10(maxOutToLog);
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
+				float val = accum.get(x, y);
+				if (val < ZERO_THRESHOLD) {
+					accum.set(x, y, 0);
+					val = 0;
+				}
+				if (val == 0)
+					image.setRGB(x, y, Color.black.getRGB());
+				else {
+					float outPower = (float) Math.log10(map(val, 0, maxValue, minOutToLog, maxOutToLog));
+					float normalized = map(outPower, logMin, logMax, 0.15f, 0.95f);
+					image.setRGB(x, y, palette.getColorNormalized(normalized).getRGB());
+				}
+			}
+		}
+	}
+
+	private static float max(float[] data) {
+		float m = 0;
+		for (float v : data) {
+			if (v > m)
+				m = v;
+		}
+		return m;
 	}
 
 	/** Chart/EDT only ever sees this copy; {@code image} may be written again. */
@@ -248,6 +289,8 @@ public class PersistentDisplay {
 
 		calibrated = false;
 		calibrating = false;
+		lastDecayMillis = 0;
+		flushUntilMillis = 0;
 
 		System.out.println("Persistent image set to " + width + "x" + height);
 		// Heap INT_RGB: compatible/accelerated images crash in libawt when
@@ -262,5 +305,11 @@ public class PersistentDisplay {
 
 	public void setPersistenceTime(int persistenceTimeSecs) {
 		this.persistenceTimeSecs = persistenceTimeSecs;
+	}
+
+	float maxAccumulated() {
+		synchronized (imageLock) {
+			return imagePowerAccumulated == null ? 0 : max(imagePowerAccumulated.data);
+		}
 	}
 }

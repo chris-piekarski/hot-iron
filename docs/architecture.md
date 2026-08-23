@@ -44,7 +44,7 @@ flowchart TD
 - `RadioMode` — derived (`stopped` / `sweep` / `listen` / `watch`), not stored
 - `AutoGainPolicy` (LNA then VGA; display policy, writes radio gain)
 - `FmListenGainPolicy` / `TvWatchGainPolicy` — parked-IQ seeds (Listen adds IF so a 200 kHz station uses the 8-bit ADC; Watch UHF starts at LNA 40 + VGA 22, Auto Watch enables the RF amp for that session, and IF keeps trimming toward ~0.5 RMS)
-- `BandScanSession` — FM/TV tuner **Scan** dwells the broadcast window (TV: VHF then UHF) so **Seek** jumps a pinned station list
+- `BandScanSession` — FM/TV tuner **Scan** dwells each broadcast window after the first live sweep (TV: VHF then UHF) so **Seek** jumps a pinned station list
 - `AutoSweepPolicy` (FFT Bin + samples from span; display policy, writes radio FFT/samples; hysteresis so pan does not thrash)
 - `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz pad so FM 88–108 is filled)
 - `FrequencyAxis`, `BandMark`, `WifiBandLayer`, `FmBandLayer`, `TvBandLayer` (plot overlays do not invent their own MHz↔pixel map)
@@ -253,6 +253,8 @@ classDiagram
     class EMA {
         +calculate()
         +addNewValue()
+        +decayToward()
+        +decayFactor()
     }
     class FrequencyAllocationTable {
         +lookupBand()
@@ -284,11 +286,14 @@ classDiagram
     SpurFilter --> DatasetSpectrum
     PersistentDisplay --> DatasetSpectrum
     PersistentDisplay --> EMA
+    DatasetSpectrumPeak --> EMA
     FrequencyAllocationTable --> FrequencyBand
     SpectrumSweepEngine --> DatasetSpectrumPeak
     SpectrumSweepEngine --> SpurFilter
     AutoGainPolicy --> DatasetSpectrum
 ```
+
+Peak hold snaps up to a new high, then `EMA.decayToward` the live bin with the operator half-life (`0` follows live). Chart holes are skipped. Persistent display uses the same half-life factor on wall-clock `dt` so a sweep-rate change does not retune the fade. A Quick Select or FM/TV mode change calls `beginFlush` (~350 ms, 55 ms half-life) so the old glow does not sit on the new axis.
 
 ```mermaid
 classDiagram

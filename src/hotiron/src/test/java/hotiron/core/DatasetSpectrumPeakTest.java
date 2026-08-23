@@ -11,61 +11,60 @@ class DatasetSpectrumPeakTest {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2500, -120f, 5f, 1000L);
         assertEquals(1000, peak.spectrumLength());
         assertEquals(-120f, peak.getPower(0));
-        // peaks should be initialized to init power
     }
 
     @Test
     void testRefreshPeakSpectrumWithNewHigh() {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 1000L);
-        // set some spectrum data
         float[] spectrum = peak.getSpectrumArray();
         spectrum[0] = -50f;
         spectrum[1] = -60f;
-
-        // simulate time passage
         peak.lastAdded = System.currentTimeMillis() - 100;
-
         peak.refreshPeakSpectrum();
-
-        // high value should set both peak and hold
         assertEquals(-50f, peak.spectrumPeak[0], 0.001f);
         assertEquals(-50f, peak.spectrumPeakHold[0], 0.001f);
     }
 
     @Test
-    void testPeakFallBelowThresholdHolds() {
-        DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 5f, 1000L);
+    void halfLifeMovesHoldHalfwayTowardLive() {
+        DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 1000L);
         float[] spectrum = peak.getSpectrumArray();
-        spectrum[0] = -50f;
-
-        peak.lastAdded = System.currentTimeMillis() - 100;
+        spectrum[0] = -30f;
+        peak.lastAdded = System.currentTimeMillis() - 1;
         peak.refreshPeakSpectrum();
+        assertEquals(-30f, peak.spectrumPeakHold[0], 0.001f);
 
-        // now lower value but within threshold
-        spectrum[0] = -53f;
-        peak.lastAdded = System.currentTimeMillis() - 100;
+        spectrum[0] = -90f;
+        peak.lastAdded = System.currentTimeMillis() - 1000;
         peak.refreshPeakSpectrum();
-
-        // hold should still be the high value since diff < threshold
-        assertEquals(-50f, peak.spectrumPeakHold[0], 0.001f);
+        assertEquals(-60f, peak.spectrumPeakHold[0], 0.05f);
+        assertEquals(peak.spectrumPeakHold[0], peak.spectrumPeak[0], 0.001f);
     }
 
     @Test
-    void testPeakFallExceedsThresholdUpdatesHold() {
-        DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 5f, 1000L);
+    void zeroHalfLifeFollowsLive() {
+        DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 0L);
         float[] spectrum = peak.getSpectrumArray();
-        spectrum[0] = -50f;
-
-        peak.lastAdded = System.currentTimeMillis() - 100;
+        spectrum[0] = -40f;
+        peak.lastAdded = System.currentTimeMillis() - 50;
         peak.refreshPeakSpectrum();
-
-        // much lower; use a large dt so EMA k is high enough to exceed the 5 dB threshold
-        spectrum[0] = -70f;
-        peak.lastAdded = System.currentTimeMillis() - 1000;
+        spectrum[0] = -80f;
+        peak.lastAdded = System.currentTimeMillis() - 50;
         peak.refreshPeakSpectrum();
+        assertEquals(-80f, peak.spectrumPeakHold[0], 0.001f);
+    }
 
-        // now hold should have fallen
-        assertTrue(peak.spectrumPeakHold[0] < -50f);
+    @Test
+    void chartHolesDoNotPullPeaksDown() {
+        DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -150f, 10f, 1000L);
+        float[] spectrum = peak.getSpectrumArray();
+        spectrum[0] = -40f;
+        peak.lastAdded = System.currentTimeMillis() - 1;
+        peak.refreshPeakSpectrum();
+        spectrum[0] = SpectrumPowerScale.EMPTY_CEILING;
+        peak.lastAdded = System.currentTimeMillis() - 5000;
+        peak.refreshPeakSpectrum();
+        assertEquals(-40f, peak.spectrumPeakHold[0], 0.001f);
     }
 
     @Test
@@ -76,7 +75,6 @@ class DatasetSpectrumPeakTest {
         hold[1] = -40f;
 
         double power = peak.calculateSpectrumPeakPower();
-        // rough check: should be finite and reasonable
         assertTrue(power > -100 && power < 0);
     }
 
@@ -113,28 +111,16 @@ class DatasetSpectrumPeakTest {
     }
 
     @Test
-    void testMultipleRefreshesWithSimulatedTime() {
+    void twoHalfLivesLeaveAQuarterOfTheGap() {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 8f, 500L);
         float[] spectrum = peak.getSpectrumArray();
-        spectrum[0] = -55f;
-        spectrum[1] = -65f;
-
-        long baseTime = System.currentTimeMillis();
-        peak.lastAdded = baseTime - 200;
+        spectrum[0] = -20f;
+        peak.lastAdded = System.currentTimeMillis() - 1;
         peak.refreshPeakSpectrum();
-
-        // Simulate time passing
-        peak.lastAdded = baseTime - 50;
-        spectrum[0] = -58f;  // slight drop
+        spectrum[0] = -80f;
+        peak.lastAdded = System.currentTimeMillis() - 1000;
         peak.refreshPeakSpectrum();
-
-        // Now larger time and bigger drop to trigger threshold
-        peak.lastAdded = baseTime - 1000;
-        spectrum[0] = -90f;
-        peak.refreshPeakSpectrum();
-
-        assertTrue(peak.spectrumPeakHold[0] < -55f);  // should have updated due to time + threshold
-        assertTrue(peak.spectrumPeak[0] < -55f);
+        assertEquals(-65f, peak.spectrumPeakHold[0], 0.1f);
     }
 
     @Test
@@ -142,9 +128,8 @@ class DatasetSpectrumPeakTest {
         DatasetSpectrumPeak peak = new DatasetSpectrumPeak(100000f, 2400, 2401, -120f, 10f, 1000L);
         peak.resetPeaks();
         double power = peak.calculateSpectrumPeakPower();
-        assertTrue(Double.isFinite(power) || power < 0);  // should be low/negative for init power
+        assertTrue(Double.isFinite(power) || power < 0);
 
-        // Set some peaks and recalc
         peak.spectrumPeakHold[0] = -20f;
         peak.spectrumPeakHold[1] = -30f;
         double power2 = peak.calculateSpectrumPeakPower();

@@ -5,7 +5,8 @@ import java.util.Optional;
 
 /**
  * Dwell each survey window long enough for the station tracker to rise
- * above {@code SHOW_AT}, then advance (TV is VHF then UHF).
+ * above {@code SHOW_AT}, then advance (TV is VHF then UHF). The dwell
+ * clock starts on {@link #markLive} so USB retune is not counted.
  */
 public final class BandScanSession
 {
@@ -14,6 +15,7 @@ public final class BandScanSession
 	private BandScan kind = BandScan.OFF;
 	private int windowIndex;
 	private long windowStartedMs;
+	private boolean windowLive;
 
 	public void start(BandScan kind, long nowMs)
 	{
@@ -22,6 +24,7 @@ public final class BandScanSession
 		this.kind = kind;
 		this.windowIndex = 0;
 		this.windowStartedMs = nowMs;
+		this.windowLive = false;
 	}
 
 	public void stop()
@@ -29,6 +32,24 @@ public final class BandScanSession
 		kind = BandScan.OFF;
 		windowIndex = 0;
 		windowStartedMs = 0;
+		windowLive = false;
+	}
+
+	/**
+	 * Start the dwell clock on the first full sweep of the current window
+	 * so USB retune time is not counted.
+	 */
+	public void markLive(long nowMs)
+	{
+		if (!active() || windowLive)
+			return;
+		windowLive = true;
+		windowStartedMs = nowMs;
+	}
+
+	public boolean windowLive()
+	{
+		return windowLive;
 	}
 
 	public boolean active()
@@ -67,6 +88,7 @@ public final class BandScanSession
 			return Optional.empty();
 		windowIndex++;
 		windowStartedMs = nowMs;
+		windowLive = false;
 		return Optional.of(windows.get(windowIndex));
 	}
 
@@ -96,6 +118,6 @@ public final class BandScanSession
 
 	private boolean dwellElapsed(long nowMs)
 	{
-		return nowMs - windowStartedMs >= DWELL_MS;
+		return windowLive && nowMs - windowStartedMs >= DWELL_MS;
 	}
 }

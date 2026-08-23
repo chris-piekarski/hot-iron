@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto FFT / samples** (default on): `AutoSweepPolicy` picks FFT Bin and Number of samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast. Hysteresis avoids USB thrash on pan. Uncheck Auto to override.
 
 ### Changed
+- TV Scan dwells each window only after the first live sweep (USB retune is not counted), clears the waterfall on the VHF→UHF hop, and holds Auto-gain so a late USB restart does not wipe the UHF graph.
+- Peak hold and persistent display use a real half-life (default 15 s / 30 s). The peak line falls toward live instead of sitting then snapping after 15 dB; `0` follows live; empty hop bins do not pull peaks down. Persistence ages from wall-clock so Auto FFT / zoom does not change the fade, and a pause does not wipe the glow. Quick Select, FM↔TV, and Listen/Watch transitions flush the old glow with a ~350 ms decay so it does not remap onto the new axis.
 - Startup Quick Select is **WiFi 2** (highlighted) and the first sweep/chart opens on 2402–2472 MHz.
 - Quick Select while **Listen** or **Watch** is parked stops FM/TV and resumes the sweep on that band.
 - FM and TV tuners have **Scan**: survey the broadcast band (FM 88–108; TV VHF then UHF) and pin those hits as the list **Seek** jumps between.

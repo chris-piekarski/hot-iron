@@ -217,6 +217,7 @@ public class HotIron {
 	private boolean									spectrumZoomDragging;
 	private int										spectrumZoomAnchorX;
 	private PersistentDisplay						persistentDisplay					= new PersistentDisplay();
+	private javax.swing.Timer						persistFlushTimer;
 	private float									spectrumInitValue					= -150;
 	private SpurFilter								spurFilter;
 	private SpectrumSweepEngine						sweepEngine;
@@ -543,15 +544,23 @@ public class HotIron {
 			settings.stopScan();
 	}
 
-	private void advanceBandScan() {
+	private void advanceBandScan(DatasetSpectrumPeak ds) {
 		if (!scanSession.active())
 			return;
 		long now = System.currentTimeMillis();
+		FrequencyRange window = scanSession.currentWindow();
+		if (window != null && ds != null && window.getStartMHz() == ds.getFreqStartMHz()
+				&& window.getEndMHz() == ds.getFreqStopMHz())
+			scanSession.markLive(now);
 		if (scanSession.shouldFinish(now)) {
 			settings.stopScan();
 			return;
 		}
-		scanSession.nextWindowIfDue(now).ifPresent(next -> settings.getFrequency().setValue(next));
+		scanSession.nextWindowIfDue(now).ifPresent(next -> {
+			if (waterfallPlot != null)
+				waterfallPlot.clearHistory();
+			settings.getFrequency().setValue(next);
+		});
 	}
 
 	private void publishDetectedStations(java.util.List<FmStationHit> hits) {
@@ -650,7 +659,7 @@ public class HotIron {
 						sweepRange.getStartMHz(), sweepRange.getEndMHz());
 				publishDetectedTvStations(tvStations);
 			}
-			advanceBandScan();
+			advanceBandScan(ds);
 			considerAutoGain(ds, sweepRange);
 
 			if (System.currentTimeMillis() - perfWatch.lastStatisticsRefreshed > 1000) {
@@ -758,6 +767,18 @@ public class HotIron {
 		}
 	}
 
+	private void flushPersistentOverlay() {
+		persistentDisplay.beginFlush();
+		if (GraphicsEnvironment.isHeadless())
+			return;
+		if (persistFlushTimer == null)
+			persistFlushTimer = new javax.swing.Timer(33, e -> {
+				if (!persistentDisplay.tickFlush(System.currentTimeMillis()))
+					persistFlushTimer.stop();
+			});
+		persistFlushTimer.restart();
+	}
+
 	private void applyAutoSweep(FrequencyRange range, boolean restart) {
 		flagApplyingAutoSweep = true;
 		flagCoalesceAutoSweep = true;
@@ -773,7 +794,8 @@ public class HotIron {
 	}
 
 	private void maybeSeedAutoGain(FrequencyRange range) {
-		if (range == null || !settings.isAutoGain().getValue() || settings.isListening().getValue())
+		if (range == null || !settings.isAutoGain().getValue() || settings.isListening().getValue()
+				|| scanSession.active())
 			return;
 		Integer seed = autoGainLoop.seedIfBandShifted(range.getStartMHz(), range.getEndMHz(),
 				settings.getGain().getValue());
@@ -787,7 +809,8 @@ public class HotIron {
 		if (ds == null || range == null)
 			return;
 		if (!settings.isAutoGain().getValue() || settings.isCapturingPaused().getValue()
-				|| settings.isRadioReleased().getValue() || settings.isListening().getValue())
+				|| settings.isRadioReleased().getValue() || settings.isListening().getValue()
+				|| scanSession.active())
 			return;
 		AutoGainPolicy.Observation obs = AutoGainPolicy.observe(ds, settings.getGain().getValue(),
 				range.getStartMHz(), range.getEndMHz());
@@ -1311,12 +1334,15 @@ public class HotIron {
 				return;
 			}
 			scanSession.start(scan, System.currentTimeMillis());
+			if (waterfallPlot != null)
+				waterfallPlot.clearHistory();
 			if (scan == hotiron.core.BandScan.FM)
 				fmTracker.reset();
 			else
 				tvTracker.reset();
 		});
 		settings.getFrequency().addListener((range) -> {
+			flushPersistentOverlay();
 			if (chart != null)
 				chart.getXYPlot().getDomainAxis().setRange(range.getStartMHz(), range.getEndMHz());
 			if (!applyingSpectrumZoom)
@@ -1365,10 +1391,12 @@ public class HotIron {
 			tvEngine.setVolume(v);
 		});
 		settings.isListening().addListener(() -> {
+			flushPersistentOverlay();
 			snapshotStore.publishContext(settings, fmStations, 0);
 			if (chartPanel != null)
 				SwingUtilities.invokeLater(chartPanel::repaint);
 		});
+		settings.getListenService().addListener(svc -> flushPersistentOverlay());
 		settings.isCapturingPaused().addListener(this::fireCapturingStateChanged);
 
 		settings.getGain().addListener((gainTotal) -> {

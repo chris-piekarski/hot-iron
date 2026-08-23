@@ -330,7 +330,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		chckbxRemoveSpurs = new JCheckBox("");
 		tab2.add(chckbxRemoveSpurs, "cell 0 13,alignx right");
 		
-		lblPeakFall = new JLabel("  Fall speed [s]");
+		lblPeakFall = new JLabel("  Peak half-life [s]");
 		tab2.add(lblPeakFall, "flowx,cell 0 11,growx");
 		
 		spinnerPeakFallSpeed = new JSpinner();
@@ -340,7 +340,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		lblPersistentDisplay = new JLabel("Persistent Display");
 		tab2.add(lblPersistentDisplay, "flowx,cell 0 15,growx");
 		
-		lblDecayRate = new JLabel("  Persistence time [s]");
+		lblDecayRate = new JLabel("  Persistence half-life [s]");
 		tab2.add(lblDecayRate, "flowx,cell 0 16,growx");
 		
 		JLabel lblDisplayFrequencyAllocation = new JLabel("Frequency Allocation Bands");

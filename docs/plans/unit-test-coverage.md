@@ -74,7 +74,7 @@ Rules the suite still follows:
 | `DatasetSpectrumTest` | `var`; `addNewData` freqs were MHz | Native path uses **Hz**. `{2400e6, 2400.1e6, 2499.9e6}` writes bins; float freq compare uses 200 Hz delta (`float` cannot represent 2.4e9 exactly) |
 | `MVCControllerTest` | `new MVCController<>()` illegal (class is not generic); no EDT flush | `new MVCController(`; `flushEdt()` before asserts; spinner uses `SpinnerListModel` like production (default number model rejects `"8192"`) |
 | `ModelValueTest` | Invented `getName()`, `Listener`, `removeListener` | `toString()` is the name; `Consumer`/`Runnable` listeners; equals no-op; bounded `IllegalStateException` |
-| `DatasetSpectrumPeakTest.testPeakFallExceedsThresholdUpdatesHold` | `dt≈100ms` / fallout 1000ms only moves EMA ~3.6 dB vs 5 dB threshold | `lastAdded = now-1000` so `k` is large enough that hold falls. Algorithm unchanged. |
+| `DatasetSpectrumPeakTest` peak fall | Hold sat until a 15 dB EMA snap | Half-life toward live; `0` follows live; holes skipped |
 | `GraphicsToolkitTest.testInvalidSize` | Expected 0-width image | 0×0 becomes 1×1; assert ≥1 |
 
 ---
@@ -116,7 +116,7 @@ Package-private accessors on `HackRFSweepSettingsUI` (same package as the test):
 | `quickSelectButtonsSetKnownRanges` | Every `QuickSelectPreset` button: WiFi 2 → 2402–2472, WiFi 5 → 5170–5895, LTE-1 → 1695–2200, LTE-2 → 617–960, FM → 88–108, NFC → 13–14, HF → 3–30, VHF → 30–300, UHF → 300–3000, V-TV → 54–216, U-TV → 470–608, 6m → 50–54, 2m → 144–148, 70cm → 420–450, 33cm → 902–928; `quick.getValue()` matches the label; the clicked button stays highlighted |
 | `clickingSamePresetAgainRestoresRange` | Second WiFi 2 click restores 2402–2472 after the range was edited; an edited range clears the highlight |
 | `defaultRangeHighlightsWifi2` | Binder + default range panel lights **WiFi 2** (2402–2472) |
-| `BandScanSession` | FM finishes after one dwell; TV goes VHF → UHF then finishes |
+| `BandScanSession` | Dwell starts on `markLive`; FM finishes after one live dwell; TV goes VHF → UHF then finishes |
 | `fmScanQsyzTheBandAndStopsListen` | `startFmScan` QSYs 88–108, clears Seek hits, leaves Listen; second click cancels |
 | `startEndVetoKeepsOrderByNudgingTheOtherSelector` | start 2000→3500 nudges end 3000→4500; end 4500→2500 nudges start 3500→1500 |
 | `startAtMaxCannotCrossEnd` | start cannot jump to 7250 when end is already 7250 (end cannot grow; veto) |
