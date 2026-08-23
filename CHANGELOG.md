@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- NFC spectrum overlay + live classifier: Quick Select is **12–15 MHz**, `NfcBandPlan` ticks carrier / A/B / F / V / 27.12 / 40.68, HUD + MCP `nfc_activity` report quiet / field on / polling / HiFER CW / card sidebands. Click a header tick to Scan PHY then harmonics. No UID/APDU decode; AirTags are not in this band. Notes: [docs/nfc.md](docs/nfc.md).
+- MCP `spectrum_history_bins`: same snapshot ring as `spectrum_history`, but each tick includes filled `points` (capped `maxSamples` / `maxPoints`). Not the waterfall image.
+
 ### Changed
+- Radio USB apply (Auto off, Listen/Watch retune, coalesced Auto writes) lives in `RadioCoordinator` with characterization tests. Operator UI and MCP still mutate the same `AnalyzerSettings`; they no longer grow `HotIron` listener flags.
+- Full-sweep live path is `SweepLiveLoop`: detect, scan, MCP publish (10 Hz), and chart paint (30 fps) are independent tested sinks. `HotIron` only paints.
+- Exclusive USB start/stop/join is `RadioSession` (last-launch-wins queue, 120 ms frequency debounce, Listen/Watch/sweep chosen at start). Native work stays on a driver in `HotIron`.
+- `RadioMode.of(settings)` is the only mode derivation (MCP, session, coordinator). Auto radio writes use `RadioCoordinator.Source` (`OPERATOR` / `AUTO_POLICY` only). Removed `intendedMode()`, unused Source values, and HotIron Seek-list wrappers.
+- `RadioSession.stopLauncher()` on JVM shutdown; launcher take-loop is unit-tested.
 - Listen and Watch parked-IQ spectrum uses the same peak half-life, persistence overlay, and `spectrum_history` ring as the wideband sweep. AUDIO/VIDEO waterfalls stay on the parked IQ strip.
 - GitHub remote is [`chris-piekarski/hot-iron`](https://github.com/chris-piekarski/hot-iron). The old `hackrf-spectrum-analyzer` slug redirects.
 

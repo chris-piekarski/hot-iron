@@ -37,7 +37,7 @@ class QuickSelectPresetTest {
         assertRange(QuickSelectPreset.WIFI_5, 5170, 5895);
         assertRange(QuickSelectPreset.LTE_1, 1695, 2200);
         assertRange(QuickSelectPreset.LTE_2, 617, 960);
-        assertRange(QuickSelectPreset.NFC, 13, 14);
+        assertRange(QuickSelectPreset.NFC, 12, 15);
         assertRange(QuickSelectPreset.FM, 88, 108);
         assertRange(QuickSelectPreset.HF, 3, 30);
         assertRange(QuickSelectPreset.VHF, 30, 300);
@@ -72,7 +72,7 @@ class QuickSelectPresetTest {
 
     @Test
     void presetSpansStaySane() {
-        assertEquals(1, QuickSelectPreset.NFC.endMHz - QuickSelectPreset.NFC.startMHz);
+        assertEquals(3, QuickSelectPreset.NFC.endMHz - QuickSelectPreset.NFC.startMHz);
         assertEquals(7249, QuickSelectPreset.ALL.endMHz - QuickSelectPreset.ALL.startMHz);
         assertEquals(20, QuickSelectPreset.FM.endMHz - QuickSelectPreset.FM.startMHz);
         assertEquals(27, QuickSelectPreset.HF.endMHz - QuickSelectPreset.HF.startMHz);

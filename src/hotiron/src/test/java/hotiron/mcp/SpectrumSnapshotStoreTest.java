@@ -152,4 +152,65 @@ class SpectrumSnapshotStoreTest {
 		assertTrue(hist.contains("\"sampleCount\":1"));
 		assertEquals(95_400_000L, store.latest().freqStartHz);
 	}
+
+	@Test
+	void historyBinsExportsPointsAndDropsADifferentAxis() {
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore(10);
+		AnalyzerSettings settings = new AnalyzerSettings();
+		settings.getGainLNA().setValue(24);
+		settings.getGainVGA().setValue(8);
+		store.publishContext(settings, List.of(), 10);
+		DatasetSpectrum wifi = new DatasetSpectrum(100_000f, 2402, 2472, -150f);
+		for (int i = 0; i < wifi.spectrumLength(); i++)
+			wifi.getSpectrumArray()[i] = -80f;
+		wifi.getSpectrumArray()[50] = -40f;
+		for (int t = 1000; t <= 1500; t += 100)
+			store.publishSweep(SpectrumSnapshot.fromDataset(wifi, t, 400, null), t);
+		DatasetSpectrum fm = new DatasetSpectrum(100_000f, 88, 108, -150f);
+		for (int i = 0; i < fm.spectrumLength(); i++)
+			fm.getSpectrumArray()[i] = -80f;
+		fm.getSpectrumArray()[10] = -50f;
+		store.publishSweep(SpectrumSnapshot.fromDataset(fm, 2000, 400, null), 2000);
+		String bins = store.historyBinsJson(5.0, 50, 32, null);
+		assertTrue(bins.contains("\"startMHz\":88"));
+		assertFalse(bins.contains("2402"), "Wi-Fi frames must not stitch onto FM");
+		assertTrue(bins.contains("\"sampleCount\":1"));
+		assertTrue(bins.contains("\"points\":["));
+		assertTrue(bins.contains("\"mhz\":"));
+		assertTrue(bins.contains("\"lnaGain\":24"));
+		assertTrue(bins.contains("\"maxPoints\":32"));
+		assertFalse(bins.contains("occupiedFraction"));
+	}
+
+	@Test
+	void historyBinsHonorsCapsAndMinDbm() {
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore(20);
+		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 88, 108, -150f);
+		ds.getSpectrumArray()[5] = -40f;
+		ds.getSpectrumArray()[6] = -90f;
+		for (int t = 0; t < 10; t++)
+			store.publishSweep(SpectrumSnapshot.fromDataset(ds, t * 1000L, 200, null), t * 1000L);
+		String few = store.historyBinsJson(30.0, 3, 8, null);
+		assertTrue(few.contains("\"sampleCount\":3"));
+		String capped = store.historyBinsJson(30.0, 200, 8, null);
+		assertTrue(capped.contains("\"sampleCount\":10"), "10 published frames, below the 50-sample cap");
+		String loud = store.historyBinsJson(30.0, 1, 200, -45.0);
+		int ptsAt = loud.indexOf("\"points\":");
+		assertTrue(ptsAt >= 0, loud);
+		String pts = loud.substring(ptsAt);
+		assertTrue(pts.contains("-40"));
+		assertFalse(pts.contains("-90"), pts);
+	}
+
+	@Test
+	void publishNfcReplacesTheLiveClassification()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		assertEquals(hotiron.core.NfcActivity.Kind.HIDDEN, store.nfcActivity().kind);
+		store.publishNfc(hotiron.core.NfcActivity.quietVisible());
+		assertEquals(hotiron.core.NfcActivity.Kind.QUIET, store.nfcActivity().kind);
+		assertTrue(store.nfcActivityJson().contains("\"kind\":\"quiet\""));
+		store.publishNfc(null);
+		assertEquals(hotiron.core.NfcActivity.Kind.HIDDEN, store.nfcActivity().kind);
+	}
 }

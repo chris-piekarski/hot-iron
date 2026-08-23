@@ -204,6 +204,11 @@ public class FakeHackRFSettings implements HackRFSettings {
 	}
 
 	@Override
+	public void startNfcScan() {
+		inner.startNfcScan();
+	}
+
+	@Override
 	public void stopScan() {
 		inner.stopScan();
 	}

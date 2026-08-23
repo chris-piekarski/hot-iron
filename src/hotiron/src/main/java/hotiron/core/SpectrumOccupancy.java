@@ -149,6 +149,8 @@ public final class SpectrumOccupancy
 			if (width < binMHz)
 				width = binMHz;
 			String label = WifiChannelPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
+			if (label == null)
+				label = NfcBandPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
 			emitters.add(new Emitter(peakAt, peak, start, end, width, label));
 		}
 		emitters.sort(Comparator.comparingDouble((Emitter e) -> e.peakDbm).reversed());

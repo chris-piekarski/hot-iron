@@ -349,6 +349,17 @@ public final class AnalyzerSettings implements HackRFSettings
 	}
 
 	@Override
+	public void startNfcScan()
+	{
+		if (bandScan.getValue() == BandScan.NFC)
+		{
+			stopScan();
+			return;
+		}
+		beginScan(BandScan.NFC, NfcBandPlan.phyWindow());
+	}
+
+	@Override
 	public void stopScan()
 	{
 		if (bandScan.getValue() == BandScan.OFF)
@@ -371,7 +382,7 @@ public final class AnalyzerSettings implements HackRFSettings
 		radioReleased.setValue(false);
 		if (scan == BandScan.FM)
 			detectedFmStations.setValue(List.of());
-		else
+		else if (scan == BandScan.TV)
 			detectedTvStations.setValue(List.of());
 		if (!window.equals(frequency.getValue()))
 			frequency.setValue(window);
@@ -430,12 +441,6 @@ public final class AnalyzerSettings implements HackRFSettings
 	public ModelValue<List<TvStationHit>> getDetectedTvStations()
 	{
 		return detectedTvStations;
-	}
-
-	public RadioMode radioMode()
-	{
-		return RadioMode.from(Boolean.TRUE.equals(radioReleased.getValue()),
-				Boolean.TRUE.equals(listening.getValue()), listenService.getValue());
 	}
 
 	@Override

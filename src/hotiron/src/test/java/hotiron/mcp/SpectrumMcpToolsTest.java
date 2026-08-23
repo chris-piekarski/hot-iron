@@ -50,9 +50,11 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("radio_identity"));
 		assertTrue(list.contains("sweep_config"));
 		assertTrue(list.contains("fm_stations"));
+		assertTrue(list.contains("nfc_activity"));
 		assertTrue(list.contains("fm_spectrum"));
 		assertTrue(list.contains("spectrum_occupancy"));
 		assertTrue(list.contains("spectrum_history"));
+		assertTrue(list.contains("spectrum_history_bins"));
 		assertTrue(list.contains("tv_watch"));
 		assertTrue(list.contains("tv_debug"));
 		assertTrue(list.contains("tv_spectrum"));
@@ -231,6 +233,22 @@ class SpectrumMcpToolsTest {
 	}
 
 	@Test
+	void nfcActivityReportsPublishedClassification()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		SpectrumMcpTools tools = new SpectrumMcpTools(store);
+		String hidden = tools.call("nfc_activity", Map.of());
+		assertTrue(hidden.contains("hidden"));
+		assertTrue(hidden.contains("trackingHint"));
+		assertTrue(hidden.contains("Bluetooth"));
+		store.publishNfc(hotiron.core.NfcActivity.quietVisible());
+		assertEquals(hotiron.core.NfcActivity.Kind.QUIET, store.nfcActivity().kind);
+		String quiet = tools.call("nfc_activity", Map.of());
+		assertTrue(quiet.contains("quiet"));
+		assertFalse(quiet.contains("\"isError\":true"));
+	}
+
+	@Test
 	void occupancyAndHistoryAreJsonRpcTextResults() {
 		SpectrumMcpTools tools = toolsWithSweep();
 		String occ = tools.handleRpc(
@@ -242,6 +260,11 @@ class SpectrumMcpToolsTest {
 				"{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/call\",\"params\":{\"name\":\"spectrum_history\",\"arguments\":{\"seconds\":15,\"maxSamples\":10}}}");
 		assertTrue(hist.contains("samples"));
 		assertTrue(hist.contains("2402"));
+		String bins = tools.handleRpc(
+				"{\"jsonrpc\":\"2.0\",\"id\":16,\"method\":\"tools/call\",\"params\":{\"name\":\"spectrum_history_bins\",\"arguments\":{\"seconds\":15,\"maxSamples\":5,\"maxPoints\":32}}}");
+		assertTrue(bins.contains("points"));
+		assertTrue(bins.contains("2402"));
+		assertFalse(bins.contains("\"isError\":true"));
 		String sum = tools.handleRpc(
 				"{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"spectrum_summary\"}}");
 		assertTrue(sum.contains("occupiedFraction"));
@@ -259,6 +282,10 @@ class SpectrumMcpToolsTest {
 				"{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"spectrum_history\"}}");
 		assertTrue(hist.contains("no sweep yet"));
 		assertTrue(hist.contains("\"isError\":true"));
+		String bins = tools.handleRpc(
+				"{\"jsonrpc\":\"2.0\",\"id\":19,\"method\":\"tools/call\",\"params\":{\"name\":\"spectrum_history_bins\"}}");
+		assertTrue(bins.contains("no sweep yet"));
+		assertTrue(bins.contains("\"isError\":true"));
 	}
 
 	@Test

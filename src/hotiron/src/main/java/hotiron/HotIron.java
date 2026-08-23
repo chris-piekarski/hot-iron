@@ -31,7 +31,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -84,15 +83,19 @@ import hotiron.core.FmChannelPlan;
 import hotiron.core.FmListenEngine;
 import hotiron.core.FmStationDial;
 import hotiron.core.FmStationHit;
-import hotiron.core.FmStationTracker;
+import hotiron.core.NfcActivity;
 import hotiron.core.FrequencyAxis;
 import hotiron.core.FrequencyAllocationTable;
 import hotiron.core.FrequencyAllocations;
 import hotiron.core.FrequencyBand;
 import hotiron.core.FrequencyRange;
 import hotiron.core.AutoGainPolicy;
-import hotiron.core.AutoSweepPolicy;
 import hotiron.core.GainPolicy;
+import hotiron.core.RadioCoordinator;
+import hotiron.core.RadioMode;
+import hotiron.core.RadioSession;
+import hotiron.core.StationDetectSink;
+import hotiron.core.SweepLiveLoop;
 import hotiron.core.FmListenGainPolicy;
 import hotiron.core.TvWatchGainPolicy;
 import hotiron.core.AudioSink;
@@ -189,12 +192,9 @@ public class HotIron {
 	private SpectrumPowerScale						powerScale;
 	private final hotiron.mcp.SpectrumSnapshotStore snapshotStore = new hotiron.mcp.SpectrumSnapshotStore();
 	private hotiron.mcp.SpectrumMcpServer	mcpServer;
-	private volatile boolean						flagManualGain						= false;
-	private volatile boolean						flagApplyingAutoGain				= false;
-	private volatile boolean						flagCoalesceGainRestart				= false;
-	private volatile boolean						flagApplyingAutoSweep				= false;
-	private volatile boolean						flagCoalesceAutoSweep				= false;
 	private final AutoGainPolicy.Loop				autoGainLoop						= new AutoGainPolicy.Loop();
+	private RadioCoordinator radio;
+	private RadioSession radioSession;
 	private volatile boolean						forceStopSweep						= false;
 	/**
 	 * Capture a GIF of the program for the GITHUB page
@@ -205,10 +205,11 @@ public class HotIron {
 	private ReentrantLock							lock								= new ReentrantLock();
 
 	private volatile List<FmStationHit>				fmStations							= List.of();
-	private final FmStationTracker					fmTracker							= new FmStationTracker();
+	private volatile NfcActivity					nfcActivity							= NfcActivity.quiet();
 	private volatile List<hotiron.core.TvStationHit> tvStations = List.of();
-	private final hotiron.core.TvStationTracker tvTracker = new hotiron.core.TvStationTracker();
+	private final StationDetectSink stationDetect = new StationDetectSink();
 	private final hotiron.core.BandScanSession scanSession = new hotiron.core.BandScanSession();
+	private SweepLiveLoop sweepLive;
 	private final hotiron.core.TvWatchEngine tvEngine = new hotiron.core.TvWatchEngine();
 	private final AtomicReference<BufferedImage> pendingTvFrame = new AtomicReference<>();
 	private final AtomicBoolean tvFrameUpdateQueued = new AtomicBoolean();
@@ -223,10 +224,7 @@ public class HotIron {
 	private SpurFilter								spurFilter;
 	private SpectrumSweepEngine						sweepEngine;
 	private Thread									threadHackrfSweep;
-	private ArrayBlockingQueue<Integer>				threadLaunchCommands				= new ArrayBlockingQueue<>(1);
-	private final javax.swing.Timer					radioApplyTimer					= new javax.swing.Timer(
-			SweepConfig.FREQUENCY_APPLY_DEBOUNCE_MS, e -> restartHackrfSweep());
-	private Thread									threadLauncher;
+	private javax.swing.Timer					radioApplyTimer;
 	private Thread									threadProcessing;
 	private TextTitle								titleFreqBand						= new TextTitle("",
 			new Font("Dialog", Font.PLAIN, 11));
@@ -242,16 +240,19 @@ public class HotIron {
 
 	public HotIron() {
 		hotiron.ui.AnalyzerLookAndFeel.install();
-		settings.setHardware(new AnalyzerSettings.Hardware() {
+		radioApplyTimer = new javax.swing.Timer(SweepConfig.FREQUENCY_APPLY_DEBOUNCE_MS, e -> {
+			if (radioSession != null)
+				radioSession.applyNow();
+		});
+		radioApplyTimer.setRepeats(false);
+		radioSession = new RadioSession(settings, new RadioSession.Driver() {
 			@Override
-			public void restartSweep() {
-				radioApplyTimer.stop();
-				restartHackrfSweep();
+			public void stopAndJoin() {
+				stopHackrfSweep();
 			}
 
 			@Override
-			public void releaseRadio() {
-				radioApplyTimer.stop();
+			public void abort() {
 				forceStopSweep = true;
 				if (sweepEngine != null)
 					sweepEngine.requestStop();
@@ -266,19 +267,65 @@ public class HotIron {
 						Thread.currentThread().interrupt();
 					}
 				}
+			}
+
+			@Override
+			public void prepareSweep() {
+				radio.applyAutoSweep(settings.getFrequency().getValue(), false);
+			}
+
+			@Override
+			public void startExclusive(RadioMode mode) {
+				startRadioThread(mode);
+			}
+		}, new RadioSession.Debounce() {
+			@Override
+			public void restart() {
+				if (SwingUtilities.isEventDispatchThread())
+					radioApplyTimer.restart();
+				else
+					SwingUtilities.invokeLater(radioApplyTimer::restart);
+			}
+
+			@Override
+			public void stop() {
+				radioApplyTimer.stop();
+			}
+		});
+		radio = new RadioCoordinator(settings, new RadioCoordinator.Usb() {
+			@Override
+			public void applyNow() {
+				radioSession.applyNow();
+			}
+
+			@Override
+			public void applyDebounced() {
+				radioSession.applyDebounced();
+			}
+		}, autoGainLoop);
+		settings.setHardware(new AnalyzerSettings.Hardware() {
+			@Override
+			public void restartSweep() {
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
+			}
+
+			@Override
+			public void releaseRadio() {
+				radioSession.release();
 				refreshRadioIdentity();
 			}
 
 			@Override
 			public void startListen() {
-				radioApplyTimer.stop();
-				restartHackrfSweep();
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
 			}
 
 			@Override
 			public void startWatch() {
-				radioApplyTimer.stop();
-				restartHackrfSweep();
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
 			}
 
 			@Override
@@ -302,9 +349,9 @@ public class HotIron {
 			FrequencyRange boot = settings.getFrequency().getValue();
 			int seed = AutoGainPolicy.seedGain(boot.getStartMHz(), boot.getEndMHz());
 			settings.getGain().setValue(seed);
-			recalculateGains(seed);
+			radio.recalculateGains(seed);
 		} else {
-			recalculateGains(settings.getGain().getValue());
+			radio.recalculateGains(settings.getGain().getValue());
 		}
 
 		setupChart();
@@ -363,10 +410,9 @@ public class HotIron {
 		uiFrame.setVisible(true);
 
 		sweepEngine = new SpectrumSweepEngine(settings, spectrumInitValue, new SweepUiHooks());
-		radioApplyTimer.setRepeats(false);
-		startLauncherThread();
-		applyAutoSweep(settings.getFrequency().getValue(), false);
-		restartHackrfSweep();
+		radioSession.startLauncher();
+		radio.applyAutoSweep(settings.getFrequency().getValue(), false);
+		radioSession.applyNow();
 
 		/**
 		 * register parameter observers
@@ -374,7 +420,11 @@ public class HotIron {
 		setupParameterObservers();
 
 		//shutdown on exit
-		Runtime.getRuntime().addShutdownHook(new Thread(() -> stopHackrfSweep()));
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			if (radioSession != null)
+				radioSession.stopLauncher();
+			stopHackrfSweep();
+		}));
 
 		if (captureGIF) {
 			try {
@@ -545,43 +595,59 @@ public class HotIron {
 			settings.stopScan();
 	}
 
-	private void advanceBandScan(DatasetSpectrumPeak ds) {
-		if (!scanSession.active())
-			return;
-		long now = System.currentTimeMillis();
-		FrequencyRange window = scanSession.currentWindow();
-		if (window != null && ds != null && window.getStartMHz() == ds.getFreqStartMHz()
-				&& window.getEndMHz() == ds.getFreqStopMHz())
-			scanSession.markLive(now);
-		if (scanSession.shouldFinish(now)) {
-			settings.stopScan();
-			return;
-		}
-		scanSession.nextWindowIfDue(now).ifPresent(next -> {
-			if (waterfallPlot != null)
-				waterfallPlot.clearHistory();
-			settings.getFrequency().setValue(next);
-		});
-	}
-
-	private void publishDetectedStations(java.util.List<FmStationHit> hits) {
-		if (FmStationDial.sameChannels(settings.getDetectedFmStations().getValue(), hits))
-			return;
-		settings.getDetectedFmStations().setValue(hits == null ? java.util.List.of() : java.util.List.copyOf(hits));
-	}
-
-	private void publishDetectedTvStations(java.util.List<hotiron.core.TvStationHit> hits) {
-		if (hotiron.core.TvStationDial.sameChannels(settings.getDetectedTvStations().getValue(), hits))
-			return;
-		settings.getDetectedTvStations().setValue(hits == null ? java.util.List.of() : java.util.List.copyOf(hits));
-	}
-
 	private final class SweepUiHooks implements SpectrumSweepEngine.Hooks {
-		private long lastChartUpdated = System.currentTimeMillis();
-		private long frameCounterChart = 0;
-		private final int limitChartRefreshFPS = 30;
-		private final int limitPersistentRefreshEveryChartFrame = 2;
 		private final XYSeries spectrumPeaksEmpty = new XYSeries("peaks");
+
+		SweepUiHooks() {
+			sweepLive = new SweepLiveLoop(settings, stationDetect, scanSession, new SweepLiveLoop.Publish() {
+				@Override
+				public boolean shouldPublish(long nowMs) {
+					return snapshotStore.shouldPublish(nowMs);
+				}
+
+				@Override
+				public void publish(hotiron.core.DatasetSpectrum ds, java.util.List<FmStationHit> fmHits,
+						double sweepsPerSec, long nowMs) {
+					snapshotStore.publishSweep(hotiron.mcp.SpectrumSnapshot.fromDataset(ds, nowMs,
+							hotiron.mcp.SpectrumSnapshot.DEFAULT_MAX_POINTS, null), nowMs);
+					snapshotStore.publishContext(settings, fmHits, sweepsPerSec);
+					snapshotStore.publishNfc(stationDetect.lastNfc());
+				}
+			}, new SweepLiveLoop.Hooks() {
+				@Override
+				public void onAxisChanged(hotiron.core.DatasetSpectrum ds) {
+					powerScale = null;
+					if (waterfallPlot != null)
+						waterfallPlot.clearHistory();
+				}
+
+				@Override
+				public void onPaint(DatasetSpectrumPeak ds, FrequencyRange view, long nowMs, int frame) {
+					paintFullSweep(ds, view, nowMs, frame, spectrumPeaksEmpty);
+				}
+
+				@Override
+				public double sweepsPerSec() {
+					return waterfallPlot != null ? waterfallPlot.getFps() : 0;
+				}
+
+				@Override
+				public void clearWaterfall() {
+					if (waterfallPlot != null)
+						waterfallPlot.clearHistory();
+				}
+
+				@Override
+				public void retune(FrequencyRange next) {
+					settings.getFrequency().setValue(next);
+				}
+
+				@Override
+				public void finishScan() {
+					settings.stopScan();
+				}
+			});
+		}
 
 		@Override
 		public void onPacketAccepted() {
@@ -604,167 +670,101 @@ public class HotIron {
 
 		@Override
 		public void onFullSweepProcessed(DatasetSpectrumPeak ds) {
-			boolean axisChanged = datasetSpectrum == null || !datasetSpectrum.sameAxisAs(ds);
 			datasetSpectrum = ds;
-			if (axisChanged) {
-				if (FmChannelPlan.overlapsBroadcast(ds.getFreqStartMHz(), ds.getFreqStopMHz()))
-					fmTracker.reset();
-				if (hotiron.core.TvChannelPlan.overlapsBroadcast(ds.getFreqStartMHz(), ds.getFreqStopMHz()))
-					tvTracker.reset();
-				powerScale = null;
-				if (waterfallPlot != null)
-					waterfallPlot.clearHistory();
-			}
-			long nowMs = System.currentTimeMillis();
-			if (snapshotStore.shouldPublish(nowMs)) {
-				FrequencyRange live = getFreq();
-				java.util.List<FmStationHit> hits = fmStations;
-				if (FmChannelPlan.overlapsBroadcast(live.getStartMHz(), live.getEndMHz())) {
-					hits = fmTracker.update(ds, live.getStartMHz(), live.getEndMHz());
-					fmStations = hits;
-					publishDetectedStations(hits);
-				}
-				if (hotiron.core.TvChannelPlan.overlapsBroadcast(live.getStartMHz(), live.getEndMHz())) {
-					tvStations = hotiron.core.TvStationDial.mergeLive(
-							settings.getDetectedTvStations().getValue(),
-							tvTracker.update(ds, live.getStartMHz(), live.getEndMHz()),
-							live.getStartMHz(), live.getEndMHz());
-					publishDetectedTvStations(tvStations);
-				}
-				snapshotStore.publishSweep(hotiron.mcp.SpectrumSnapshot.fromDataset(ds, nowMs,
-						hotiron.mcp.SpectrumSnapshot.DEFAULT_MAX_POINTS, null), nowMs);
-				double sps = waterfallPlot != null ? waterfallPlot.getFps() : 0;
-				snapshotStore.publishContext(settings, hits, sps);
-			}
+			sweepLive.accept(ds, getFreq(), System.currentTimeMillis());
+			fmStations = stationDetect.lastFm();
+			tvStations = stationDetect.lastTv();
+			nfcActivity = stationDetect.lastNfc();
 			synchronized (perfWatch) {
 				perfWatch.hwFullSpectrumRefreshes++;
 			}
-			// Narrow windows (FM 20 MHz) finish 400+ sweeps/s. Updating the
-			// waterfall / EDT that often freezes the plot. Keep ingesting
-			// bins; only paint at the chart frame rate.
-			if (System.currentTimeMillis() - lastChartUpdated <= 1000 / limitChartRefreshFPS)
-				return;
-			lastChartUpdated = System.currentTimeMillis();
-			frameCounterChart++;
-
-			FrequencyRange sweepRange = getFreq();
-			if (FmChannelPlan.overlapsBroadcast(sweepRange.getStartMHz(), sweepRange.getEndMHz())) {
-				fmStations = fmTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz());
-				publishDetectedStations(fmStations);
-			}
-			if (hotiron.core.TvChannelPlan.overlapsBroadcast(sweepRange.getStartMHz(), sweepRange.getEndMHz())) {
-				tvStations = hotiron.core.TvStationDial.mergeLive(
-						settings.getDetectedTvStations().getValue(),
-						tvTracker.update(ds, sweepRange.getStartMHz(), sweepRange.getEndMHz()),
-						sweepRange.getStartMHz(), sweepRange.getEndMHz());
-				publishDetectedTvStations(tvStations);
-			}
-			advanceBandScan(ds);
-			considerAutoGain(ds, sweepRange);
-
-			if (System.currentTimeMillis() - perfWatch.lastStatisticsRefreshed > 1000) {
-				synchronized (perfWatch) {
-					perfWatch.waterfallDraw.nanosSum = waterfallPlot.getDrawTimeSumAndReset();
-					perfWatch.waterfallDraw.count = waterfallPlot.getDrawingCounterAndReset();
-					String stats = perfWatch.generateStatistics();
-					SwingUtilities.invokeLater(() -> {
-						labelMessages.setText(stats);
-					});
-					perfWatch.reset();
-				}
-			}
-
-			int maxPts = chartVertexBudget();
-			XYSeries spectrumSeries = datasetSpectrum.createSpectrumDataset("spectrum", maxPts);
-			XYSeries spectrumPeaks = settings.isChartsPeaksVisible().getValue()
-					? datasetSpectrum.createPeaksDataset("peaks", maxPts)
-					: spectrumPeaksEmpty;
-			final double yLow;
-			final double yHigh;
-			if (settings.isPowerAutoScale().getValue()) {
-				SpectrumPowerScale target = SpectrumPowerScale.fromDataset(datasetSpectrum);
-				long now = System.currentTimeMillis();
-				if (powerScale == null || powerScale.isUnset())
-					powerScale = (target.isUnset() ? SpectrumPowerScale.defaults() : target.displayTicks())
-							.stamped(now);
-				else
-					powerScale = powerScale.follow(target, now);
-				yLow = powerScale.lowDb;
-				yHigh = powerScale.highDb;
-			} else {
-				powerScale = SpectrumPowerScale.defaults();
-				yLow = SpectrumPowerScale.DEFAULT_LOW;
-				yHigh = SpectrumPowerScale.DEFAULT_HIGH;
-			}
-
-			if (settings.isPersistentDisplayVisible().getValue()) {
-				long start = System.nanoTime();
-				boolean redraw = frameCounterChart % limitPersistentRefreshEveryChartFrame == 0;
-				persistentDisplay.drawSpectrumFloat(datasetSpectrum, (float) yLow, (float) yHigh, redraw);
-				synchronized (perfWatch) {
-					perfWatch.persisentDisplay.addDrawingTime(System.nanoTime() - start);
-				}
-			}
-
-			if (settings.isWaterfallVisible().getValue()) {
-				long start = System.nanoTime();
-				if (settings.isPowerAutoScale().getValue())
-					waterfallPlot.applyPowerWindow(yLow, yHigh);
-				else {
-					int startDb = settings.getSpectrumPaletteStart().getValue();
-					int sizeDb = settings.getSpectrumPaletteSize().getValue();
-					waterfallPlot.setSpectrumPaletteStart(startDb);
-					if (sizeDb >= SPECTRUM_PALETTE_SIZE_MIN)
-						waterfallPlot.setSpectrumPaletteSize(sizeDb);
-				}
-				waterfallPlot.addNewData(datasetSpectrum);
-				synchronized (perfWatch) {
-					perfWatch.waterfallUpdate.addDrawingTime(System.nanoTime() - start);
-				}
-				waterfallPlot.repaint();
-			}
-
-			final double rbwHz = datasetSpectrum.getFFTBinSizeHz();
-			final int bins = datasetSpectrum.spectrumLength();
-			final double fps = waterfallPlot.getFps();
-			final Double peakDbm = Double.valueOf(datasetSpectrum.calculateSpectrumPeakPower());
-			SwingUtilities.invokeLater(() -> {
-				if (sweepStatusBar != null)
-					sweepStatusBar.setSweepInfo(rbwHz, bins, fps, peakDbm);
-				chart.setNotify(false);
-				NumberAxis yAxis = (NumberAxis) chart.getXYPlot().getRangeAxis();
-				if (yAxis.getLowerBound() != yLow || yAxis.getUpperBound() != yHigh)
-					yAxis.setRange(yLow, yHigh);
-				chartDataset.removeAllSeries();
-				chartDataset.addSeries(spectrumPeaks);
-				chartDataset.addSeries(spectrumSeries);
-				chart.setNotify(true);
-				if (gifCap != null) {
-					gifCap.captureFrame();
-				}
-			});
 		}
 	}
 
-	private void recalculateGains(int totalGain) {
-		int lnaGain = GainPolicy.lnaGain(totalGain);
-		int vgaGain = GainPolicy.vgaGain(totalGain);
-		this.settings.getGainLNA().setValue(lnaGain);
-		this.settings.getGainVGA().setValue(vgaGain);
-		this.settings.getGain().setValue(lnaGain + vgaGain);
-	}
+	private void paintFullSweep(DatasetSpectrumPeak ds, FrequencyRange sweepRange, long nowMs, int frame,
+			XYSeries spectrumPeaksEmpty) {
+		radio.considerAutoGain(ds, sweepRange, scanSession.active(), nowMs);
 
-	private void applyAutoGain(int totalGain, boolean restart) {
-		int snapped = GainPolicy.clampTotal(totalGain);
-		flagApplyingAutoGain = true;
-		flagCoalesceGainRestart = !restart;
-		try {
-			if (settings.getGain().getValue() != snapped)
-				settings.getGain().setValue(snapped);
-		} finally {
-			flagApplyingAutoGain = false;
-			flagCoalesceGainRestart = false;
+		if (System.currentTimeMillis() - perfWatch.lastStatisticsRefreshed > 1000) {
+			synchronized (perfWatch) {
+				perfWatch.waterfallDraw.nanosSum = waterfallPlot.getDrawTimeSumAndReset();
+				perfWatch.waterfallDraw.count = waterfallPlot.getDrawingCounterAndReset();
+				String stats = perfWatch.generateStatistics();
+				SwingUtilities.invokeLater(() -> {
+					labelMessages.setText(stats);
+				});
+				perfWatch.reset();
+			}
 		}
+
+		int maxPts = chartVertexBudget();
+		XYSeries spectrumSeries = ds.createSpectrumDataset("spectrum", maxPts);
+		XYSeries spectrumPeaks = settings.isChartsPeaksVisible().getValue()
+				? ds.createPeaksDataset("peaks", maxPts)
+				: spectrumPeaksEmpty;
+		final double yLow;
+		final double yHigh;
+		if (settings.isPowerAutoScale().getValue()) {
+			SpectrumPowerScale target = SpectrumPowerScale.fromDataset(ds);
+			if (powerScale == null || powerScale.isUnset())
+				powerScale = (target.isUnset() ? SpectrumPowerScale.defaults() : target.displayTicks())
+						.stamped(nowMs);
+			else
+				powerScale = powerScale.follow(target, nowMs);
+			yLow = powerScale.lowDb;
+			yHigh = powerScale.highDb;
+		} else {
+			powerScale = SpectrumPowerScale.defaults();
+			yLow = SpectrumPowerScale.DEFAULT_LOW;
+			yHigh = SpectrumPowerScale.DEFAULT_HIGH;
+		}
+
+		if (settings.isPersistentDisplayVisible().getValue()) {
+			long start = System.nanoTime();
+			boolean redraw = frame % 2 == 0;
+			persistentDisplay.drawSpectrumFloat(ds, (float) yLow, (float) yHigh, redraw);
+			synchronized (perfWatch) {
+				perfWatch.persisentDisplay.addDrawingTime(System.nanoTime() - start);
+			}
+		}
+
+		if (settings.isWaterfallVisible().getValue()) {
+			long start = System.nanoTime();
+			if (settings.isPowerAutoScale().getValue())
+				waterfallPlot.applyPowerWindow(yLow, yHigh);
+			else {
+				int startDb = settings.getSpectrumPaletteStart().getValue();
+				int sizeDb = settings.getSpectrumPaletteSize().getValue();
+				waterfallPlot.setSpectrumPaletteStart(startDb);
+				if (sizeDb >= SPECTRUM_PALETTE_SIZE_MIN)
+					waterfallPlot.setSpectrumPaletteSize(sizeDb);
+			}
+			waterfallPlot.addNewData(ds);
+			synchronized (perfWatch) {
+				perfWatch.waterfallUpdate.addDrawingTime(System.nanoTime() - start);
+			}
+			waterfallPlot.repaint();
+		}
+
+		final double rbwHz = ds.getFFTBinSizeHz();
+		final int bins = ds.spectrumLength();
+		final double fps = waterfallPlot.getFps();
+		final Double peakDbm = Double.valueOf(ds.calculateSpectrumPeakPower());
+		SwingUtilities.invokeLater(() -> {
+			if (sweepStatusBar != null)
+				sweepStatusBar.setSweepInfo(rbwHz, bins, fps, peakDbm);
+			chart.setNotify(false);
+			NumberAxis yAxis = (NumberAxis) chart.getXYPlot().getRangeAxis();
+			if (yAxis.getLowerBound() != yLow || yAxis.getUpperBound() != yHigh)
+				yAxis.setRange(yLow, yHigh);
+			chartDataset.removeAllSeries();
+			chartDataset.addSeries(spectrumPeaks);
+			chartDataset.addSeries(spectrumSeries);
+			chart.setNotify(true);
+			if (gifCap != null) {
+				gifCap.captureFrame();
+			}
+		});
 	}
 
 	private void flushPersistentOverlay() {
@@ -779,70 +779,6 @@ public class HotIron {
 		persistFlushTimer.restart();
 	}
 
-	private void applyAutoSweep(FrequencyRange range, boolean restart) {
-		flagApplyingAutoSweep = true;
-		flagCoalesceAutoSweep = true;
-		boolean changed;
-		try {
-			changed = AutoSweepPolicy.apply(settings, range);
-		} finally {
-			flagApplyingAutoSweep = false;
-			flagCoalesceAutoSweep = false;
-		}
-		if (restart && changed)
-			restartHackrfSweep();
-	}
-
-	private void maybeSeedAutoGain(FrequencyRange range) {
-		if (range == null || !settings.isAutoGain().getValue() || settings.isListening().getValue()
-				|| scanSession.active())
-			return;
-		Integer seed = autoGainLoop.seedIfBandShifted(range.getStartMHz(), range.getEndMHz(),
-				settings.getGain().getValue());
-		if (seed == null)
-			return;
-		autoGainLoop.markSettling(System.currentTimeMillis());
-		applyAutoGain(seed.intValue(), false);
-	}
-
-	private void considerAutoGain(DatasetSpectrumPeak ds, FrequencyRange range) {
-		if (ds == null || range == null)
-			return;
-		if (!settings.isAutoGain().getValue() || settings.isCapturingPaused().getValue()
-				|| settings.isRadioReleased().getValue() || settings.isListening().getValue()
-				|| scanSession.active())
-			return;
-		AutoGainPolicy.Observation obs = AutoGainPolicy.observe(ds, settings.getGain().getValue(),
-				range.getStartMHz(), range.getEndMHz());
-		Integer next = autoGainLoop.consider(obs, System.currentTimeMillis());
-		if (next == null || next.intValue() == settings.getGain().getValue())
-			return;
-		autoGainLoop.markSettling(System.currentTimeMillis());
-		applyAutoGain(next.intValue(), true);
-	}
-
-	/**
-	 * uses fifo queue to process launch commands, only the last launch command
-	 * is important, delete others
-	 */
-	private synchronized void restartHackrfSweep() {
-		if (settings.isRadioReleased().getValue())
-			return;
-		if (threadLaunchCommands.offer(0) == false) {
-			threadLaunchCommands.clear();
-			threadLaunchCommands.offer(0);
-		}
-	}
-
-	private void scheduleFrequencyRadioApply() {
-		if (settings.isRadioReleased().getValue())
-			return;
-		if (SwingUtilities.isEventDispatchThread())
-			radioApplyTimer.restart();
-		else
-			SwingUtilities.invokeLater(radioApplyTimer::restart);
-	}
-
 	private int chartVertexBudget() {
 		Rectangle2D area = chartDataArea.getValue();
 		if (area != null && area.getWidth() > 8)
@@ -850,18 +786,9 @@ public class HotIron {
 		return 2048;
 	}
 
-	/**
-	 * no need to synchronize, executes only in the launcher thread
-	 */
-	private void restartHackrfSweepExecute() {
-		stopHackrfSweep();
-		if (!SweepConfig.shouldStartAfterStop(settings.isRadioReleased().getValue(),
-				threadLaunchCommands.peek() != null))
-			return;
-		final boolean listen = settings.isListening().getValue();
-		final boolean watch = listen && settings.getListenService().getValue() == hotiron.core.ListenService.TV;
-		if (!listen)
-			applyAutoSweep(settings.getFrequency().getValue(), false);
+	private void startRadioThread(RadioMode mode) {
+		final boolean watch = mode == RadioMode.WATCH;
+		final boolean listen = mode == RadioMode.LISTEN;
 		threadHackrfSweep = new Thread(() -> {
 			Thread.currentThread().setName(watch ? "hackrf_tv" : (listen ? "hackrf_fm" : "hackrf_sweep"));
 			try {
@@ -1033,6 +960,10 @@ public class HotIron {
 						settings.getListenKHz().getValue());
 				hotiron.ui.TvChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), tvStations,
 						settings.getTvChannel().getValue());
+				hotiron.ui.NfcChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), nfcActivity);
+				if (hotiron.core.NfcBandLayer.tagsReadable(range.getStartMHz(), range.getEndMHz())
+						&& !settings.isListening().getValue())
+					hotiron.ui.NfcHud.paint(g2, area, nfcActivity, settings.getBandScan().getValue());
 				if (settings.isListening().getValue())
 				{
 					if (settings.getListenService().getValue() == hotiron.core.ListenService.TV)
@@ -1245,6 +1176,13 @@ public class HotIron {
 			settings.startListen();
 			return;
 		}
+		java.util.List<BandMark> nfcMarks = hotiron.core.NfcBandLayer.marks(axis, nfcActivity);
+		BandMark nfcHit = BandHeaderPainter.hitTest(e.getX(), e.getY(), area, axis, nfcMarks);
+		if (nfcHit != null)
+		{
+			settings.startNfcScan();
+			return;
+		}
 		java.util.List<BandMark> tvMarks = hotiron.core.TvBandLayer.marks(axis, tvStations,
 				settings.getTvChannel().getValue());
 		BandMark tvHit = BandHeaderPainter.hitTest(e.getX(), e.getY(), area, axis, tvMarks);
@@ -1319,14 +1257,8 @@ public class HotIron {
 	}
 
 	private void setupParameterObservers() {
-		Runnable restartHackrf = this::restartHackrfSweep;
-		settings.getFrequency().addListener(() -> {
-			cancelScanIfRangeLeft();
-			if (settings.isListening().getValue())
-				return;
-			applyAutoSweep(settings.getFrequency().getValue(), false);
-			scheduleFrequencyRadioApply();
-		});
+		radio.bind();
+		settings.getFrequency().addListener(this::cancelScanIfRangeLeft);
 		settings.getBandScan().addListener(scan -> {
 			if (scan == hotiron.core.BandScan.OFF)
 			{
@@ -1337,9 +1269,11 @@ public class HotIron {
 			if (waterfallPlot != null)
 				waterfallPlot.clearHistory();
 			if (scan == hotiron.core.BandScan.FM)
-				fmTracker.reset();
-			else
-				tvTracker.reset();
+				stationDetect.resetFm();
+			else if (scan == hotiron.core.BandScan.TV)
+				stationDetect.resetTv();
+			else if (scan == hotiron.core.BandScan.NFC)
+				stationDetect.resetNfc();
 		});
 		settings.getFrequency().addListener((range) -> {
 			flushPersistentOverlay();
@@ -1347,43 +1281,16 @@ public class HotIron {
 				chart.getXYPlot().getDomainAxis().setRange(range.getStartMHz(), range.getEndMHz());
 			if (!applyingSpectrumZoom)
 				spectrumZoomHistory.clear();
-			maybeSeedAutoGain(range);
+			radio.maybeSeedAutoGain(range, scanSession.active(), System.currentTimeMillis());
 		});
-		settings.getAntennaPowerEnable().addListener(restartHackrf);
-		settings.getAntennaLNA().addListener(restartHackrf);
-		settings.getFFTBinHz().addListener(() -> {
-			if (!flagApplyingAutoSweep && settings.isAutoSweep().getValue())
-				settings.isAutoSweep().setValue(false);
-			if (!settings.isListening().getValue() && !flagCoalesceAutoSweep)
-				restartHackrfSweep();
-		});
-		settings.getSamples().addListener(() -> {
-			if (!flagApplyingAutoSweep && settings.isAutoSweep().getValue())
-				settings.isAutoSweep().setValue(false);
-			if (!settings.isListening().getValue() && !flagCoalesceAutoSweep)
-				restartHackrfSweep();
-		});
-		settings.isAutoSweep().addListener((on) -> {
-			if (!Boolean.TRUE.equals(on))
-				return;
-			applyAutoSweep(getFreq(), true);
-		});
-		settings.getSelectedSerial().addListener(restartHackrf);
-		settings.getClkoutEnable().addListener(restartHackrf);
 		settings.getListenKHz().addListener(() -> {
 			flushPersistentOverlay();
-			if (settings.isListening().getValue()
-					&& settings.getListenService().getValue() == hotiron.core.ListenService.FM)
-				restartHackrfSweep();
 			snapshotStore.publishContext(settings, fmStations, 0);
 			if (chartPanel != null)
 				SwingUtilities.invokeLater(chartPanel::repaint);
 		});
 		settings.getTvChannel().addListener(() -> {
 			flushPersistentOverlay();
-			if (settings.isListening().getValue()
-					&& settings.getListenService().getValue() == hotiron.core.ListenService.TV)
-				restartHackrfSweep();
 			snapshotStore.publishContext(settings, fmStations, 0);
 			if (chartPanel != null)
 				SwingUtilities.invokeLater(chartPanel::repaint);
@@ -1400,45 +1307,6 @@ public class HotIron {
 		});
 		settings.getListenService().addListener(svc -> flushPersistentOverlay());
 		settings.isCapturingPaused().addListener(this::fireCapturingStateChanged);
-
-		settings.getGain().addListener((gainTotal) -> {
-			if (flagManualGain) //flag is being adjusted manually by LNA or VGA, do not recalculate the gains
-				return;
-			recalculateGains(gainTotal);
-			if (!flagCoalesceGainRestart)
-				restartHackrfSweep();
-			if (!flagApplyingAutoGain && settings.isAutoGain().getValue())
-				settings.isAutoGain().setValue(false);
-		});
-		Runnable gainRecalc = () -> {
-			int totalGain = settings.getGainLNA().getValue() + settings.getGainVGA().getValue();
-			flagManualGain = true;
-			try {
-				settings.getGain().setValue(totalGain);
-			} catch (Exception e) {
-				e.printStackTrace();
-			} finally {
-				flagManualGain = false;
-			}
-			if (!flagApplyingAutoGain && settings.isAutoGain().getValue())
-				settings.isAutoGain().setValue(false);
-			if (!flagCoalesceGainRestart && !flagApplyingAutoGain)
-				restartHackrfSweep();
-		};
-		settings.getGainLNA().addListener(gainRecalc);
-		settings.getGainVGA().addListener(gainRecalc);
-		settings.isAutoGain().addListener((on) -> {
-			if (!Boolean.TRUE.equals(on))
-				return;
-			autoGainLoop.reset();
-			FrequencyRange range = getFreq();
-			Integer seed = autoGainLoop.seedIfBandShifted(range.getStartMHz(), range.getEndMHz(),
-					settings.getGain().getValue());
-			if (seed == null)
-				return;
-			autoGainLoop.markSettling(System.currentTimeMillis());
-			applyAutoGain(seed.intValue(), true);
-		});
 
 		settings.isSpurRemoval().addListener(() -> {
 			SpurFilter filter = spurFilter;
@@ -1522,21 +1390,6 @@ public class HotIron {
 		});
 	}
 
-	private void startLauncherThread() {
-		threadLauncher = new Thread(() -> {
-			Thread.currentThread().setName("Launcher-thread");
-			while (true) {
-				try {
-					threadLaunchCommands.take();
-					restartHackrfSweepExecute();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}
-		});
-		threadLauncher.start();
-	}
-
 	private void queueTvPreviewFrame(BufferedImage img) {
 		if (img == null)
 			return;
@@ -1596,7 +1449,7 @@ public class HotIron {
 							settings.getDetectedTvStations().getValue(), live,
 							snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
 					tvStations = merged;
-					publishDetectedTvStations(merged);
+					StationDetectSink.publishTv(settings, merged);
 				}
 			}
 			waterfallPlot.addVideoFrame(row, hotiron.core.IqSpectrum.DISPLAY_HZ, loHz);
@@ -1799,7 +1652,7 @@ public class HotIron {
 						settings.getDetectedFmStations().getValue(), live,
 						snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
 				fmStations = merged;
-				publishDetectedStations(merged);
+				StationDetectSink.publishFm(settings, merged);
 			}
 		});
 		fmEngine.setSpectrumListener(row -> {

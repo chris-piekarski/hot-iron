@@ -100,6 +100,7 @@ flowchart TD
 - [Development & Testing](docs/develop.md)
 - [Radio setup](docs/hardware.md) (udev, firmware, Windows drivers)
 - [Operator UI](docs/operator.md)
+- [NFC / HF RFID](docs/nfc.md) — 13.56 MHz overlay, classifier, and what not to decode
 - [Architecture](docs/architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies
 - [Repository stats](docs/stats.md) (`make stats`)
 - [Contributing](docs/contributing.md)

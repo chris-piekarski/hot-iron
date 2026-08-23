@@ -14,7 +14,7 @@ public enum RadioMode
 		return name().toLowerCase(Locale.ROOT);
 	}
 
-	public static RadioMode from(boolean released, boolean parked, ListenService service)
+	private static RadioMode from(boolean released, boolean parked, ListenService service)
 	{
 		if (released)
 			return STOPPED;
@@ -23,5 +23,23 @@ public enum RadioMode
 		if (service == ListenService.TV)
 			return WATCH;
 		return LISTEN;
+	}
+
+	/** Settings are the source of truth; do not store a second mode. */
+	public static RadioMode of(HackRFSettings settings)
+	{
+		if (settings == null)
+			return STOPPED;
+		boolean released = settings.isRadioReleased() != null
+				&& Boolean.TRUE.equals(settings.isRadioReleased().getValue());
+		boolean parked = settings.isListening() != null && Boolean.TRUE.equals(settings.isListening().getValue());
+		ListenService service = settings.getListenService() != null ? settings.getListenService().getValue()
+				: ListenService.FM;
+		return from(released, parked, service);
+	}
+
+	public boolean parked()
+	{
+		return this == LISTEN || this == WATCH;
 	}
 }

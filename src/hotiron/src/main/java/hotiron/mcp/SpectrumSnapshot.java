@@ -193,6 +193,76 @@ public final class SpectrumSnapshot
 		Json.appendKey(sb, "noiseDbm").append(Json.num(noiseDbm)).append(',');
 		Json.appendKey(sb, "peakDbm").append(Json.num(peakDbm)).append(',');
 		Json.appendKey(sb, "peakMhz").append(Json.num(peakMhz)).append(',');
+		appendPoints(sb);
+		sb.append('}');
+		return sb.toString();
+	}
+
+	/**
+	 * Peak-pick into at most {@code maxPoints} bins. Optional {@code minDbm}
+	 * drops weaker points. Same helper the snapshot tool uses so history
+	 * frames match the live downsample.
+	 */
+	public SpectrumSnapshot downsampled(int maxPoints, Float minDbm)
+	{
+		if (isEmpty())
+			return this;
+		int cap = Math.max(1, maxPoints);
+		int n = mhz.length;
+		float[] m = new float[Math.min(n, cap)];
+		float[] d = new float[m.length];
+		int out = 0;
+		if (n <= cap)
+		{
+			for (int i = 0; i < n; i++)
+			{
+				if (minDbm != null && dbm[i] < minDbm.floatValue())
+					continue;
+				if (out < m.length)
+				{
+					m[out] = mhz[i];
+					d[out] = dbm[i];
+					out++;
+				}
+			}
+		}
+		else
+		{
+			for (int p = 0; p < cap; p++)
+			{
+				int i0 = (int) ((long) p * n / cap);
+				int i1 = Math.max(i0 + 1, (int) ((long) (p + 1) * n / cap));
+				float peak = Float.NEGATIVE_INFINITY;
+				float xAt = mhz[i0];
+				boolean any = false;
+				for (int i = i0; i < i1 && i < n; i++)
+				{
+					if (minDbm != null && dbm[i] < minDbm.floatValue())
+						continue;
+					any = true;
+					if (dbm[i] > peak)
+					{
+						peak = dbm[i];
+						xAt = mhz[i];
+					}
+				}
+				if (!any)
+					continue;
+				m[out] = xAt;
+				d[out] = peak;
+				out++;
+			}
+		}
+		float[] mo = new float[out];
+		float[] do_ = new float[out];
+		System.arraycopy(m, 0, mo, 0, out);
+		System.arraycopy(d, 0, do_, 0, out);
+		return new SpectrumSnapshot(timestampMs, startMHz, endMHz, fftBinHz, mo, do_, filledBins, omittedHoles,
+				noiseDbm, peakDbm, peakMhz, freqStartHz);
+	}
+
+	void appendPoints(StringBuilder sb)
+	{
 		Json.appendKey(sb, "points").append('[');
 		for (int i = 0; i < mhz.length; i++)
 		{
@@ -200,8 +270,7 @@ public final class SpectrumSnapshot
 				sb.append(',');
 			sb.append("{\"mhz\":").append(Json.num(mhz[i])).append(",\"dbm\":").append(Json.num(dbm[i])).append('}');
 		}
-		sb.append("]}");
-		return sb.toString();
+		sb.append(']');
 	}
 
 	public String toSummaryJson(RadioContext ctx)

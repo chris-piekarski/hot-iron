@@ -41,7 +41,7 @@ Point a local MCP client at the stdio proxy (the GUI must already be listening):
 }
 ```
 
-Tools: `spectrum_summary`, `spectrum_snapshot` (optional `maxPoints`, `minDbm`), `radio_identity`, `sweep_config` (radio vs display, including `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`), `fm_stations`, `fm_spectrum`, `spectrum_occupancy`, `spectrum_history`, `tv_debug` (includes an `ffmpeg` object when Watch is parked), `tv_debug_history`, plus writes `fm_listen` (`mhz`) and `tv_watch` (`channel`). Unfilled hop holes are omitted, not reported as −150 dBm. Snapshots are sampled at most 10 times per second. The GUI must already hold the radio; MCP does not open a second USB device.
+Tools: `spectrum_summary`, `spectrum_snapshot` (optional `maxPoints`, `minDbm`), `radio_identity`, `sweep_config` (radio vs display, including `radioMode`, `listenMHz`, `tvChannel`, `tvLocked`), `fm_stations`, `nfc_activity`, `fm_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins` (ring frames with `points`, not the waterfall PNG), `tv_debug` (includes an `ffmpeg` object when Watch is parked), `tv_debug_history`, plus writes `fm_listen` (`mhz`) and `tv_watch` (`channel`). Unfilled hop holes are omitted, not reported as −150 dBm. Snapshots are sampled at most 10 times per second. The GUI must already hold the radio; MCP does not open a second USB device.
 
 The sidebar **MCP** line (and the status-bar `MCP` field) show whether this process is listening (`127.0.0.1:8765`), how many clients are connected, their `initialize` names, and the last tool they called. **MCP off** means the GUI was started without `--mcp` — use `make mcp`. **MCP failed** means the port is already taken.
 
@@ -112,7 +112,7 @@ Integer-MHz survey windows. The app starts on **WiFi 2** (highlighted) so the fi
 | WiFi 5 | 5170–5895 | Occupied US 802.11 20 MHz ch 36–177 (ch 36 starts at 5170, ch 177 ends at 5895). U-NII-1 legally starts at 5150; there is no 20 MHz channel there. The hole after 64 is not Wi-Fi. |
 | LTE-1 | 1695–2200 | 3GPP AWS + PCS + IMT (B70/B66/B4/B3/B2/B25/B1/B65). |
 | LTE-2 | 617–960 | 3GPP 600/700/800/850/900 (B71 DL through B8 DL). |
-| NFC | 13–14 | 13.56 MHz HF RFID (47 CFR 15.225: 13.110–14.010). |
+| NFC | 12–15 | 13.56 MHz HF RFID PHY (47 CFR 15.225 citation is 13.110–14.010). Overlay ticks the carrier, Type A/B ±847.5 kHz, FeliCa ±212 kHz, and 15693 ±424 kHz. HUD classifies quiet / field on / polling / HiFER CW / card sidebands. Click a header tick to Scan 12–15 then 27.12 / 40.68 harmonics. AirTags are not in this band. Notes: [nfc.md](nfc.md). |
 | FM | 88–108 | US FM broadcast (47 CFR 73.201). Overlay labels **live** peaks as **97.3**-style station frequencies. |
 | HF | 3–30 | ITU HF. **Not** a single amateur allocation. |
 | VHF | 30–300 | ITU VHF (includes 6 m / 2 m plus broadcast and aviation). |
@@ -150,6 +150,7 @@ This app only **receives**. Transmitting on amateur frequencies needs a license 
 
 ## Tips
 
+- NFC at 13.56 MHz needs a **small loop** (or a salvaged RC522 antenna), not a Wi-Fi whip. A card alone is invisible. A Morse-like blink is usually a HiFER beacon or a phone poll — not AirTag / Find My (those are Bluetooth / UWB). See [nfc.md](nfc.md).
 - Use a short, known-good USB cable. Hubs drop the radio under load.
 - The board gets warm on long wideband sweeps — that is normal.
 - If the plot freezes after a setting change, press **RESET** on the radio (or detach/reattach USB). That is a firmware quirk, not a UI hang.

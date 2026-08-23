@@ -48,6 +48,26 @@ class BandScanSessionTest
 	}
 
 	@Test
+	void nfcHopsPhyThenHarmonics()
+	{
+		BandScanSession s = new BandScanSession();
+		s.start(BandScan.NFC, 0);
+		assertEquals(NfcBandPlan.VIEW_START_MHZ, s.currentWindow().getStartMHz());
+		assertEquals(NfcBandPlan.VIEW_END_MHZ, s.currentWindow().getEndMHz());
+		s.markLive(100);
+		var h2 = s.nextWindowIfDue(100 + BandScanSession.DWELL_MS);
+		assertTrue(h2.isPresent());
+		assertEquals(NfcBandPlan.H2_VIEW_START_MHZ, h2.get().getStartMHz());
+		assertFalse(s.windowLive());
+		s.markLive(100 + BandScanSession.DWELL_MS + 10);
+		var h3 = s.nextWindowIfDue(100 + 2L * BandScanSession.DWELL_MS + 10);
+		assertTrue(h3.isPresent());
+		assertEquals(NfcBandPlan.H3_VIEW_START_MHZ, h3.get().getStartMHz());
+		s.markLive(100 + 2L * BandScanSession.DWELL_MS + 20);
+		assertTrue(s.shouldFinish(100 + 3L * BandScanSession.DWELL_MS + 20));
+	}
+
+	@Test
 	void markLiveIsIdempotentOnTheSameWindow()
 	{
 		BandScanSession s = new BandScanSession();

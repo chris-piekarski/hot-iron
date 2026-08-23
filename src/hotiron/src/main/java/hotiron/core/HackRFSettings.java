@@ -75,6 +75,12 @@ public interface HackRFSettings {
 	/** True when the native sweep is stopped and USB is released. */
 	public ModelValueBoolean isRadioReleased();
 
+	/** Exclusive USB mode from released / parked / {@link ListenService}. */
+	public default RadioMode radioMode()
+	{
+		return RadioMode.of(this);
+	}
+
 	public void restartSweep();
 
 	public void releaseRadio();
@@ -93,6 +99,9 @@ public interface HackRFSettings {
 
 	/** Sweep VHF then UHF TV and pin those hits as the Seek list. */
 	public void startTvScan();
+
+	/** Dwell 12–15 MHz then 27.12 / 40.68 MHz NFC harmonics. */
+	public void startNfcScan();
 
 	public void stopScan();
 

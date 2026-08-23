@@ -74,7 +74,7 @@ make test
 
 `hackrf_fm.c` and patched `hackrf_sweep.c` are not in the gcov report until they have self-tests; they are exercised by `make test-hw` with a radio.
 
-**Guideline**: New logic in `hotiron/core/` should come with unit tests. Use synthetic `DatasetSpectrum` / `FFTBins` data. Settings belong on `AnalyzerSettings` (test without a JFrame). Overlay policy belongs on `FrequencyAxis` / `BandMark` layers (test without painting). Auto-gain belongs on `AutoGainPolicy` (inject `nowMs`; do not open USB). Auto FFT/samples belongs on `AutoSweepPolicy` (span in, discrete bin + samples out; hysteresis; do not open USB). MCP belongs on `SpectrumSnapshotStore` / `SpectrumMcpTools` (in-process JSON-RPC; no sockets required). Waterfall tick math belongs on `WaterfallTimeScale`. WFM listen belongs on `WfmDemodulator` (synthetic int8 IQ; `AudioSink` fake). Reflection is acceptable for controlling time-based or internal graphics state in `PersistentDisplay` and `DatasetSpectrumPeak`.
+**Guideline**: New logic in `hotiron/core/` should come with unit tests. Use synthetic `DatasetSpectrum` / `FFTBins` data. Settings belong on `AnalyzerSettings` (test without a JFrame). Overlay policy belongs on `FrequencyAxis` / `BandMark` layers (test without painting). Radio USB apply (Auto off, debounce, Listen/Watch retune) belongs on `RadioCoordinator` (`Source.AUTO_POLICY` vs operator; `FakeHackRFSettings` + counting `Usb`; do not construct `HotIron`). Exclusive start/stop/join belongs on `RadioSession` (queue + `settings.radioMode()` at start; `Driver` fake, no JNA). `RadioMode.of(settings)` is the only derivation. Live sweep detect/scan/publish/paint timing belongs on `SweepLiveLoop` / `SweepFramePolicy` (MCP 10 Hz and chart 30 fps are independent; scan and AGC stay paint-gated). Auto-gain belongs on `AutoGainPolicy` (inject `nowMs`; do not open USB). Auto FFT/samples belongs on `AutoSweepPolicy` (span in, discrete bin + samples out; hysteresis; do not open USB). MCP belongs on `SpectrumSnapshotStore` / `SpectrumMcpTools` (in-process JSON-RPC; no sockets required). Waterfall tick math belongs on `WaterfallTimeScale`. WFM listen belongs on `WfmDemodulator` (synthetic int8 IQ; `AudioSink` fake). Reflection is acceptable for controlling time-based or internal graphics state in `PersistentDisplay` and `DatasetSpectrumPeak`.
 
 ### Test → Coverage Workflow
 
@@ -120,7 +120,7 @@ For the native C/C++ parts, a clang-format command is commented in the Makefile.
 
 ## Architecture Notes
 
-See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool.
+See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool. NFC / 13.56 MHz spectrum notes: [nfc.md](nfc.md).
 
 Key directories:
 - `src/hotiron/src/main/java/hotiron/core/` — Engines, DSP, policies, channel plans (best place for unit tests)

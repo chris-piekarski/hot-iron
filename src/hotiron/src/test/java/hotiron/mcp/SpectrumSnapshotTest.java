@@ -51,6 +51,26 @@ class SpectrumSnapshotTest {
 	}
 
 	@Test
+	void downsampledKeepsThePeakAndHonorsMinDbm() {
+		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 2400, 2500, -150f);
+		for (int i = 0; i < ds.spectrumLength(); i++)
+			ds.getSpectrumArray()[i] = -80f;
+		ds.getSpectrumArray()[1] = -20f;
+		SpectrumSnapshot snap = SpectrumSnapshot.fromDataset(ds, 1L, 10_000, null);
+		assertTrue(snap.mhz.length > 8);
+		SpectrumSnapshot small = snap.downsampled(8, null);
+		assertTrue(small.mhz.length <= 8);
+		boolean saw = false;
+		for (float y : small.dbm)
+			if (Math.abs(y + 20f) < 0.01f)
+				saw = true;
+		assertTrue(saw, "peak bin must survive downsample");
+		SpectrumSnapshot loud = snap.downsampled(10_000, Float.valueOf(-30f));
+		assertEquals(1, loud.mhz.length);
+		assertEquals(-20f, loud.dbm[0], 0.01f);
+	}
+
+	@Test
 	void minDbmDropsWeakBins() {
 		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 88, 89, -150f);
 		ds.getSpectrumArray()[0] = -80f;

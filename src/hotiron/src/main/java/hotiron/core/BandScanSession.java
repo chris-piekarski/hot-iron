@@ -113,6 +113,8 @@ public final class BandScanSession
 			return List.of(fmWindow());
 		if (kind == BandScan.TV)
 			return List.of(tvVhfWindow(), tvUhfWindow());
+		if (kind == BandScan.NFC)
+			return List.of(NfcBandPlan.phyWindow(), NfcBandPlan.harmonic2Window(), NfcBandPlan.harmonic3Window());
 		return List.of();
 	}
 

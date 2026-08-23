@@ -92,18 +92,29 @@ public final class SpectrumMcpTools
 						"Live FM dial hits for an FM-scale view, or an empty list when zoomed out.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
+				+ tool("nfc_activity",
+						"Live 13.56 MHz NFC / HF-RFID classification (field, poll, HiFER/CW, A/B/F/V sidebands). Read-only; no payload/UID decode. AirTags are not in this band.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
 				+ tool("fm_spectrum",
 						"Live local RF spectrum from the same parked 4 MS/s IQ stream used by FM Listen (dBFS).",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("spectrum_occupancy",
-						"Emitters above noise+8 dB: width, occupied fraction, optional Wi-Fi ch label.",
+						"Emitters above noise+8 dB: width, occupied fraction, optional Wi-Fi ch or NFC feature label.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("spectrum_history",
 						"Recent summaries from the snapshot ring (not full bins). Optional seconds and maxSamples.",
 						"{\"type\":\"object\",\"properties\":{\"seconds\":{\"type\":\"number\",\"minimum\":0.1},"
 								+ "\"maxSamples\":{\"type\":\"integer\",\"minimum\":1}}}")
+				+ ","
+				+ tool("spectrum_history_bins",
+						"Recent filled-bin frames from the snapshot ring (same axis as the live window). Optional seconds, maxSamples (capped at 50), maxPoints, minDbm. Not the waterfall image.",
+						"{\"type\":\"object\",\"properties\":{\"seconds\":{\"type\":\"number\",\"minimum\":0.1},"
+								+ "\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":50},"
+								+ "\"maxPoints\":{\"type\":\"integer\",\"minimum\":1},"
+								+ "\"minDbm\":{\"type\":\"number\"}}}")
 				+ ","
 				+ tool("tv_watch",
 						"Park the HackRF on a US ATSC 1.0 channel (2-36) and start Watch. Same exclusive RF path as the UI.",
@@ -146,6 +157,8 @@ public final class SpectrumMcpTools
 			return fmListenCall(args);
 		if ("fm_stations".equals(name))
 			return textResult(store.context().fmStationsJson(), false);
+		if ("nfc_activity".equals(name))
+			return textResult(store.nfcActivityJson(), false);
 		if ("fm_spectrum".equals(name))
 		{
 			FmListenSpectrum fm = store.fmListenSpectrum();
@@ -155,6 +168,8 @@ public final class SpectrumMcpTools
 			return occupancyCall();
 		if ("spectrum_history".equals(name))
 			return historyCall(args);
+		if ("spectrum_history_bins".equals(name))
+			return historyBinsCall(args);
 		throw new IllegalArgumentException("unknown tool: " + name);
 	}
 
@@ -243,6 +258,14 @@ public final class SpectrumMcpTools
 		return textResult(json, empty);
 	}
 
+	private String historyBinsCall(Map<String, Object> args)
+	{
+		String json = store.historyBinsJson(McpJson.getDouble(args, "seconds"), McpJson.getInt(args, "maxSamples"),
+				McpJson.getInt(args, "maxPoints"), McpJson.getDouble(args, "minDbm"));
+		boolean empty = store.latest() == null || store.latest().isEmpty();
+		return textResult(json, empty);
+	}
+
 	private String snapshotCall(Map<String, Object> args)
 	{
 		SpectrumSnapshot latest = store.latest();
@@ -250,67 +273,8 @@ public final class SpectrumMcpTools
 		Double min = McpJson.getDouble(args, "minDbm");
 		if (max == null && min == null)
 			return textResult(latest.toJson(), latest.isEmpty());
-		// Re-filter from the stored points (already hole-stripped).
 		int cap = max == null ? latest.mhz.length : Math.max(1, max.intValue());
-		return textResult(downsampleStored(latest, cap, min == null ? null : min.floatValue()).toJson(),
-				latest.isEmpty());
-	}
-
-	static SpectrumSnapshot downsampleStored(SpectrumSnapshot src, int maxPoints, Float minDbm)
-	{
-		if (src == null || src.isEmpty())
-			return src == null ? SpectrumSnapshot.empty(0L) : src;
-		int n = src.mhz.length;
-		float[] m = new float[Math.min(n, maxPoints)];
-		float[] d = new float[m.length];
-		int out = 0;
-		if (n <= maxPoints)
-		{
-			for (int i = 0; i < n; i++)
-			{
-				if (minDbm != null && src.dbm[i] < minDbm.floatValue())
-					continue;
-				if (out < m.length)
-				{
-					m[out] = src.mhz[i];
-					d[out] = src.dbm[i];
-					out++;
-				}
-			}
-		}
-		else
-		{
-			for (int p = 0; p < maxPoints; p++)
-			{
-				int i0 = (int) ((long) p * n / maxPoints);
-				int i1 = Math.max(i0 + 1, (int) ((long) (p + 1) * n / maxPoints));
-				float peak = Float.NEGATIVE_INFINITY;
-				float xAt = src.mhz[i0];
-				boolean any = false;
-				for (int i = i0; i < i1 && i < n; i++)
-				{
-					if (minDbm != null && src.dbm[i] < minDbm.floatValue())
-						continue;
-					any = true;
-					if (src.dbm[i] > peak)
-					{
-						peak = src.dbm[i];
-						xAt = src.mhz[i];
-					}
-				}
-				if (!any)
-					continue;
-				m[out] = xAt;
-				d[out] = peak;
-				out++;
-			}
-		}
-		float[] mo = new float[out];
-		float[] do_ = new float[out];
-		System.arraycopy(m, 0, mo, 0, out);
-		System.arraycopy(d, 0, do_, 0, out);
-		return new SpectrumSnapshot(src.timestampMs, src.startMHz, src.endMHz, src.fftBinHz, mo, do_, src.filledBins,
-				src.omittedHoles, src.noiseDbm, src.peakDbm, src.peakMhz, src.freqStartHz);
+		return textResult(latest.downsampled(cap, min == null ? null : min.floatValue()).toJson(), latest.isEmpty());
 	}
 
 	private static String textResult(String json, boolean isError)

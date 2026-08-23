@@ -5,5 +5,5 @@ package hotiron.core;
  */
 public enum BandScan
 {
-	OFF, FM, TV
+	OFF, FM, TV, NFC
 }

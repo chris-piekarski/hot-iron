@@ -44,11 +44,11 @@ flowchart TD
 - `RadioMode` — derived (`stopped` / `sweep` / `listen` / `watch`), not stored
 - `AutoGainPolicy` (LNA then VGA; display policy, writes radio gain)
 - `FmListenGainPolicy` / `TvWatchGainPolicy` — parked-IQ seeds (Listen adds IF so a 200 kHz station uses the 8-bit ADC; Watch UHF starts at LNA 40 + VGA 22, Auto Watch enables the RF amp for that session, and IF keeps trimming toward ~0.5 RMS)
-- `BandScanSession` — FM/TV tuner **Scan** dwells each broadcast window after the first live sweep (TV: VHF then UHF) so **Seek** jumps a pinned station list
+- `BandScanSession` — FM/TV/NFC **Scan** dwells each window after the first live sweep (TV: VHF then UHF; NFC: 12–15 then 27.12 / 40.68) so **Seek** jumps a pinned station list (NFC has no Seek list)
 - `AutoSweepPolicy` (FFT Bin + samples from span; display policy, writes radio FFT/samples; hysteresis so pan does not thrash)
 - `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz pad so FM 88–108 is filled)
-- `FrequencyAxis`, `BandMark`, `WifiBandLayer`, `FmBandLayer`, `TvBandLayer` (plot overlays do not invent their own MHz↔pixel map)
-- Channel catalogs + trackers: `FmChannelPlan` / `FmStationTracker`, `TvChannelPlan` / `TvStationTracker`, `WifiChannelPlan`
+- `FrequencyAxis`, `BandMark`, `WifiBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer` (plot overlays do not invent their own MHz↔pixel map)
+- Channel catalogs + trackers: `FmChannelPlan` / `FmStationTracker`, `TvChannelPlan` / `TvStationTracker`, `WifiChannelPlan`, `NfcBandPlan` / `NfcActivityTracker`
 - `EMA`, `FFTBins`, `RadioIdentity`, `AudioSink` / `AudioSinks`
 - Frequency allocation tables
 
@@ -65,10 +65,10 @@ These are the best candidates for unit testing (and have the majority of our tes
 ### UI Layer
 - Swing + FlatLaf + JFreeChart. Settings widgets bind through `hotiron.mvc` (`ModelValue` + `MVCController`); do not add new model fields on the JFrame.
 - `WaterfallPlot` + `WaterfallTimeScale` (left gutter, newest at the top). Palette follows the live dB window when auto-scale is on. History is kept across gain-only USB restarts (`DatasetSpectrum.sameAxisAs`). Chart refresh is capped at 30 fps even when a narrow window finishes hundreds of sweeps per second.
-- `HackRFSweepSettingsUI`, Quick Select (`QuickSelectPreset`), `SweepStatusBar`, radio identity (board / serial / firmware), MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen and Watch both keep `WaterfallPlot` (AUDIO / VIDEO banners) at the same split.
+- `HackRFSweepSettingsUI`, Quick Select (`QuickSelectPreset`), `SweepStatusBar`, radio identity (board / serial / firmware), MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), NFC / 13.56 (`NfcBandLayer` + `NfcActivityTracker` + `NfcHud`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch / NFC Scan works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen and Watch both keep `WaterfallPlot` (AUDIO / VIDEO banners) at the same split.
 
 ### MCP (`hotiron.mcp`)
-Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `tv_debug`, `tv_debug_history`. Writes: `fm_listen` (US FM dial) and `tv_watch` (US ATSC ch 2–36) set the same `AnalyzerSettings` the operator uses (EDT), then park. Snapshot tools must not restart USB. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
+Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `nfc_activity`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins`, `tv_debug`, `tv_debug_history`. Writes: `fm_listen` (US FM dial) and `tv_watch` (US ATSC ch 2–36) set the same `AnalyzerSettings` the operator uses (EDT), then park. Snapshot tools must not restart USB. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
 
 ### Build System
 - Root `Makefile` — convenience targets (`make help`, `make test`, `make start`, etc.).
@@ -83,7 +83,7 @@ Model Context Protocol on the **same JVM** as the GUI (no second USB open). `Swe
 
 ## Exclusive USB
 
-`RadioMode` is derived, not stored: released → `stopped`; else parked + `ListenService.TV` → `watch`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`).
+`RadioMode` is derived, not stored (`RadioMode.of(settings)`): released → `stopped`; else parked + `ListenService.TV` → `watch`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`).
 
 ```mermaid
 flowchart TD
@@ -99,7 +99,7 @@ flowchart TD
     Stopped -->|restartSweep| Sweep
 ```
 
-Mode changes go through `AnalyzerSettings.Hardware` into `HotIron.restartHackrfSweep()`. See [Restart coalescing](#restart-coalescing).
+Mode changes go through `AnalyzerSettings.Hardware` into `RadioSession.applyNow()`.
 
 ## Data Flow
 
@@ -142,7 +142,7 @@ This is how the pieces stay testable and exclusive. Types, not a framework.
 - **View:** Swing widgets in `HackRFSweepSettingsUI`.
 - **Controller:** `MVCController` binds checkbox/slider/spinner/combo both ways, with a `disableViewListeners` flag so view updates do not re-enter the model. View writes marshal onto the EDT.
 
-`AnalyzerSettings` implements `HackRFSettings` and **owns every `ModelValue`**. Radio fields (`isRadioSetting`) restart USB after debounce/coalesce. Display fields (peaks, auto-scale, palette, waterfall) only repaint. Auto-gain and Auto-sweep are **display policies that write radio fields**; those writes are flagged so they do not flip Auto off or double-restart. Manual spinner changes turn Auto off.
+`AnalyzerSettings` implements `HackRFSettings` and **owns every `ModelValue`**. Radio fields (`isRadioSetting`) restart USB after debounce/coalesce. Display fields (peaks, auto-scale, palette, waterfall) only repaint. Auto-gain and Auto-sweep are **display policies that write radio fields**. `RadioCoordinator.bind()` is the only listener table that may restart USB; Auto writes go through `applyAutoSweep` / `applyAutoGain` so they do not look like spinner overrides. Manual spinner changes turn Auto off. MCP `fm_listen` / `tv_watch` set the same model and park via `startListen` / `startWatch` (EDT), then dial/channel retunes flow through the coordinator.
 
 ### Ports (hooks, no DI container)
 
@@ -151,6 +151,8 @@ Three ports keep `core` and `mcp` free of Swing and USB:
 | Port | Production implementor | Null / test stand-in |
 |---|---|---|
 | `AnalyzerSettings.Hardware` | `HotIron` (restart, release, listen, watch, list serials) | `Hardware.NOOP` |
+| `RadioCoordinator.Usb` | `RadioSession.applyNow` / `applyDebounced` | counting fake in `RadioCoordinatorTest` |
+| `RadioSession.Driver` | `HotIron` stop/join + start sweep/listen/watch | counting fake in `RadioSessionTest` |
 | `SpectrumSweepEngine.Hooks` | `HotIron.SweepUiHooks` (chart, waterfall, snapshot publish, auto-gain) | `NOOP_HOOKS` |
 | `SpectrumMcpTools.FmListenHook` / `TvWatchHook` | EDT lambdas that set dial/channel and call `startListen` / `startWatch` | `null` → tool reports unavailable |
 
@@ -177,14 +179,18 @@ Policies are `final` classes with private constructors and static methods. They 
 | `FmListenGainPolicy` | Sweep seed + 16 dB IF |
 | `TvWatchGainPolicy` | UHF watch seed (LNA 40 + VGA 22) |
 | `AutoSweepPolicy` | Finest FFT bin with ≤~4000 dataset points, always 8192 samples, keep current bin while length stays 1500–6000 |
+| `RadioCoordinator` | Operator vs Auto vs parked retune; Auto writes run as `Source.AUTO_POLICY` so they do not look like spinner overrides |
+| `RadioSession` | Exclusive USB queue, debounce, sweep vs Listen vs Watch at start |
+| `SweepFramePolicy` | Chart ≤30 fps, axis-history, Auto-gain eligibility (off while parked or scanning) |
+| `SweepLiveLoop` | One full-sweep tick: axis, 10 Hz detect+MCP, then paint-gated detect/scan/AGC/paint |
 | `SpurFilter` | Calibrate across N sweeps, then subtract; recalibrate on axis change |
 | `SpectrumOccupancy` | Emitters above noise+8 dB on filled bins; no USB |
 
 ### Shared frequency map
 
-`FrequencyAxis` is the only MHz↔pixel map. Zoom-drag, waterfall, and every overlay use it. Layers are pure functions of axis + domain data (`WifiBandLayer`, `FmBandLayer`, `TvBandLayer`, `QuickSelectBandLayer`) and emit `BandMark`s. UI overlays are thin: `FrequencyAxis.fromArea` → layer `marks()` → `BandHeaderPainter.paint`. Do not add a second MHz↔pixel map.
+`FrequencyAxis` is the only MHz↔pixel map. Zoom-drag, waterfall, and every overlay use it. Layers are pure functions of axis + domain data (`WifiBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer`, `QuickSelectBandLayer`) and emit `BandMark`s. UI overlays are thin: `FrequencyAxis.fromArea` → layer `marks()` → `BandHeaderPainter.paint`. Do not add a second MHz↔pixel map. NFC Quick Select is **12–15 MHz** so Type A/B sidebands are on-screen; PHY notes are in [nfc.md](nfc.md).
 
-`FmStationTracker` / `TvStationTracker` add temporal hysteresis so a one-sweep flash is not labeled as a station.
+`FmStationTracker` / `TvStationTracker` / `NfcActivityTracker` add temporal hysteresis so a one-sweep flash is not labeled.
 
 ### Immutable snapshots
 
@@ -206,11 +212,9 @@ Java `HackRFSweepNativeBridge` / `HackRFFmNativeBridge` vs C `hackrf_sweep_lib_*
 
 `MpegTsPlayer` adapts MPEG-TS bytes to host `ffmpeg` and keeps decode counters (`Stats` + `MpegTsProbe`) for `tv_debug`. Watch only starts that player after a healthy Reed-Solomon window and maps the PMT video/audio PIDs. `AudioSinks.openPlayback()` is Java Sound, then Pulse (WSL), then `RecordingAudioSink`. Unit tests inject `AudioSink` and never open a mixer.
 
-### Restart coalescing
+### Exclusive USB
 
-`restartHackrfSweep()` offers a token into a size-1 FIFO; on overflow it clears and offers again (last launch wins). The launcher thread runs `restartHackrfSweepExecute()`: stop native + engines, then start sweep **or** `runFmListen()` **or** `runTvWatch()`. `SweepConfig.shouldStartAfterStop(released, newerQueued)` avoids starting a sweep the operator already cancelled.
-
-Frequency applies debounce (`SweepConfig.FREQUENCY_APPLY_DEBOUNCE_MS` = 120 ms) so Grafana-style drag-zoom does not thrash libusb. Auto-gain / Auto-sweep writes coalesce with that restart via flags (`flagApplyingAutoGain`, `flagCoalesceAutoSweep`).
+`RadioSession` owns the last-launch-wins apply queue and frequency debounce (`SweepConfig.FREQUENCY_APPLY_DEBOUNCE_MS` = 120 ms). After stop, it starts sweep, Listen, or Watch from `settings.radioMode()` (`RadioMode.of`). `Stop` aborts with a bounded join so the EDT cannot hang; a queued apply after Stop does not start. Auto writes run as `RadioCoordinator.Source.AUTO_POLICY` so FFT/gain listeners do not double-restart or turn Auto off.
 
 ### Cross-cutting
 
@@ -364,8 +368,11 @@ flowchart LR
 ## Where to start reading
 
 1. `HackRFSettings` + `AnalyzerSettings` — the model and radio/display split
-2. `SpectrumSweepEngine` — producer/consumer + hooks
-3. `HotIron.restartHackrfSweepExecute` + `SweepUiHooks` — composition and 30 fps publish
-4. `FmListenEngine` / `TvWatchEngine` — parked IQ variants of the same queue pattern
-5. `FrequencyAxis` + `BandMark` + one `*BandLayer` — overlay architecture
-6. `SpectrumSnapshotStore` + `SpectrumMcpTools` — agent read model and the two write hooks
+2. `RadioCoordinator` — USB apply from operator / Auto / MCP dial (tests, no JFrame)
+3. `RadioSession` — exclusive queue, debounce, mode at start (tests, no JNA)
+4. `SpectrumSweepEngine` — producer/consumer + hooks
+5. `SweepLiveLoop` — detect / scan / 10 Hz MCP publish / 30 fps paint (`SweepFramePolicy`)
+6. `HotIron` driver — native start/stop; paint stays on the frame
+7. `FmListenEngine` / `TvWatchEngine` — parked IQ variants of the same queue pattern
+8. `FrequencyAxis` + `BandMark` + one `*BandLayer` — overlay architecture
+9. `SpectrumSnapshotStore` + `SpectrumMcpTools` — agent read model and the two write hooks

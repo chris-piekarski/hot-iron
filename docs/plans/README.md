@@ -19,6 +19,9 @@ Living implementation plans live here so later work (and agents) can pick them u
 
 | Plan | Outcome |
 |---|---|
+| [MCP spectrum history bins](spectrum-history-bins.md) | Done 2026-08-23. `spectrum_history_bins` exports the snapshot ring as filled-bin frames (not the waterfall). |
+| [NFC spectrum overlays](nfc-spectrum.md) | Done 2026-08-23. 12–15 MHz Quick Select, `NfcActivityTracker`, overlay/HUD, Scan harmonics, MCP `nfc_activity`. |
+| [Radio apply coordinator](radio-apply.md) | Done 2026-08-23. `RadioCoordinator` + `SweepLiveLoop` + `RadioSession`; USB apply, live sinks, and exclusive start/stop are tested in `core`. |
 | [Unit test coverage](unit-test-coverage.md) | Done 2026-08-17. `make test` 104/104. Project **56.1%** lines, `core` **90.2%**. |
 | [Hardware integration tests](hardware-integration-tests.md) | Done; updated 2026-08-22. Gated `make test-hw` (8 ITs, including sweep queue/dataset and FM Listen→sweep resume). `make test` stays radio-free. |
 | [Java 21 + FlatLaf UI](java-21-ui.md) | Done 2026-08-18. Java 21 floor, FlatDarkLaf, library bumps. `make test` 119/119, `make test-hw` 7/7. |

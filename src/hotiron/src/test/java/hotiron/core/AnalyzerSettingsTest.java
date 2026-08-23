@@ -219,6 +219,18 @@ class AnalyzerSettingsTest {
 	}
 
 	@Test
+	void nfcScanStartsOnPhyWindowAndTogglesOff()
+	{
+		AnalyzerSettings s = new AnalyzerSettings();
+		s.startNfcScan();
+		assertEquals(BandScan.NFC, s.getBandScan().getValue());
+		assertEquals(NfcBandPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(NfcBandPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		s.startNfcScan();
+		assertEquals(BandScan.OFF, s.getBandScan().getValue());
+	}
+
+	@Test
 	void hardwareEventsReachRegisteredListeners() {
 		AnalyzerSettings s = new AnalyzerSettings();
 		AtomicInteger hw = new AtomicInteger();

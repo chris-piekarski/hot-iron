@@ -53,6 +53,33 @@ class SpectrumOccupancyTest {
 	}
 
 	@Test
+	void nfcCarrierGetsAFeatureLabel()
+	{
+		DatasetSpectrum ds = new DatasetSpectrum(10_000f, 12, 15, -150f);
+		for (int i = 0; i < ds.spectrumLength(); i++)
+			ds.getSpectrumArray()[i] = -80f;
+		NfcBandPlanTest.spike(ds, 13.56, -30f);
+		float[] mhz = ds.frequencyAxisMHz();
+		float[] dbm = ds.getSpectrumArray();
+		int n = 0;
+		float[] m = new float[mhz.length];
+		float[] d = new float[mhz.length];
+		for (int i = 0; i < mhz.length; i++)
+		{
+			if (DatasetSpectrum.isChartHole(dbm[i]))
+				continue;
+			m[n] = mhz[i];
+			d[n] = dbm[i];
+			n++;
+		}
+		SpectrumOccupancy.Result r = SpectrumOccupancy.from(java.util.Arrays.copyOf(m, n),
+				java.util.Arrays.copyOf(d, n), -80f, 10_000f, 12, 15);
+		assertEquals(1, r.emitters.size(), r.toJson());
+		assertEquals("13.56", r.emitters.get(0).label);
+		assertTrue(r.toJson().contains("13.56"));
+	}
+
+	@Test
 	void twoSeparatedPeaksAreTwoEmittersStrongestFirst() {
 		float[] mhz = new float[20];
 		float[] dbm = new float[20];
