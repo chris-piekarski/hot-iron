@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Listen and Watch parked-IQ spectrum uses the same peak half-life, persistence overlay, and `spectrum_history` ring as the wideband sweep. AUDIO/VIDEO waterfalls stay on the parked IQ strip.
+- GitHub remote is [`chris-piekarski/hot-iron`](https://github.com/chris-piekarski/hot-iron). The old `hackrf-spectrum-analyzer` slug redirects.
 
 ## [2.0.2] - 2026-08-22
 

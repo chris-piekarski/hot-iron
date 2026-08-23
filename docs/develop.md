@@ -3,8 +3,8 @@
 ## Getting the Code
 
 ```bash
-git clone --recurse-submodules https://github.com/chris-piekarski/hackrf-spectrum-analyzer.git
-cd hackrf-spectrum-analyzer
+git clone --recurse-submodules https://github.com/chris-piekarski/hot-iron.git
+cd hot-iron
 make help
 ```
 

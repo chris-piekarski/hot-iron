@@ -11,14 +11,14 @@
 
 **Heat on the dial. QSY to live hits. Agents copy the RF bins.**
 
-[![Release](https://img.shields.io/github/v/release/chris-piekarski/hackrf-spectrum-analyzer)](https://github.com/chris-piekarski/hackrf-spectrum-analyzer/releases/latest)
+[![Release](https://img.shields.io/github/v/release/chris-piekarski/hot-iron)](https://github.com/chris-piekarski/hot-iron/releases/latest)
 [![MCP](https://img.shields.io/badge/MCP-localhost%208765-7c3aed.svg)](docs/agents.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Java](https://img.shields.io/badge/Java-21-orange.svg)](docs/building.md)
 [![HackRF SDK](https://img.shields.io/badge/HackRF_SDK-v2026.01.3-success.svg)](docs/hardware.md)
 [![Firmware](https://img.shields.io/badge/min_firmware-2024.02.1-lightgrey.svg)](docs/hardware.md)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational.svg)](docs/building.md)
-[![Last commit](https://img.shields.io/github/last-commit/chris-piekarski/hackrf-spectrum-analyzer/master)](https://github.com/chris-piekarski/hackrf-spectrum-analyzer/commits/master)
+[![Last commit](https://img.shields.io/github/last-commit/chris-piekarski/hot-iron/master)](https://github.com/chris-piekarski/hot-iron/commits/master)
 
 A Java 21 desktop for the [HackRF One](https://greatscottgadgets.com/hackrf/) (and Pro). Sweep the waterfall, **QSY** to live FM/TV hits, and let agents **copy** the same RF bins over MCP — **one rig**, no second USB open.
 
@@ -68,8 +68,8 @@ Ask an attached agent: *peak and noise on this window? any live FM dial hits? wa
 ## Quick Start
 
 ```bash
-git clone --recurse-submodules https://github.com/chris-piekarski/hackrf-spectrum-analyzer.git
-cd hackrf-spectrum-analyzer
+git clone --recurse-submodules https://github.com/chris-piekarski/hot-iron.git
+cd hot-iron
 make help          # all commands
 make deps          # Ubuntu/Debian build packages
 make mcp           # build if needed, launch GUI + MCP
