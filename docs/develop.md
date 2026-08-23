@@ -166,7 +166,7 @@ That marks upstream as an ancestor so GitHub shows 0 behind, while leaving this 
 
 ## Releasing
 
-Current app version is **2.0.1** (`Version.java`, Maven `pom.xml`, MCP `SERVER_VERSION`).
+Current app version is **2.0.2** (`Version.java`, Maven `pom.xml`, MCP `SERVER_VERSION`).
 
 1. Bump `Version.java`, `src/hotiron/pom.xml`, `SpectrumMcpTools.SERVER_VERSION`, and move `[Unreleased]` in `CHANGELOG.md` to a dated section.
 2. Run `make stats` (do not hand-edit `docs/stats.md`).

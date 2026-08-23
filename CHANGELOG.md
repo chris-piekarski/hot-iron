@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-08-22
+
 ### Added
 - Watch `tv_debug` / `tv_debug_history` and the 2 s `ATSC watch:` console line report FFmpeg process health (alive/exit, stdin write errors, stdout bytes / partial frame), TS bytes offered vs written, queue drops, last stderr, and PAT/PMT/video PID counts. `stage` now splits a stuck decode (`ffmpeg_missing`, `ffmpeg_blocked`, `no_pmt`, `no_video_pes`, `ffmpeg_waiting`, …) instead of a single `ffmpeg_waiting` bucket.
 - **Auto FFT / samples** (default on): `AutoSweepPolicy` picks FFT Bin and Number of samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast. Hysteresis avoids USB thrash on pan. Uncheck Auto to override.

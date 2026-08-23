@@ -10,7 +10,7 @@ public final class SpectrumMcpTools
 {
 	public static final String PROTOCOL = "2024-11-05";
 	public static final String SERVER_NAME = "hotiron";
-	public static final String SERVER_VERSION = "2.0.1";
+	public static final String SERVER_VERSION = "2.0.2";
 
 	@FunctionalInterface
 	public interface TvWatchHook
