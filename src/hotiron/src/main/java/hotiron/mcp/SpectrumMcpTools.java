@@ -24,27 +24,63 @@ public final class SpectrumMcpTools
 		void listen(double mhz);
 	}
 
+	@FunctionalInterface
+	public interface NfcSniffHook
+	{
+		void sniff();
+	}
+
+	@FunctionalInterface
+	public interface AutoGainHook
+	{
+		void setEnabled(boolean enabled);
+	}
+
+	@FunctionalInterface
+	public interface SweepHook
+	{
+		void sweep();
+	}
+
 	private final SpectrumSnapshotStore store;
 	private final TvWatchHook tvWatch;
 	private final FmListenHook fmListen;
+	private final NfcSniffHook nfcSniff;
+	private final AutoGainHook autoGain;
+	private final SweepHook sweep;
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store)
 	{
-		this(store, null, null);
+		this(store, null, null, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch)
 	{
-		this(store, tvWatch, null);
+		this(store, tvWatch, null, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen)
+	{
+		this(store, tvWatch, fmListen, null, null, null);
+	}
+
+	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
+			NfcSniffHook nfcSniff)
+	{
+		this(store, tvWatch, fmListen, nfcSniff, null, null);
+	}
+
+	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
+			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep)
 	{
 		if (store == null)
 			throw new IllegalArgumentException("store");
 		this.store = store;
 		this.tvWatch = tvWatch;
 		this.fmListen = fmListen;
+		this.nfcSniff = nfcSniff;
+		this.autoGain = autoGain;
+		this.sweep = sweep;
 	}
 
 	public SpectrumSnapshotStore store()
@@ -73,7 +109,7 @@ public final class SpectrumMcpTools
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("sweep_config",
-						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|stopped), listenMHz, tvChannel, plus display flags (autoSweep, autoGain, autoScale, peaks).",
+						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|nfc|stopped), listenMHz, tvChannel, plus display flags (autoSweep, autoGain, autoScale, peaks).",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("tv_debug",
@@ -93,7 +129,15 @@ public final class SpectrumMcpTools
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("nfc_activity",
-						"Live 13.56 MHz NFC / HF-RFID classification (field, poll, HiFER/CW, A/B/F/V sidebands). Read-only; no payload/UID decode. AirTags are not in this band.",
+						"Live 13.56 MHz NFC / HF-RFID classification (field, poll, HiFER/CW, A/B/F/V sidebands). Sweep classifier only. AirTags are not in this band.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("nfc_frames",
+						"Recent NFC frames from the parked sniff decoder (tech, name, hex). Empty unless radioMode is nfc. Optional maxSamples (1-200).",
+						"{\"type\":\"object\",\"properties\":{\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}}")
+				+ ","
+				+ tool("nfc_sniff",
+						"Park the HackRF at 11.56 MHz / 10 MS/s and decode NFC frames. Same exclusive RF path as the Sniff control. Receive only.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("fm_spectrum",
@@ -125,6 +169,14 @@ public final class SpectrumMcpTools
 						"Park the HackRF on a US FM dial (88.1-107.9 MHz, 200 kHz raster) and start Listen. Same exclusive RF path as the UI.",
 						"{\"type\":\"object\",\"properties\":{\"mhz\":{\"type\":\"number\",\"minimum\":88.1,\"maximum\":107.9}},"
 								+ "\"required\":[\"mhz\"]}")
+				+ ","
+				+ tool("auto_gain",
+						"Set the existing Auto gain checkbox (same AnalyzerSettings.isAutoGain as the sidebar). Does not change LNA/VGA until the policy or operator does.",
+						"{\"type\":\"object\",\"properties\":{\"enabled\":{\"type\":\"boolean\"}},\"required\":[\"enabled\"]}")
+				+ ","
+				+ tool("sweep",
+						"Leave Listen/Watch/Sniff and restart the wideband sweep (same as Stop / restartSweep).",
+						"{\"type\":\"object\",\"properties\":{}}")
 				+ "]}";
 	}
 
@@ -159,6 +211,14 @@ public final class SpectrumMcpTools
 			return textResult(store.context().fmStationsJson(), false);
 		if ("nfc_activity".equals(name))
 			return textResult(store.nfcActivityJson(), false);
+		if ("nfc_frames".equals(name))
+			return textResult(store.nfcFramesJson(McpJson.getInt(args, "maxSamples")), false);
+		if ("nfc_sniff".equals(name))
+			return nfcSniffCall();
+		if ("auto_gain".equals(name))
+			return autoGainCall(args);
+		if ("sweep".equals(name))
+			return sweepCall();
 		if ("fm_spectrum".equals(name))
 		{
 			FmListenSpectrum fm = store.fmListenSpectrum();
@@ -224,6 +284,33 @@ public final class SpectrumMcpTools
 		tvWatch.watch(plan.fccChannel);
 		return textResult("{\"ok\":true,\"tvChannel\":" + plan.fccChannel + ",\"centerMHz\":" + plan.centerMHz() + "}",
 				false);
+	}
+
+	private String nfcSniffCall()
+	{
+		if (nfcSniff == null)
+			throw new IllegalArgumentException("nfc_sniff is not bound");
+		nfcSniff.sniff();
+		return textResult("{\"ok\":true,\"radioMode\":\"nfc\",\"loHz\":11560000,\"sampleRate\":10000000}", false);
+	}
+
+	private String autoGainCall(Map<String, Object> args)
+	{
+		if (autoGain == null)
+			throw new IllegalArgumentException("auto_gain is not bound");
+		Boolean enabled = McpJson.getBoolean(args, "enabled");
+		if (enabled == null)
+			throw new IllegalArgumentException("auto_gain requires enabled");
+		autoGain.setEnabled(enabled.booleanValue());
+		return textResult("{\"ok\":true,\"autoGain\":" + enabled + "}", false);
+	}
+
+	private String sweepCall()
+	{
+		if (sweep == null)
+			throw new IllegalArgumentException("sweep is not bound");
+		sweep.sweep();
+		return textResult("{\"ok\":true,\"radioMode\":\"sweep\"}", false);
 	}
 
 	private String fmListenCall(Map<String, Object> args)

@@ -151,6 +151,20 @@ class RadioCoordinatorTest
 	}
 
 	@Test
+	void sniffIgnoresFmDialAndTvChannel()
+	{
+		FakeHackRFSettings s = new FakeHackRFSettings();
+		UsbCount usb = new UsbCount();
+		bind(s, usb);
+		s.startSniff();
+		usb.now.set(0);
+		s.getListenKHz().setValue(95_100);
+		s.getTvChannel().setValue(14);
+		assertEquals(0, usb.now.get(), "NFC LO is fixed");
+		assertEquals(RadioMode.NFC, s.radioMode());
+	}
+
+	@Test
 	void operatorGainTurnsAutoGainOffAndSplitsLnaVga()
 	{
 		FakeHackRFSettings s = new FakeHackRFSettings();

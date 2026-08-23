@@ -6,8 +6,8 @@ import com.sun.jna.ptr.DoubleByReference;
 import com.sun.jna.ptr.FloatByReference;
 /**
  * JNA bindings for {@code libhackrf-sweep}. Hand-maintained — do not regenerate
- * with JNAerator. Keep in sync with {@code src-c/hackrf_sweep.h} and
- * {@code src-c/hackrf_fm.h}.
+ * with JNAerator. Keep in sync with {@code src-c/hackrf_sweep.h},
+ * {@code src-c/hackrf_fm.h}, and {@code src-c/nfc_dec.h}.
  */
 public class HackrfSweepLibrary implements Library {
 	public interface hackrf_sweep_lib_start__fft_power_callback_callback extends Callback {
@@ -50,4 +50,12 @@ public class HackrfSweepLibrary implements Library {
 
 	public static native int atsc_rx_debug(Pointer rx, long[] counters, int counterCap,
 			float[] gauges, int gaugeCap);
+
+	public static native Pointer nfc_dec_create();
+
+	public static native void nfc_dec_destroy(Pointer dec);
+
+	public static native void nfc_dec_set_sample_rate(Pointer dec, int sample_rate);
+
+	public static native int nfc_dec_process_iq(Pointer dec, byte[] iq, int nbytes, Pointer out, int max_frames);
 }

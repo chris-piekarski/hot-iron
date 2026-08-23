@@ -5,5 +5,5 @@ package hotiron.core;
  */
 public enum ListenService
 {
-	FM, TV
+	FM, TV, NFC
 }

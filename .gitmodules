@@ -2,3 +2,6 @@
 	path = src/hotiron/lib/hackrf
 	url = https://github.com/greatscottgadgets/hackrf.git
 	ignore = dirty
+[submodule "src/hotiron/lib/nfc-laboratory"]
+	path = src/hotiron/lib/nfc-laboratory
+	url = https://github.com/josevcm/nfc-laboratory.git

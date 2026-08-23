@@ -27,6 +27,10 @@ public final class AnalyzerSettings implements HackRFSettings
 
 		void startWatch();
 
+		default void startSniff()
+		{
+		}
+
 		List<String> listRadioSerials();
 
 		Hardware NOOP = new Hardware()
@@ -324,6 +328,19 @@ public final class AnalyzerSettings implements HackRFSettings
 		listening.setValue(true);
 		radioReleased.setValue(false);
 		hardware.startWatch();
+	}
+
+	@Override
+	public void startSniff()
+	{
+		stopScan();
+		listenService.setValue(ListenService.NFC);
+		listening.setValue(true);
+		radioReleased.setValue(false);
+		if (getFrequency().getValue() == null || getFrequency().getValue().getStartMHz() != NfcBandPlan.VIEW_START_MHZ
+				|| getFrequency().getValue().getEndMHz() != NfcBandPlan.VIEW_END_MHZ)
+			getFrequency().setValue(NfcBandPlan.phyWindow());
+		hardware.startSniff();
 	}
 
 	@Override

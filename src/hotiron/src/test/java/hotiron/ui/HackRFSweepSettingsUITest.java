@@ -167,6 +167,24 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
+    void sniffButtonParksAsNfcWithoutRelease() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Sniff", ui.nfcSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.nfcSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.startSniffCalls);
+        assertTrue(settings.isListening().getValue());
+        assertEquals(hotiron.core.ListenService.NFC, settings.getListenService().getValue());
+        assertEquals(hotiron.core.RadioMode.NFC, settings.radioMode());
+        assertEquals("Stop", ui.nfcSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.nfcSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue());
+    }
+
+    @Test
     void stationKnobJumpsBetweenDetectedStations() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         settings.getDetectedFmStations().setValue(java.util.List.of(

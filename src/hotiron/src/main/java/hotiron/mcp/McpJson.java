@@ -59,6 +59,21 @@ final class McpJson
 		return null;
 	}
 
+	static Boolean getBoolean(Map<String, Object> o, String key)
+	{
+		Object v = get(o, key);
+		if (v instanceof Boolean)
+			return (Boolean) v;
+		if (v instanceof String)
+		{
+			if ("true".equalsIgnoreCase((String) v))
+				return Boolean.TRUE;
+			if ("false".equalsIgnoreCase((String) v))
+				return Boolean.FALSE;
+		}
+		return null;
+	}
+
 	static Double getDouble(Map<String, Object> o, String key)
 	{
 		Object v = get(o, key);

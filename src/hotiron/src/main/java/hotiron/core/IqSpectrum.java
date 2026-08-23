@@ -3,7 +3,7 @@ package hotiron.core;
 import java.util.Arrays;
 
 /**
- * Real-time FFT of parked int8 IQ (FM Listen or TV Watch). Hann-windowed 1024-point
+ * Real-time FFT of parked int8 IQ (FM Listen, TV Watch, or NFC sniff). Hann-windowed 1024-point
  * frames, fftshifted so bin 0 is −fs/2. Power in dBFS.
  */
 public final class IqSpectrum

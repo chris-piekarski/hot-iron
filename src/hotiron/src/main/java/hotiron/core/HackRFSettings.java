@@ -91,6 +91,9 @@ public interface HackRFSettings {
 	/** Parked ATSC 1.0 receiver. Stops the sweep; USB stays owned. */
 	public void startWatch();
 
+	/** Parked NFC sniff at 11.56 MHz / 10 MS/s. Stops the sweep; USB stays owned. */
+	public void startSniff();
+
 	/** Leave listen mode and resume the sweep unless Stop was pressed. */
 	public void stopListen();
 

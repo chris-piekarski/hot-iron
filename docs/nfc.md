@@ -1,6 +1,8 @@
 # NFC / HF RFID at 13.56 MHz
 
-Reference for the **NFC** Quick Select and the live sweep classifier. Quick Select is **12–15 MHz** so Type A/B card sidebands are on-screen. `NfcBandPlan` / `NfcActivityTracker` / `NfcBandLayer` label the carrier, sidebands, and harmonics; MCP `nfc_activity` copies that same snapshot. There is no parked-IQ NFC demod and no UID / APDU decode.
+Reference for the **NFC** Quick Select, the live sweep classifier, and parked **Sniff**. Quick Select is **12–15 MHz** so Type A/B card sidebands are on-screen. `NfcBandPlan` / `NfcActivityTracker` / `NfcBandLayer` label the carrier, sidebands, and harmonics; MCP `nfc_activity` copies that same snapshot.
+
+**Sniff** (sidebar or MCP `nfc_sniff`) parks the same HackRF at **11.56 MHz / 10 MS/s**. The chart and waterfall stay **12–15 MHz** (parked FFT). The sidebar **13.56 |IQ|** strip is the last **500 ms** of the carrier mixed to baseband (not wideband magnitude) so ASK holes and poll trains show; [nfc-laboratory](https://github.com/josevcm/nfc-laboratory) names frames (REQA / ATQA / UID / SELECT and hex). MCP `nfc_frames` copies that list. Receive only — no TX, emulate, or APDU replay.
 
 NFC is not a channelized band like FM or Wi-Fi. There is **one carrier** at 13.56 MHz. What the operator needs is a **state over time** (quiet, reader field, polling, card talking back) plus **which air interface**, not a station list.
 
@@ -88,7 +90,7 @@ flowchart TD
 
 Sweep averaging and hop time work against the short polls. `hackrf_sweep` is a wideband power tool, not a millisecond frame sniffer.
 
-Type A **100% ASK** is carrier *dropouts*. That is modulation, not a disappeared signal. Auto-gain’s “one Wi-Fi packet is not clip” rule needs an NFC cousin if anyone parks IQ here.
+Type A **100% ASK** is carrier *dropouts*. That is modulation, not a disappeared signal. Sniff seeds LNA 8 / VGA 0 and does not treat those holes as clip.
 
 ## What HotIron does today
 
@@ -114,7 +116,7 @@ A Morse-like blink on the waterfall is usually **HiFER** or **polling**. It is n
 
 MCP `nfc_activity` is that same snapshot (`kind`, duty, `pollHz`, sideband flags, `trackingHint`). Read-only, no extra USB path. For the time-frequency stack (poll / HiFER blinks), use `spectrum_history_bins` on a 12–15 MHz window — that is the snapshot ring, not the waterfall image.
 
-Parked IQ at 11.56 MHz / 10 MS/s is still the better instrument for frame-level classification. That is not in this pass. FM Listen’s 4 MS/s path *covers* ±847.5 kHz if the LO is offset so 13.56 is not on DC; it is thin compared with what people use to *decode*.
+**Sniff** is the frame instrument. It stops the sweep (one radio), parks LO at 11.56 so 13.56 sits at +2 MHz IF (never on the DC spike), and feeds magnitude `sqrt(I²+Q²)` into nfc-lab’s `NfcDecoder`. The 12–15 MHz chart is an `IqSpectrum` of the same IQ. Header-click Scan is still Scan (12–15 → 27.12 → 40.68), not park.
 
 ## Practical HackRF (from SDR / ham writeups)
 
@@ -150,15 +152,16 @@ Sweep scores **sideband bins**, not energy at 13.56, for card talk-back — the 
 
 ## What not to build
 
-- ISO 14443 / EMV / MIFARE decode, UID dumps, APDU payloads. Different product; dual-use.
+- A second ISO 14443 stack, Proxmark ingest, EMV helpers, clone/emulate, or APDU replay. Show what nfc-lab already names (frame, tech, rate, UID/ATQA, raw hex).
 - Time-slicing sweep and NFC IQ. One radio.
 - Treating 125 kHz or UHF RFID as this button.
 - Assuming every 13.56 spike is a reader (HiFER / heaters).
 - Putting the LO on 13.56 in parked IQ (carrier becomes the DC spike).
+- Writing the Antenna LNA checkbox as a “leave the amp on after sniff” switch.
 
 ## Later (not this pass)
 
-Parked IQ classifier at 11.56 MHz / 10 MS/s: reuse `hackrf_fm` / `IqSpectrum`; envelope vs time (not audio); tests on synthetic int8 IQ. Hardware IT: park then resume sweep. Do not put the LO on 13.56.
+Hardware IT: sniff → stop → sweep resume with a loop on the SMA. NFC-F/V and 212+ kb/s are not v1 success criteria. Windows still stubs the decoder (spectrum parks; no frames) until lab-radio is cross-built.
 
 ## Sources
 

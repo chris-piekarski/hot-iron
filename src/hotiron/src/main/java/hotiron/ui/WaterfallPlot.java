@@ -63,6 +63,9 @@ public class WaterfallPlot extends JPanel {
 	private static final int	TIME_AXIS_MIN_GUTTER	= 28;
 	private boolean				audioMode				= false;
 	private boolean				videoMode				= false;
+	private boolean				nfcMode					= false;
+	private float				nfcStartMHz				= 12f;
+	private float				nfcEndMHz				= 15f;
 	private float				audioHzMax				= 16_000f;
 	private double				videoCenterHz			= 0;
 	private float				videoSpanHz				= 12_000_000f;
@@ -122,6 +125,7 @@ public class WaterfallPlot extends JPanel {
 	public synchronized void addNewData(DatasetSpectrum spectrum) {
 		audioMode = false;
 		videoMode = false;
+		nfcMode = false;
 
 		int size = spectrum.spectrumLength();
 		double freqRange = (spectrum.getFreqStopMHz() - spectrum.getFreqStartMHz()) * 1000000d;
@@ -240,6 +244,7 @@ public class WaterfallPlot extends JPanel {
 			return;
 		audioMode = true;
 		videoMode = false;
+		nfcMode = false;
 		audioHzMax = hzMax > 0 ? hzMax : 16_000f;
 		lastSpectrum = null;
 		addParkedDbRow(db);
@@ -253,8 +258,24 @@ public class WaterfallPlot extends JPanel {
 			return;
 		videoMode = true;
 		audioMode = false;
+		nfcMode = false;
 		videoSpanHz = spanHz > 0 ? spanHz : 12_000_000f;
 		videoCenterHz = centerHz;
+		lastSpectrum = null;
+		addParkedDbRow(db);
+	}
+
+	/**
+	 * One row of parked NFC RF (12–15 MHz). Same raster as Watch VIDEO.
+	 */
+	public synchronized void addNfcFrame(float[] db, float startMHz, float endMHz) {
+		if (db == null || db.length == 0)
+			return;
+		nfcMode = true;
+		audioMode = false;
+		videoMode = false;
+		nfcStartMHz = startMHz;
+		nfcEndMHz = endMHz > startMHz ? endMHz : startMHz + 3f;
 		lastSpectrum = null;
 		addParkedDbRow(db);
 	}
@@ -296,6 +317,11 @@ public class WaterfallPlot extends JPanel {
 			g.setColor(color);
 			g.draw(rect);
 		}
+		tickFps();
+		g.dispose();
+	}
+
+	private void tickFps() {
 		fpsRenderedFrames++;
 		if (System.currentTimeMillis() - lastFPSRecalculated > 1000) {
 			double rawfps = fpsRenderedFrames / ((System.currentTimeMillis() - (double) lastFPSRecalculated) / 1000d);
@@ -303,15 +329,17 @@ public class WaterfallPlot extends JPanel {
 			lastFPSRecalculated = System.currentTimeMillis();
 			fpsRenderedFrames = 0;
 		}
-		g.dispose();
 	}
 
 	public synchronized void setAudioMode(boolean on) {
-		if (audioMode == on && !videoMode)
+		if (audioMode == on && !videoMode && !nfcMode)
 			return;
 		audioMode = on;
 		if (on)
+		{
 			videoMode = false;
+			nfcMode = false;
+		}
 		clearHistory();
 	}
 
@@ -321,8 +349,21 @@ public class WaterfallPlot extends JPanel {
 		if (on)
 		{
 			audioMode = false;
+			nfcMode = false;
 			videoCenterHz = centerHz;
 			videoSpanHz = hotiron.core.IqSpectrum.DISPLAY_HZ;
+		}
+		if (was != on)
+			clearHistory();
+	}
+
+	public synchronized void setNfcMode(boolean on) {
+		boolean was = nfcMode;
+		nfcMode = on;
+		if (on)
+		{
+			audioMode = false;
+			videoMode = false;
 		}
 		if (was != on)
 			clearHistory();
@@ -446,6 +487,16 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	private double translateChartXToFrequency(int x) {
+		if (nfcMode) {
+			if (chartWidth <= 0)
+				return -1;
+			double u = x / (double) chartWidth;
+			if (u < 0)
+				u = 0;
+			if (u > 1)
+				u = 1;
+			return (nfcStartMHz + u * (nfcEndMHz - nfcStartMHz)) * 1_000_000d;
+		}
 		if (videoMode) {
 			if (chartWidth <= 0)
 				return -1;
@@ -475,6 +526,12 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	public static String modeBanner(boolean audio, boolean video) {
+		return modeBanner(audio, video, false);
+	}
+
+	public static String modeBanner(boolean audio, boolean video, boolean nfc) {
+		if (nfc)
+			return "parked IQ  ·  NFC  ·  12–15 MHz";
 		if (video)
 			return "parked IQ  ·  VIDEO  ·  ±8 MHz";
 		if (audio)
@@ -491,7 +548,7 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	private void drawModeBanner(Graphics2D g, int x0) {
-		String title = modeBanner(audioMode, videoMode);
+		String title = modeBanner(audioMode, videoMode, nfcMode);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12) : getFont().deriveFont(Font.BOLD, 12f);
 		g.setFont(font);
@@ -502,7 +559,7 @@ public class WaterfallPlot extends JPanel {
 		int th = fm.getAscent() + fm.getDescent();
 		int x = x0 + 8;
 		int y = 8;
-		boolean gold = audioMode || videoMode;
+		boolean gold = audioMode || videoMode || nfcMode;
 		g.setColor(gold ? BANNER_AUDIO : BANNER_RF);
 		g.fillRoundRect(x, y, tw + padX * 2, th + padY * 2, 8, 8);
 		g.setColor(gold ? BANNER_AUDIO_TEXT : BANNER_RF_TEXT);
@@ -526,6 +583,36 @@ public class WaterfallPlot extends JPanel {
 			int x = x0 + (int) Math.round(w * (hz / audioHzMax));
 			g.drawLine(x, y - 14, x, y - 10);
 			String lab = hz == 0 ? "0" : String.format("%.0fk", hz / 1000f);
+			int tw = fm.stringWidth(lab);
+			int tx = x - tw / 2;
+			if (tx < x0)
+				tx = x0;
+			if (tx + tw > x0 + w)
+				tx = x0 + w - tw;
+			g.drawString(lab, tx, y);
+		}
+	}
+
+	private void drawNfcMhzAxis(Graphics2D g, int x0, int w, int h) {
+		if (w < 40 || h < 16)
+			return;
+		float span = nfcEndMHz - nfcStartMHz;
+		if (!(span > 0))
+			return;
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11) : getFont().deriveFont(Font.PLAIN, 11f);
+		g.setFont(font);
+		g.setColor(TIME_AXIS_COLOR);
+		int y = h - 2;
+		g.drawLine(x0, y - 10, x0 + w, y - 10);
+		float[] ticks = { 12f, 12.71f, 13.56f, 14.41f, 15f };
+		FontMetrics fm = g.getFontMetrics();
+		for (float mhz : ticks) {
+			if (mhz < nfcStartMHz - 0.02f || mhz > nfcEndMHz + 0.02f)
+				continue;
+			int x = x0 + (int) Math.round(w * ((mhz - nfcStartMHz) / span));
+			g.drawLine(x, y - 14, x, y - 10);
+			String lab = mhz == Math.rint(mhz) ? String.format("%.0f", mhz) : String.format("%.2f", mhz);
 			int tw = fm.stringWidth(lab);
 			int tx = x - tw / 2;
 			if (tx < x0)
@@ -624,16 +711,16 @@ public class WaterfallPlot extends JPanel {
 		if (audioMode)
 			drawAudioHzAxis(g, chartXOffset, w, h);
 		else if (videoMode)
-		{
 			drawVideoMhzAxis(g, chartXOffset, w, h);
-		}
+		else if (nfcMode)
+			drawNfcMhzAxis(g, chartXOffset, w, h);
 
 		if (displayMarker) {
 			g.setColor(Color.gray);
 			g.drawLine(displayMarkerX, 0, displayMarkerX, h);
 			double age = WaterfallTimeScale.ageAtY(times, h, displayMarkerY);
 			String hz = audioMode ? formatAudioHz(displayMarkerFrequency)
-					: String.format("%.1f MHz", displayMarkerFrequency / 1000000.0);
+					: String.format("%.2f MHz", displayMarkerFrequency / 1000000.0);
 			g.drawString(hz + "  " + WaterfallTimeScale.formatAge(age), displayMarkerX + 5,
 					Math.max(14, displayMarkerY - 6));
 		} 

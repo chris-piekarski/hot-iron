@@ -5,7 +5,8 @@ package hotiron.core;
  * {@link Source#OPERATOR}. {@link #applyAutoSweep} / {@link #applyAutoGain}
  * run as {@link Source#AUTO_POLICY} so they do not turn Auto off or
  * double-fire USB. MCP parks via {@link HackRFSettings#startListen()} /
- * {@code startWatch()}; dial and channel still flow through {@link #bind()}.
+ * {@code startWatch()} / {@code startSniff()}; dial and channel still
+ * flow through {@link #bind()}. NFC LO is fixed (11.56 MHz).
  */
 public final class RadioCoordinator
 {

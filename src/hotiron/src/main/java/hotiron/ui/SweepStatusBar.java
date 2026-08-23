@@ -53,12 +53,17 @@ public class SweepStatusBar extends JPanel {
 
 	public void setSweepInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbm, boolean audio,
 			boolean video) {
-		mode.setText("Panel  " + WaterfallPlot.modeBanner(audio, video));
+		setSweepInfo(rbwHz, fftBins, waterfallFps, peakDbm, audio, video, false);
+	}
+
+	public void setSweepInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbm, boolean audio,
+			boolean video, boolean nfc) {
+		mode.setText("Panel  " + WaterfallPlot.modeBanner(audio, video, nfc));
 		resolution.setText("Resolution  " + formatHz(rbwHz));
 		bins.setText("FFT bins  " + formatBins(fftBins));
-		String ratePrefix = video ? "Video  " : audio ? "Audio  " : "Waterfall  ";
+		String ratePrefix = nfc ? "NFC  " : video ? "Video  " : audio ? "Audio  " : "Waterfall  ";
 		rate.setText(ratePrefix + formatFps(waterfallFps));
-		peak.setText("Peak  " + ((audio || video) ? formatPeakDbfs(peakDbm) : formatPeakDbm(peakDbm)));
+		peak.setText("Peak  " + ((audio || video || nfc) ? formatPeakDbfs(peakDbm) : formatPeakDbm(peakDbm)));
 	}
 
 	public static String formatHz(double hz) {

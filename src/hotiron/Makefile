@@ -62,6 +62,33 @@ src-c/atsc/fec/decode_rs_char.c
 ATSC_INCLUDES= -Isrc-c/atsc/shim -Isrc-c/atsc/lib -Isrc-c/atsc/fec -Isrc-c/atsc
 ATSC_CXXFLAGS= -O3 -ffast-math
 
+# nfc-laboratory decoder only (no Qt, no hw-radio). Linux links the real
+# lab-radio subset; Windows gets a JNA-safe stub so register() still works.
+NFC_LAB= lib/nfc-laboratory/src/nfc-lib
+NFC_INCLUDES= \
+	-I$(NFC_LAB)/lib-lab/lab-radio/src/main/include \
+	-I$(NFC_LAB)/lib-lab/lab-data/src/main/include \
+	-I$(NFC_LAB)/lib-hw/hw-dev/src/main/include \
+	-I$(NFC_LAB)/lib-rt/rt-lang/src/main/include \
+	-I$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp
+NFC_CXX= \
+	src-c/nfc_dec.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/NfcDecoder.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/NfcTech.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/tech/NfcA.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/tech/NfcB.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/tech/NfcF.cpp \
+	$(NFC_LAB)/lib-lab/lab-radio/src/main/cpp/tech/NfcV.cpp \
+	$(NFC_LAB)/lib-lab/lab-data/src/main/cpp/RawFrame.cpp \
+	$(NFC_LAB)/lib-lab/lab-data/src/main/cpp/Crc.cpp \
+	$(NFC_LAB)/lib-hw/hw-dev/src/main/cpp/hw/SignalBuffer.cpp \
+	$(NFC_LAB)/lib-hw/hw-dev/src/main/cpp/hw/RecordDevice.cpp \
+	$(NFC_LAB)/lib-rt/rt-lang/src/main/cpp/Logger.cpp \
+	$(NFC_LAB)/lib-rt/rt-lang/src/main/cpp/Format.cpp \
+	$(NFC_LAB)/lib-rt/rt-lang/src/main/cpp/Tokenizer.cpp \
+	$(NFC_LAB)/lib-rt/rt-lang/src/main/cpp/FileSystem.cpp
+NFC_STUB_C= src-c/nfc_dec_stub.c
+
 INCLUDE_PATHS= -Ilib/hackrf/host/libhackrf/src -I$(LIBUSB_DIR)/include/libusb-1.0 -Ilib/fftw-3.3.5-dll64
 LIBUSB_DIR= lib/libusb-1.0.21
 MAIN_JAR= $(OUTPUT_PATH)/lib/hotiron.jar
@@ -72,9 +99,11 @@ OBJECT_SUFFIX_WIN= ow
 OBJECTS= $(addsuffix .$(OBJECT_SUFFIX), $(addprefix $(BUILD_PATH)/, $(SOURCES)))
 OBJECTS_ATSC= $(addsuffix .$(OBJECT_SUFFIX), $(addprefix $(BUILD_PATH)/, $(ATSC_CC))) \
 	$(addsuffix .$(OBJECT_SUFFIX), $(addprefix $(BUILD_PATH)/, $(ATSC_C)))
+OBJECTS_NFC= $(addsuffix .$(OBJECT_SUFFIX), $(addprefix $(BUILD_PATH)/, $(NFC_CXX)))
 OBJECTS_WIN= $(addsuffix .$(OBJECT_SUFFIX_WIN), $(addprefix $(BUILD_PATH)/, $(SOURCES)))
 OBJECTS_ATSC_WIN= $(addsuffix .$(OBJECT_SUFFIX_WIN), $(addprefix $(BUILD_PATH)/, $(ATSC_CC))) \
 	$(addsuffix .$(OBJECT_SUFFIX_WIN), $(addprefix $(BUILD_PATH)/, $(ATSC_C)))
+OBJECTS_NFC_WIN= $(addsuffix .$(OBJECT_SUFFIX_WIN), $(addprefix $(BUILD_PATH)/, $(NFC_STUB_C)))
 
 HACKRF_SDK_PIN= v2026.01.3
 HACKRF_SWEEP_PATCH= src-c/0001-hackrf_sweep-to-library-conversion-v2026.01.3.patch
@@ -116,7 +145,7 @@ LDFLAGS_WIN+= -Wl,--gc-sections -static-libgcc -static-libstdc++ -shared
 # Linux build setup
 # required installed libraries: openjdk-21 (headful), libfftw3, libusb-1.0
 DLL_LIB= $(OUTPUT_DLL_DIR)/libhackrf-sweep.so
-LDLIBS= -lusb-1.0 -lfftw3f
+LDLIBS= -lusb-1.0 -lfftw3f -lpthread
 CFLAGS+= -march=x86-64
 
 ZIP_FILE= hotiron.zip
@@ -170,15 +199,15 @@ prepare: dirs $(DLL_LIB_FFTW) ## (internal) prepare output dirs, assets, launche
 	cp -f $(DLL_LIB_FFTW) $(DLL_LIB_PTHREAD) $(DLL_LIB_USB) $(OUTPUT_DLL_DIR_WIN)
 
 ##@ Native Libraries
-$(DLL_LIB_WIN): $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN)
+$(DLL_LIB_WIN): $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN) $(OBJECTS_NFC_WIN)
 	echo "---- Building windows version [start] ----"
-	$(CXX_WIN) $(LDFLAGS_WIN) $(LDPATHS_WIN) $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN) -o $(DLL_LIB_WIN) $(LDLIBS_WIN)
+	$(CXX_WIN) $(LDFLAGS_WIN) $(LDPATHS_WIN) $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN) $(OBJECTS_NFC_WIN) -o $(DLL_LIB_WIN) $(LDLIBS_WIN)
 	x86_64-w64-mingw32-strip --strip-unneeded $(DLL_LIB_WIN)
 	echo "---- Building windows version [done ] ----"
 
-$(DLL_LIB):  $(OBJECTS) $(OBJECTS_ATSC)
+$(DLL_LIB):  $(OBJECTS) $(OBJECTS_ATSC) $(OBJECTS_NFC)
 	echo "---- Building linux version [start] ----"
-	$(CXX) $(LDFLAGS) $(LDPATHS) $(OBJECTS) $(OBJECTS_ATSC) -o $(DLL_LIB) $(LDLIBS)
+	$(CXX) $(LDFLAGS) $(LDPATHS) $(OBJECTS) $(OBJECTS_ATSC) $(OBJECTS_NFC) -o $(DLL_LIB) $(LDLIBS)
 	strip --strip-unneeded $(DLL_LIB)
 	echo "---- Building linux version [done ] ----"
 
@@ -192,7 +221,7 @@ $(BUILD_PATH)/%.cc.$(OBJECT_SUFFIX): %.cc
 
 $(BUILD_PATH)/%.cpp.$(OBJECT_SUFFIX): %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CFLAGS) $(ATSC_CXXFLAGS) -DNDEBUG -std=c++17 $(INCLUDE_PATHS) $(ATSC_INCLUDES) $< -o $@
+	$(CXX) $(CFLAGS) $(ATSC_CXXFLAGS) -DNDEBUG -std=c++17 $(INCLUDE_PATHS) $(ATSC_INCLUDES) $(NFC_INCLUDES) $< -o $@
 
 $(BUILD_PATH)/%.c.$(OBJECT_SUFFIX_WIN): %.c
 	@mkdir -p $(dir $@)
@@ -209,7 +238,7 @@ $(BUILD_PATH)/%.cpp.$(OBJECT_SUFFIX_WIN): %.cpp
 .PHONY: clean
 clean: ## Clean all build artifacts (mvn + obj + build dirs)
 	mvn clean
-	rm -f  $(MAIN_JAR) $(OBJECTS) $(OBJECTS_ATSC) $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN) $(DLL_LIB) $(DLL_LIB_WIN) $(SWEEP_POWER_AVERAGE_SELFTEST) $(ATSC_SELFTEST)
+	rm -f  $(MAIN_JAR) $(OBJECTS) $(OBJECTS_ATSC) $(OBJECTS_NFC) $(OBJECTS_WIN) $(OBJECTS_ATSC_WIN) $(OBJECTS_NFC_WIN) $(DLL_LIB) $(DLL_LIB_WIN) $(SWEEP_POWER_AVERAGE_SELFTEST) $(ATSC_SELFTEST)
 	rm -rf $(OUTPUT_DLL_DIR) $(BUILD_PATH) $(OUTPUT_PATH)/* bin/*
 
 ##@ Test & Quality

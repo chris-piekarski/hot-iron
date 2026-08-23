@@ -3,11 +3,12 @@ package hotiron.core;
 import java.util.Locale;
 
 /**
- * Exclusive USB use: sweep, parked FM listen, parked ATSC watch, or released.
+ * Exclusive USB use: sweep, parked FM listen, parked ATSC watch, parked NFC
+ * sniff, or released.
  */
 public enum RadioMode
 {
-	SWEEP, LISTEN, WATCH, STOPPED;
+	SWEEP, LISTEN, WATCH, NFC, STOPPED;
 
 	public String jsonName()
 	{
@@ -22,6 +23,8 @@ public enum RadioMode
 			return SWEEP;
 		if (service == ListenService.TV)
 			return WATCH;
+		if (service == ListenService.NFC)
+			return NFC;
 		return LISTEN;
 	}
 
@@ -40,6 +43,6 @@ public enum RadioMode
 
 	public boolean parked()
 	{
-		return this == LISTEN || this == WATCH;
+		return this == LISTEN || this == WATCH || this == NFC;
 	}
 }

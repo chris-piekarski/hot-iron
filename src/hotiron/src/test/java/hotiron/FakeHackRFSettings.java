@@ -22,6 +22,7 @@ public class FakeHackRFSettings implements HackRFSettings {
 	public int releaseRadioCalls;
 	public int startListenCalls;
 	public int startWatchCalls;
+	public int startSniffCalls;
 	public List<String> listedSerials = new ArrayList<String>();
 
 	public FakeHackRFSettings() {
@@ -44,6 +45,11 @@ public class FakeHackRFSettings implements HackRFSettings {
 			@Override
 			public void startWatch() {
 				startWatchCalls++;
+			}
+
+			@Override
+			public void startSniff() {
+				startSniffCalls++;
 			}
 
 			@Override
@@ -186,6 +192,11 @@ public class FakeHackRFSettings implements HackRFSettings {
 	@Override
 	public void startWatch() {
 		inner.startWatch();
+	}
+
+	@Override
+	public void startSniff() {
+		inner.startSniff();
 	}
 
 	@Override

@@ -84,6 +84,9 @@ import hotiron.core.FmListenEngine;
 import hotiron.core.FmStationDial;
 import hotiron.core.FmStationHit;
 import hotiron.core.NfcActivity;
+import hotiron.core.NfcFrame;
+import hotiron.core.NfcSniffEngine;
+import hotiron.core.NfcSniffGainPolicy;
 import hotiron.core.FrequencyAxis;
 import hotiron.core.FrequencyAllocationTable;
 import hotiron.core.FrequencyAllocations;
@@ -119,9 +122,11 @@ import hotiron.mcp.TvWatchSpectrum;
 import hotiron.nativebridge.HackRFDeviceQuery;
 import hotiron.nativebridge.HackRFFmNativeBridge;
 import hotiron.nativebridge.HackRFSweepNativeBridge;
+import hotiron.nativebridge.NfcDecNative;
 import hotiron.ui.BandHeaderPainter;
 import hotiron.ui.HackRFSweepSettingsUI;
 import hotiron.ui.ListenHud;
+import hotiron.ui.NfcSniffHud;
 import hotiron.ui.SweepStatusBar;
 import hotiron.ui.WaterfallPlot;
 import hotiron.ui.WatchHud;
@@ -236,6 +241,9 @@ public class HotIron {
 	private JLabel labelMessages;
 	private SweepStatusBar sweepStatusBar;
 	private final FmListenEngine fmEngine = new FmListenEngine();
+	private final NfcSniffEngine nfcEngine = new NfcSniffEngine();
+	private volatile NfcFrame lastNfcFrame;
+	private volatile boolean nfcFieldOn;
 	private volatile boolean fmAudioOk;
 
 	public HotIron() {
@@ -260,6 +268,7 @@ public class HotIron {
 				HackRFFmNativeBridge.stop();
 				fmEngine.stop();
 				tvEngine.stop();
+				nfcEngine.stop();
 				if (threadHackrfSweep != null) {
 					try {
 						threadHackrfSweep.join(2000);
@@ -324,6 +333,12 @@ public class HotIron {
 
 			@Override
 			public void startWatch() {
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
+			}
+
+			@Override
+			public void startSniff() {
 				radioSession.cancelDebounce();
 				radioSession.applyNow();
 			}
@@ -473,7 +488,10 @@ public class HotIron {
 				settings.getListenKHz().setValue(ch.centerKHz);
 				settings.startListen();
 			});
-		});
+		}, () -> runOnEdt(settings::startSniff), on -> runOnEdt(() -> {
+			settings.isAutoGain().setValue(on);
+			snapshotStore.publishContext(settings, fmStations, 0);
+		}), () -> runOnEdt(settings::restartSweep));
 		mcpServer.addStatusListener(s -> settings.getMcpStatus().setValue(s));
 	}
 
@@ -531,28 +549,25 @@ public class HotIron {
 	}
 
 	/**
-	 * WSLg often reports one huge virtual desktop (e.g. 15360x2160). Maximizing
-	 * there yields a gray empty frame. Size to the default screen and sit at
-	 * its origin instead.
+	 * Size to the monitor that owns the window, not the WSLg virtual desktop.
+	 * A spanned desktop (e.g. 15360x2160) still uses a compact fallback so
+	 * maximize does not produce a gray empty frame. Keep packed height when
+	 * that fallback is used so the settings panel is not immediately scrolled.
 	 */
 	private static void placeInitialWindow(JFrame frame) {
 		Rectangle screen;
 		try {
-			GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
-			screen = gd.getDefaultConfiguration().getBounds();
+			GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+			screen = ge.getMaximumWindowBounds();
+			if (screen == null || screen.width <= 0 || screen.height <= 0 || spannedDesktop(screen)) {
+				screen = ge.getDefaultScreenDevice().getDefaultConfiguration().getBounds();
+			}
 		} catch (Exception e) {
 			screen = new Rectangle(0, 0, 1920, 1080);
 		}
-		int w = 1600;
-		int h = 900;
-		if (screen.width > 0 && screen.width <= 2560)
-			w = Math.max(1000, screen.width - 80);
-		if (screen.height > 0 && screen.height <= 1440)
-			h = Math.max(700, screen.height - 80);
-		if (screen.width > 2560 || screen.height > 1440) {
-			w = 1600;
-			h = 900;
-		}
+		Dimension size = initialWindowSize(screen, frame.getSize());
+		int w = size.width;
+		int h = size.height;
 		frame.setExtendedState(Frame.NORMAL);
 		frame.setSize(w, h);
 		int x = screen.x + 40;
@@ -560,6 +575,25 @@ public class HotIron {
 		if (x + w > screen.x + screen.width && screen.width > w)
 			x = screen.x + Math.max(0, (screen.width - w) / 2);
 		frame.setLocation(x, y);
+	}
+
+	static boolean spannedDesktop(Rectangle screen) {
+		Rectangle bounds = screen == null ? new Rectangle() : screen;
+		return bounds.width > 7680 || (bounds.height > 0 && bounds.width > bounds.height * 4);
+	}
+
+	static Dimension initialWindowSize(Rectangle screen, Dimension packed) {
+		Rectangle bounds = screen == null ? new Rectangle(0, 0, 1920, 1080) : screen;
+		Dimension preferred = packed == null ? new Dimension() : packed;
+		boolean spanned = spannedDesktop(bounds);
+
+		int w = spanned ? 1600 : Math.max(1000, bounds.width - 80);
+		int h = spanned ? Math.max(900, preferred.height) : Math.max(700, bounds.height - 80);
+		if (bounds.width > 0)
+			w = Math.min(w, Math.max(900, bounds.width - 80));
+		if (bounds.height > 0)
+			h = Math.min(h, Math.max(560, bounds.height - 80));
+		return new Dimension(w, h);
 	}
 
 	private void fireCapturingStateChanged() {
@@ -789,8 +823,10 @@ public class HotIron {
 	private void startRadioThread(RadioMode mode) {
 		final boolean watch = mode == RadioMode.WATCH;
 		final boolean listen = mode == RadioMode.LISTEN;
+		final boolean nfc = mode == RadioMode.NFC;
 		threadHackrfSweep = new Thread(() -> {
-			Thread.currentThread().setName(watch ? "hackrf_tv" : (listen ? "hackrf_fm" : "hackrf_sweep"));
+			Thread.currentThread().setName(watch ? "hackrf_tv"
+					: (listen ? "hackrf_fm" : (nfc ? "hackrf_nfc" : "hackrf_sweep")));
 			try {
 				forceStopSweep = false;
 				if (sweepEngine != null)
@@ -799,6 +835,8 @@ public class HotIron {
 					runTvWatch();
 				else if (listen)
 					runFmListen();
+				else if (nfc)
+					runNfcSniff();
 				else
 					sweep();
 			} catch (IOException e) {
@@ -947,6 +985,16 @@ public class HotIron {
 							settings.getTvChannel().getValue());
 					WatchHud.paint(g2, area, settings.getTvChannel().getValue(), tvEngine.locked(),
 							tvEngine.snrDb(), tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames());
+					return;
+				}
+				boolean nfcParked = settings.isListening().getValue()
+						&& settings.getListenService().getValue() == hotiron.core.ListenService.NFC;
+				if (nfcParked)
+				{
+					double start = xy.getDomainAxis().getLowerBound();
+					double end = xy.getDomainAxis().getUpperBound();
+					hotiron.ui.NfcChannelOverlay.paint(g2, area, start, end, nfcActivity);
+					NfcSniffHud.paint(g2, area, lastNfcFrame, nfcFieldOn);
 					return;
 				}
 				BufferedImage img = imageFrequencyAllocationTableBands;
@@ -1556,9 +1604,16 @@ public class HotIron {
 				&& settings.getTvChannel().getValue() == snap.tvChannel);
 	}
 
+	private void showNfcRfSpectrum(NfcSniffEngine.ViewRow view) {
+		if (view == null || view.isEmpty())
+			return;
+		paintParkedRf(view.mhz, view.dbfs, view.binHz, () -> settings.isListening().getValue()
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.NFC);
+	}
+
 	/**
 	 * Parked-IQ FFT uses the same peak half-life, persistence overlay, and
-	 * snapshot-history ring as the wideband sweep. Waterfall stays AUDIO/VIDEO.
+	 * snapshot-history ring as the wideband sweep. Waterfall stays AUDIO/VIDEO/NFC.
 	 */
 	private void paintParkedRf(float[] mhz, float[] dbfs, float binHz, java.util.function.BooleanSupplier stillLive) {
 		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
@@ -1710,6 +1765,102 @@ public class HotIron {
 		}
 	}
 
+	private void runNfcSniff() {
+		lastNfcFrame = null;
+		nfcFieldOn = false;
+		waterfallPlot.setNfcMode(true);
+		final long[] lastRfMs = { 0L };
+		final long[] lastEnvMs = { 0L };
+		nfcEngine.setRfSpectrumListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastRfMs[0] < 33)
+				return;
+			lastRfMs[0] = now;
+			NfcSniffEngine.ViewRow view = NfcSniffEngine.cropPhy(row, nfcEngine.rfSpectrum().binHz(),
+					NfcSniffEngine.LO_HZ);
+			showNfcRfSpectrum(view);
+			if (view.isEmpty())
+				return;
+			waterfallPlot.addNfcFrame(view.dbfs, view.mhz[0], view.mhz[view.mhz.length - 1]);
+			waterfallPlot.repaint();
+			float peak = -150f;
+			for (int i = 0; i < view.dbfs.length; i++)
+			{
+				if (view.dbfs[i] > peak)
+					peak = view.dbfs[i];
+			}
+			final float peakDb = peak;
+			final int bins = view.dbfs.length;
+			final float binHz = view.binHz;
+			SwingUtilities.invokeLater(() -> {
+				if (sweepStatusBar != null && settings.isListening().getValue())
+					sweepStatusBar.setSweepInfo(binHz, bins, waterfallPlot.getFps(), Double.valueOf(peakDb), false,
+							false, true);
+			});
+		});
+		nfcEngine.setEnvelopeListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastEnvMs[0] < 33)
+				return;
+			lastEnvMs[0] = now;
+			final float[] snap = row;
+			SwingUtilities.invokeLater(() -> {
+				if (settingsPanel != null)
+					settingsPanel.nfcSniffPanel().setEnvelope(snap);
+			});
+		});
+		nfcEngine.setFrameListener(frame -> {
+			if (frame.fieldOn())
+				nfcFieldOn = true;
+			else if (frame.fieldOff())
+				nfcFieldOn = false;
+			if (!frame.carrier())
+				lastNfcFrame = frame;
+			snapshotStore.publishNfcFrame(frame);
+			final boolean field = nfcFieldOn;
+			final NfcFrame shown = lastNfcFrame;
+			SwingUtilities.invokeLater(() -> {
+				if (settingsPanel != null)
+				{
+					settingsPanel.nfcSniffPanel().setFrames(snapshotStore.nfcFrames());
+					settingsPanel.nfcSniffPanel().setStatus(NfcSniffHud.text(shown, field));
+				}
+				if (chartPanel != null)
+					chartPanel.repaint();
+			});
+		});
+		NfcDecNative decoder = NfcDecNative.open();
+		if (decoder == null)
+			System.err.println("NFC sniff: decoder unavailable (spectrum only)");
+		nfcEngine.start(decoder == null ? NfcSniffEngine.Decoder.NONE : decoder);
+		snapshotStore.publishContext(settings, fmStations, 0);
+		if (chartPanel != null)
+			SwingUtilities.invokeLater(chartPanel::repaint);
+		if (settingsPanel != null)
+			SwingUtilities.invokeLater(() -> settingsPanel.nfcSniffPanel().setSniffing(true));
+		try {
+			int lna = NfcSniffGainPolicy.seedLna();
+			int vga = NfcSniffGainPolicy.seedVga();
+			System.err.println("NFC sniff: LO " + NfcSniffEngine.LO_HZ + " Hz " + NfcSniffEngine.IQ_RATE_HZ
+					+ " S/s LNA " + lna + " VGA " + vga);
+			HackRFFmNativeBridge.configure(settings.getSelectedSerial().getValue(),
+					settings.getClkoutEnable().getValue());
+			HackRFFmNativeBridge.start(iq -> nfcEngine.offerIq(iq), NfcSniffEngine.LO_HZ, NfcSniffEngine.IQ_RATE_HZ,
+					lna, vga, settings.getAntennaPowerEnable().getValue(), false);
+		} finally {
+			nfcEngine.setRfSpectrumListener(null);
+			nfcEngine.setEnvelopeListener(null);
+			nfcEngine.setFrameListener(null);
+			nfcEngine.stop();
+			waterfallPlot.setNfcMode(false);
+			if (chart != null)
+				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
+						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
+			if (settingsPanel != null)
+				SwingUtilities.invokeLater(() -> settingsPanel.nfcSniffPanel().setSniffing(false));
+		}
+	}
+
 	/**
 	 * no need to synchronize, executes only in launcher thread
 	 */
@@ -1720,6 +1871,7 @@ public class HotIron {
 		HackRFFmNativeBridge.stop();
 		fmEngine.stop();
 		tvEngine.stop();
+		nfcEngine.stop();
 		if (threadHackrfSweep != null) {
 			while (threadHackrfSweep.isAlive()) {
 				forceStopSweep = true;

@@ -20,6 +20,7 @@ This is a **hybrid JNA desktop module** with C and C++ natives next to Java. Mav
 | `Makefile` | Patch `lib/hackrf`, build `.so` / `.dll`, copy launchers, zip |
 | `src-c/` | Sweep-as-library patch, native headers, parked-IQ `hackrf_fm.c`, tested sweep-power averaging, and ATSC C/C++ (`atsc/`: GNU Radio shims + libfec) |
 | `lib/hackrf` | git submodule (SDK pin) |
+| `lib/nfc-laboratory` | git submodule (decoder only; no Qt / hw-radio) |
 | `lib/fftw-3.3.5-dll64`, `lib/libusb-1.0.21` | Vendored headers used by native compilation; Windows also cross-links these trees, while Linux links system libraries |
 | `lib/win32-x86-64/libwinpthread-1.dll` | Shipped next to the Windows sweep DLL |
 | `lib/launchers`, `src/main/resources/hotiron/` | Start scripts and packaged application icons |
@@ -130,6 +131,7 @@ Key directories:
 - `src/hotiron/src/main/java/hotiron/nativebridge/` — JNA glue
 - `src/hotiron/src-c/` — Sweep library patch, parked-IQ receiver, native headers, and ATSC GNU Radio/libfec C/C++
 - `src/hotiron/lib/hackrf/` — Submodule (automatically patched during build)
+- `src/hotiron/lib/nfc-laboratory/` — Submodule; Linux links `lab-radio` into `libhackrf-sweep.so`
 
 ## Working with AI Agents
 

@@ -41,13 +41,26 @@ public final class SpectrumMcpServer
 
 	public SpectrumMcpServer(SpectrumSnapshotStore store)
 	{
-		this(store, null, null);
+		this(store, null, null, null);
 	}
 
 	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
 			SpectrumMcpTools.FmListenHook fmListen)
 	{
-		this.tools = new SpectrumMcpTools(store, tvWatch, fmListen);
+		this(store, tvWatch, fmListen, null);
+	}
+
+	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
+			SpectrumMcpTools.FmListenHook fmListen, SpectrumMcpTools.NfcSniffHook nfcSniff)
+	{
+		this(store, tvWatch, fmListen, nfcSniff, null, null);
+	}
+
+	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
+			SpectrumMcpTools.FmListenHook fmListen, SpectrumMcpTools.NfcSniffHook nfcSniff,
+			SpectrumMcpTools.AutoGainHook autoGain, SpectrumMcpTools.SweepHook sweep)
+	{
+		this.tools = new SpectrumMcpTools(store, tvWatch, fmListen, nfcSniff, autoGain, sweep);
 	}
 
 	public SpectrumMcpTools tools()

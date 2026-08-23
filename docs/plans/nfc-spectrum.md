@@ -4,7 +4,7 @@
 **Started:** 2026-08-23
 **Finished:** 2026-08-23
 
-Sweep catalog + tracker + overlay + `nfc_activity` are in. Parked-IQ NFC demod is still a non-goal.
+Sweep catalog + tracker + overlay + `nfc_activity` are in. Parked sniff is the follow-on in [nfc-laboratory.md](nfc-laboratory.md).
 
 ## Goal
 
@@ -31,3 +31,5 @@ A Morse-like blink at 13.56 on the waterfall is usually **HiFER / Part 15 CW** o
 ## Non-goals (v1)
 
 Parked IQ at 11.56 / 10 MS/s, ISO 14443 frame names, Morse decoder, BLE AirTag overlay.
+
+Follow-on (not this checklist): [nfc-laboratory.md](nfc-laboratory.md).

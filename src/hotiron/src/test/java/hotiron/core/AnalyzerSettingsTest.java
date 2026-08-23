@@ -155,6 +155,12 @@ class AnalyzerSettingsTest {
 		assertEquals(RadioMode.WATCH, s.radioMode());
 		assertEquals(ListenService.TV, s.getListenService().getValue());
 		assertEquals(33, s.getTvChannel().getValue());
+		s.startSniff();
+		assertEquals(RadioMode.NFC, s.radioMode());
+		assertEquals(ListenService.NFC, s.getListenService().getValue());
+		assertEquals(NfcBandPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(NfcBandPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertTrue(s.isListening().getValue());
 	}
 
 	@Test

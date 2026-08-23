@@ -13,6 +13,7 @@ Living implementation plans live here so later work (and agents) can pick them u
 
 | Plan | Notes |
 |---|---|
+| [NFC park + nfc-laboratory](nfc-laboratory.md) | In progress 2026-08-23. `RadioMode.NFC`, parked 11.56 / 10 MS/s, nfc-lab frames, MCP `nfc_sniff` / `nfc_frames`. Hardware IT still open. |
 | [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; hardware IT still open. |
 
 ## Done

@@ -76,6 +76,7 @@ public class HackRFSweepSettingsUI extends JPanel
 	private StationKnob stationKnob;
 	private TunerPanel tunerPanel;
 	private TvTunerPanel tvTunerPanel;
+	private NfcSniffPanel nfcSniffPanel;
 	private JSlider sliderVolume;
 	private JComboBox<String> comboRadio;
 	private JCheckBox checkBoxClkout;
@@ -152,6 +153,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		sliderVolume = tunerPanel.volumeSlider();
 		tvTunerPanel = new TvTunerPanel();
 		btnWatch = tvTunerPanel.watchButton();
+		nfcSniffPanel = new NfcSniffPanel();
 		ExclusiveToolTip.install(txtHackrfConnected);
 		ExclusiveToolTip.install(txtMcpStatus);
 		ExclusiveToolTip.install(comboRadio);
@@ -171,6 +173,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		radioStrip.add(radioButtons);
 		radioStrip.add(tunerPanel);
 		radioStrip.add(tvTunerPanel);
+		radioStrip.add(nfcSniffPanel);
 		radioStrip.add(btnPause);
 		panelMainSettings.add(radioStrip, "cell 0 4,growx");
 
@@ -487,17 +490,26 @@ public class HackRFSweepSettingsUI extends JPanel
 				hRF.getTvChannel().setValue(next.fccChannel);
 		});
 		tvTunerPanel.setOnScan(hRF::startTvScan);
+		nfcSniffPanel.setOnSniff(() -> {
+			if (Boolean.TRUE.equals(hRF.isListening().getValue())
+					&& hRF.getListenService().getValue() == hotiron.core.ListenService.NFC)
+				hRF.stopListen();
+			else
+				hRF.startSniff();
+		});
 		Runnable syncListen = () -> {
 			boolean parked = Boolean.TRUE.equals(hRF.isListening().getValue());
 			boolean released = Boolean.TRUE.equals(hRF.isRadioReleased().getValue());
 			boolean fm = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.FM;
 			boolean tv = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.TV;
+			boolean nfc = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.NFC;
 			int kHz = hRF.getListenKHz().getValue();
 			tunerPanel.setKHz(kHz);
 			tunerPanel.setListening(fm);
 			tunerPanel.setStations(hRF.getDetectedFmStations().getValue());
 			tvTunerPanel.setChannel(hRF.getTvChannel().getValue());
 			tvTunerPanel.setWatching(tv);
+			nfcSniffPanel.setSniffing(nfc);
 			btnPause.setEnabled(!parked && !released);
 		};
 		hRF.isListening().addListener(() -> SwingUtilities.invokeLater(syncListen));
@@ -636,6 +648,10 @@ public class HackRFSweepSettingsUI extends JPanel
 
 	public TvTunerPanel tvTunerPanel() {
 		return tvTunerPanel;
+	}
+
+	public NfcSniffPanel nfcSniffPanel() {
+		return nfcSniffPanel;
 	}
 
 	StationKnob stationKnob() {

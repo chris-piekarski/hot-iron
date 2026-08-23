@@ -8,6 +8,7 @@ import java.util.Locale;
 import hotiron.core.FmBandLayer;
 import hotiron.core.FmStationHit;
 import hotiron.core.NfcActivity;
+import hotiron.core.NfcFrame;
 import hotiron.core.HackRFSettings;
 import hotiron.core.MpegTsPlayer;
 import hotiron.core.MpegTsProbe;
@@ -48,6 +49,7 @@ public final class SpectrumSnapshotStore
 	private FmListenSpectrum fmListenSpectrum = FmListenSpectrum.empty();
 	private TvWatchSpectrum tvWatchSpectrum = TvWatchSpectrum.empty();
 	private NfcActivity nfc = NfcActivity.hidden();
+	private final ArrayDeque<NfcFrame> nfcFrames = new ArrayDeque<NfcFrame>(DEFAULT_RING);
 
 	public SpectrumSnapshotStore()
 	{
@@ -156,6 +158,43 @@ public final class SpectrumSnapshotStore
 	public String nfcActivityJson()
 	{
 		return nfcActivity().toJson();
+	}
+
+	public void publishNfcFrame(NfcFrame frame)
+	{
+		if (frame == null)
+			return;
+		synchronized (lock)
+		{
+			nfcFrames.addLast(frame);
+			while (nfcFrames.size() > ringCap)
+				nfcFrames.removeFirst();
+		}
+	}
+
+	public List<NfcFrame> nfcFrames()
+	{
+		synchronized (lock)
+		{
+			return List.copyOf(nfcFrames);
+		}
+	}
+
+	public String nfcFramesJson(Integer max)
+	{
+		int cap = max == null ? 50 : Math.max(1, Math.min(200, max.intValue()));
+		List<NfcFrame> all = nfcFrames();
+		int from = Math.max(0, all.size() - cap);
+		StringBuilder sb = new StringBuilder(64 + all.size() * 80);
+		sb.append("{\"count\":").append(all.size()).append(",\"frames\":[");
+		for (int i = from; i < all.size(); i++)
+		{
+			if (i > from)
+				sb.append(',');
+			sb.append(all.get(i).toJson());
+		}
+		sb.append("]}");
+		return sb.toString();
 	}
 
 	public void publishWatchStats(boolean locked, float snrDb, int packets)

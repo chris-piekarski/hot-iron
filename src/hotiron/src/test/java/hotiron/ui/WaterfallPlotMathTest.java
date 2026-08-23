@@ -57,6 +57,7 @@ class WaterfallPlotMathTest {
         assertEquals("RF waterfall", WaterfallPlot.modeBanner(false, false));
         assertEquals("parked IQ  ·  AUDIO  ·  0–16 kHz", WaterfallPlot.modeBanner(true, false));
         assertEquals("parked IQ  ·  VIDEO  ·  ±8 MHz", WaterfallPlot.modeBanner(false, true));
+        assertEquals("parked IQ  ·  NFC  ·  12–15 MHz", WaterfallPlot.modeBanner(false, false, true));
     }
 
     @Test

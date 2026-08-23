@@ -213,4 +213,19 @@ class SpectrumSnapshotStoreTest {
 		store.publishNfc(null);
 		assertEquals(hotiron.core.NfcActivity.Kind.HIDDEN, store.nfcActivity().kind);
 	}
+
+	@Test
+	void publishNfcFrameCapsTheRing()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore(3);
+		store.publishNfcFrame(new hotiron.core.NfcFrame(1, 0x0101, 0x0102, 0, 0, 106000, 0, 0, "REQA", "26"));
+		store.publishNfcFrame(new hotiron.core.NfcFrame(2, 0x0101, 0x0103, 0, 0, 106000, 0, 0, "ATQA", "04 00"));
+		store.publishNfcFrame(new hotiron.core.NfcFrame(3, 0x0101, 0x0103, 0, 0, 106000, 0, 0, "UID", "04 AA"));
+		store.publishNfcFrame(new hotiron.core.NfcFrame(4, 0x0101, 0x0102, 0, 0, 106000, 0, 0, "SEL1", "93 70"));
+		assertEquals(3, store.nfcFrames().size());
+		assertEquals("SEL1", store.nfcFrames().get(2).name);
+		assertTrue(store.nfcFramesJson(2).contains("UID"));
+		assertTrue(store.nfcFramesJson(2).contains("SEL1"));
+		assertFalse(store.nfcFramesJson(2).contains("ATQA"));
+	}
 }

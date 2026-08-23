@@ -65,10 +65,10 @@ These are the best candidates for unit testing (and have the majority of our tes
 ### UI Layer
 - Swing + FlatLaf + JFreeChart. Settings widgets bind through `hotiron.mvc` (`ModelValue` + `MVCController`); do not add new model fields on the JFrame.
 - `WaterfallPlot` + `WaterfallTimeScale` (left gutter, newest at the top). Palette follows the live dB window when auto-scale is on. History is kept across gain-only USB restarts (`DatasetSpectrum.sameAxisAs`). Chart refresh is capped at 30 fps even when a narrow window finishes hundreds of sweeps per second.
-- `HackRFSweepSettingsUI`, Quick Select (`QuickSelectPreset`), `SweepStatusBar`, radio identity (board / serial / firmware), MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), NFC / 13.56 (`NfcBandLayer` + `NfcActivityTracker` + `NfcHud`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch / NFC Scan works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen and Watch both keep `WaterfallPlot` (AUDIO / VIDEO banners) at the same split.
+- `HackRFSweepSettingsUI`, Quick Select (`QuickSelectPreset`), `SweepStatusBar`, radio identity (board / serial / firmware), MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), NFC / 13.56 (`NfcBandLayer` + `NfcActivityTracker` + `NfcHud` / `NfcSniffHud`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch / NFC Scan works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen, Watch, and NFC Sniff keep `WaterfallPlot` (AUDIO / VIDEO / NFC banners) at the same split.
 
 ### MCP (`hotiron.mcp`)
-Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `nfc_activity`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins`, `tv_debug`, `tv_debug_history`. Writes: `fm_listen` (US FM dial) and `tv_watch` (US ATSC ch 2–36) set the same `AnalyzerSettings` the operator uses (EDT), then park. Snapshot tools must not restart USB. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
+Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (`--mcp` / `make mcp`) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `nfc_activity`, `nfc_frames`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins`, `tv_debug`, `tv_debug_history`. Writes: `fm_listen` (US FM dial), `tv_watch` (US ATSC ch 2–36), and `nfc_sniff` set the same `AnalyzerSettings` the operator uses (EDT), then park. Snapshot tools must not restart USB. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
 
 ### Build System
 - Root `Makefile` — convenience targets (`make help`, `make test`, `make start`, etc.).
@@ -83,19 +83,26 @@ Model Context Protocol on the **same JVM** as the GUI (no second USB open). `Swe
 
 ## Exclusive USB
 
-`RadioMode` is derived, not stored (`RadioMode.of(settings)`): released → `stopped`; else parked + `ListenService.TV` → `watch`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`).
+`RadioMode` is derived, not stored (`RadioMode.of(settings)`): released → `stopped`; else parked + `ListenService.TV` → `watch`; parked + `ListenService.NFC` → `nfc`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`, `nfc_dec.h`).
 
 ```mermaid
 flowchart TD
     Sweep -->|startListen| Listen
     Sweep -->|startWatch| Watch
+    Sweep -->|startSniff| Nfc
     Sweep -->|releaseRadio| Stopped
     Listen -->|stopListen| Sweep
     Watch -->|stopListen| Sweep
+    Nfc -->|stopListen| Sweep
     Listen -->|startWatch| Watch
     Watch -->|startListen| Listen
+    Listen -->|startSniff| Nfc
+    Watch -->|startSniff| Nfc
+    Nfc -->|startListen| Listen
+    Nfc -->|startWatch| Watch
     Listen -->|releaseRadio| Stopped
     Watch -->|releaseRadio| Stopped
+    Nfc -->|releaseRadio| Stopped
     Stopped -->|restartSweep| Sweep
 ```
 
@@ -123,12 +130,14 @@ sequenceDiagram
     Engine->>UI: Hooks.onFullSweepProcessed
     Engine->>Store: immutable snapshot copy at most 10 Hz
     MCP->>Store: read snapshots and diagnostics
-    MCP->>UI: fm_listen / tv_watch via EDT
+    MCP->>UI: fm_listen / tv_watch / nfc_sniff via EDT
 ```
 
 **Listen.** Native parks at 4 MS/s IQ. The libusb callback only `FmListenEngine.offerIq()`. Demod, audio FFT, and local ±2 MHz `IqSpectrum` run on `fm-wfm-demod`. The first 200 ms after sweep→4 MS/s is dropped (unlocked PLL/DC). Chart uses the IQ FFT; waterfall is 0–16 kHz audio.
 
 **Watch.** Same parked-IQ bridge at 16 MS/s / 8 MHz analog filter. `TvWatchEngine` feeds native `atsc_rx_process`, then `MpegTsPlayer`. The same IQ drives the local ±8 MHz chart, VIDEO waterfall, and `tv_spectrum`. Queue overflow discards stale backlog and recreates the native decoder (see [plans/atsc-tv-watch.md](plans/atsc-tv-watch.md)).
+
+**NFC sniff.** Same parked-IQ bridge at 10 MS/s, LO 11.56 MHz. `NfcSniffEngine` FFTs the complex IQ for the 12–15 MHz chart and feeds magnitude to nfc-laboratory `NfcDecoder` (`nfc_dec_*`). Frames go to the sidebar list and `nfc_frames`. The waterfall strip is the 12–15 MHz parked FFT (same idea as Watch VIDEO). `NfcEnvelopeTrace` mixes the +2 MHz IF to baseband for a 500 ms |IQ| scope on the NFC sidebar — not wideband magnitude.
 
 ## Design structure
 

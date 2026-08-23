@@ -51,6 +51,8 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("sweep_config"));
 		assertTrue(list.contains("fm_stations"));
 		assertTrue(list.contains("nfc_activity"));
+		assertTrue(list.contains("nfc_frames"));
+		assertTrue(list.contains("nfc_sniff"));
 		assertTrue(list.contains("fm_spectrum"));
 		assertTrue(list.contains("spectrum_occupancy"));
 		assertTrue(list.contains("spectrum_history"));
@@ -60,6 +62,8 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("tv_spectrum"));
 		assertTrue(list.contains("tv_debug_history"));
 		assertTrue(list.contains("fm_listen"));
+		assertTrue(list.contains("auto_gain"));
+		assertTrue(list.contains("sweep"));
 		assertNull(tools.handleRpc("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"));
 	}
 
@@ -230,6 +234,60 @@ class SpectrumMcpToolsTest {
 		assertTrue(out.contains("listenMHz"));
 		assertTrue(out.contains("97.3"));
 		assertTrue(out.contains("97300"));
+	}
+
+	@Test
+	void nfcSniffParksWhenBound()
+	{
+		int[] calls = { 0 };
+		SpectrumMcpTools tools = new SpectrumMcpTools(new SpectrumSnapshotStore(), null, null, () -> calls[0]++);
+		String out = tools.call("nfc_sniff", Map.of());
+		assertEquals(1, calls[0]);
+		assertTrue(out.contains("radioMode"));
+		assertTrue(out.contains("nfc"));
+		assertTrue(out.contains("11560000"));
+		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> unbound.call("nfc_sniff", Map.of()));
+		assertTrue(ex.getMessage().contains("not bound"));
+	}
+
+	@Test
+	void autoGainWritesTheExistingCheckbox()
+	{
+		boolean[] got = { true };
+		SpectrumMcpTools tools = new SpectrumMcpTools(new SpectrumSnapshotStore(), null, null, null,
+				on -> got[0] = on, null);
+		String out = tools.call("auto_gain", Map.of("enabled", false));
+		assertFalse(got[0]);
+		assertTrue(out.contains("autoGain"));
+		assertTrue(out.contains("false"));
+		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> unbound.call("auto_gain", Map.of("enabled", false)));
+		assertTrue(ex.getMessage().contains("not bound"));
+	}
+
+	@Test
+	void sweepRestartsTheWidebandPath()
+	{
+		int[] calls = { 0 };
+		SpectrumMcpTools tools = new SpectrumMcpTools(new SpectrumSnapshotStore(), null, null, null, null,
+				() -> calls[0]++);
+		String out = tools.call("sweep", Map.of());
+		assertEquals(1, calls[0]);
+		assertTrue(out.contains("sweep"));
+	}
+
+	@Test
+	void nfcFramesReadsTheStoreRing()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		store.publishNfcFrame(new hotiron.core.NfcFrame(1, 0x0101, 0x0102, 0, 0, 106000, 0, 0, "REQA", "26"));
+		SpectrumMcpTools tools = new SpectrumMcpTools(store);
+		String json = tools.call("nfc_frames", Map.of("maxSamples", 10));
+		assertTrue(json.contains("REQA"));
+		assertTrue(json.contains("count"));
 	}
 
 	@Test
