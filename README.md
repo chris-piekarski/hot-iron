@@ -101,6 +101,7 @@ flowchart TD
 - [Radio setup](docs/hardware.md) (udev, firmware, Windows drivers)
 - [Operator UI](docs/operator.md)
 - [NFC / HF RFID](docs/nfc.md) — 13.56 MHz overlay, classifier, and what not to decode
+- [nRF 2.4 GHz sniffer](docs/nrf-sniffer.md) — bench J-Link / BLE overlay + UART host (15.4 / ANT decode not wired)
 - [Architecture](docs/architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies
 - [Repository stats](docs/stats.md) (`make stats`)
 - [Contributing](docs/contributing.md)

@@ -77,6 +77,7 @@ public class HackRFSweepSettingsUI extends JPanel
 	private TunerPanel tunerPanel;
 	private TvTunerPanel tvTunerPanel;
 	private NfcSniffPanel nfcSniffPanel;
+	private BleSniffPanel bleSniffPanel;
 	private JSlider sliderVolume;
 	private JComboBox<String> comboRadio;
 	private JCheckBox checkBoxClkout;
@@ -154,6 +155,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		tvTunerPanel = new TvTunerPanel();
 		btnWatch = tvTunerPanel.watchButton();
 		nfcSniffPanel = new NfcSniffPanel();
+		bleSniffPanel = new BleSniffPanel();
 		ExclusiveToolTip.install(txtHackrfConnected);
 		ExclusiveToolTip.install(txtMcpStatus);
 		ExclusiveToolTip.install(comboRadio);
@@ -174,6 +176,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		radioStrip.add(tunerPanel);
 		radioStrip.add(tvTunerPanel);
 		radioStrip.add(nfcSniffPanel);
+		radioStrip.add(bleSniffPanel);
 		radioStrip.add(btnPause);
 		panelMainSettings.add(radioStrip, "cell 0 4,growx");
 
@@ -497,6 +500,12 @@ public class HackRFSweepSettingsUI extends JPanel
 			else
 				hRF.startSniff();
 		});
+		bleSniffPanel.setOnSniff(() -> {
+			if (Boolean.TRUE.equals(hRF.isBleSniffing().getValue()))
+				hRF.stopBleSniff();
+			else
+				hRF.startBleSniff();
+		});
 		Runnable syncListen = () -> {
 			boolean parked = Boolean.TRUE.equals(hRF.isListening().getValue());
 			boolean released = Boolean.TRUE.equals(hRF.isRadioReleased().getValue());
@@ -510,6 +519,7 @@ public class HackRFSweepSettingsUI extends JPanel
 			tvTunerPanel.setChannel(hRF.getTvChannel().getValue());
 			tvTunerPanel.setWatching(tv);
 			nfcSniffPanel.setSniffing(nfc);
+			bleSniffPanel.setSniffing(Boolean.TRUE.equals(hRF.isBleSniffing().getValue()));
 			btnPause.setEnabled(!parked && !released);
 		};
 		hRF.isListening().addListener(() -> SwingUtilities.invokeLater(syncListen));
@@ -523,6 +533,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		hRF.getListenKHz().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		hRF.getTvChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
 		hRF.getDetectedFmStations().addListener(hits -> SwingUtilities.invokeLater(() -> tunerPanel.setStations(hits)));
+		hRF.isBleSniffing().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		syncListen.run();
 		new MVCController(checkBoxClkout, hRF.getClkoutEnable());
 		refreshRadioCombo();
@@ -652,6 +663,10 @@ public class HackRFSweepSettingsUI extends JPanel
 
 	public NfcSniffPanel nfcSniffPanel() {
 		return nfcSniffPanel;
+	}
+
+	public BleSniffPanel bleSniffPanel() {
+		return bleSniffPanel;
 	}
 
 	StationKnob stationKnob() {

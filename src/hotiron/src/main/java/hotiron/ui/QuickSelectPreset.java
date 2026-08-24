@@ -19,6 +19,8 @@ public enum QuickSelectPreset
 			"Full HotIron/HackRF selectable survey range (1–7250 MHz). Auto FFT keeps this coarse so the waterfall stays fast."),
 	WIFI_2("WiFi 2", WifiChannelPlan.WIFI_24_VIEW_START_MHZ, WifiChannelPlan.WIFI_24_VIEW_END_MHZ,
 			"US 802.11 ch 1–11 occupied 20 MHz (2402–2472). Channel N starts at (2412+5×(N−1))−10; 2402 is ch 1, 2407 is ch 2, 2452–2472 is ch 11. Channels overlap."),
+	BLE("BLE", hotiron.core.BleBandPlan.VIEW_START_MHZ, hotiron.core.BleBandPlan.VIEW_END_MHZ,
+			"Bluetooth LE ISM 2400–2484 MHz so advertising 37/38/39 are on-screen (39 is 2480). Wi-Fi 2 stops at 2472."),
 	WIFI_5("WiFi 5", WifiChannelPlan.WIFI_5_VIEW_START_MHZ, WifiChannelPlan.WIFI_5_VIEW_END_MHZ,
 			"US 802.11 20 MHz ch 36–177 occupied (5170–5895). U-NII-1 legally starts at 5150; the first 20 MHz channel is 36 at 5170–5190."),
 	LTE_1("LTE-1", 1695, 2200,

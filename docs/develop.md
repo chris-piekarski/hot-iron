@@ -121,7 +121,7 @@ For the native C/C++ parts, a clang-format command is commented in the Makefile.
 
 ## Architecture Notes
 
-See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool. NFC / 13.56 MHz spectrum notes: [nfc.md](nfc.md).
+See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool. NFC / 13.56 MHz spectrum notes: [nfc.md](nfc.md). Bench nRF / 2.4 GHz BLE–ANT–15.4 notes: [nrf-sniffer.md](nrf-sniffer.md) (second USB; do not park the HackRF).
 
 Key directories:
 - `src/hotiron/src/main/java/hotiron/core/` — Engines, DSP, policies, channel plans (best place for unit tests)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- BLE Quick Select **2400–2484 MHz** (includes adv 39 at 2480; Wi-Fi 2 stays 2402–2472), `BleBandPlan` / `BleBandLayer` ticks, occupancy labels, and parallel nRF BLE sniff on the J-Link ACM (does not park the HackRF). MCP write `ble_sniff`, read `ble_frames` / `ble_activity`. Flash recipe (PCA10031 / nRF51822, not 4.1.1 nRF52 HEX): [docs/nrf-sniffer.md](docs/nrf-sniffer.md#flash-recipe).
 - MCP `auto_gain` writes the existing Auto gain checkbox; `sweep` leaves a park and restarts the wideband sweep.
 - NFC **Sniff**: parks the HackRF at 11.56 MHz / 10 MS/s (same exclusive IQ path as Listen/Watch) and decodes Type A/B frames with nfc-laboratory. Sidebar frame list + HUD show field on/off, REQA/ATQA/UID/SELECT, raw hex. MCP write `nfc_sniff`, read `nfc_frames`. Sweep classifier `nfc_activity` is unchanged. Loop antenna, receive only. Notes: [docs/nfc.md](docs/nfc.md).
 - NFC spectrum overlay + live classifier: Quick Select is **12–15 MHz**, `NfcBandPlan` ticks carrier / A/B / F / V / 27.12 / 40.68, HUD + MCP `nfc_activity` report quiet / field on / polling / HiFER CW / card sidebands. Click a header tick to Scan PHY then harmonics. AirTags are not in this band.

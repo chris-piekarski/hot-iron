@@ -93,6 +93,8 @@ sudo chmod a+rw /dev/bus/usb/00X/00Y
 
 HackRF One is `1d50:6089`. In WSL, `lsusb` should then show Great Scott Gadgets HackRF One.
 
+The bench nRF board is a second USB: SEGGER J-Link serial **`000680852409`**, identified as **PCA10031 / nRF51822**. Normal PID is **`1366:1015`** (CDC+MSD+BULK). J-Link Commander can leave it as **`1366:0101`** (J-Link-only, no ACM) — bind that ID and restore VCOM before sniffing. `make udev` covers both PIDs. Sidebar **BLE sniff** / MCP `ble_sniff` opens the ACM; snapshot tools do not. Flash recipe (identify, HEX, `nrfutil device program`): [nrf-sniffer.md](nrf-sniffer.md#flash-recipe).
+
 List the radio and run hardware smoke tests (not part of `make test`):
 
 ```bash

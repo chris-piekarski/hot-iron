@@ -15,7 +15,7 @@ class QuickSelectPresetTest {
 
     @Test
     void everyPresetIsAValidHackrfSweepWindow() {
-        assertEquals(16, QuickSelectPreset.values().length);
+        assertEquals(17, QuickSelectPreset.values().length);
         for (QuickSelectPreset preset : QuickSelectPreset.values()) {
             assertTrue(preset.startMHz >= 1, preset.label + " below HackRF floor");
             assertTrue(preset.endMHz <= 7250, preset.label + " above selector max");
@@ -34,6 +34,7 @@ class QuickSelectPresetTest {
     void fccAndItuEnvelopesMatchCitedRules() {
         assertRange(QuickSelectPreset.ALL, 1, 7250);
         assertRange(QuickSelectPreset.WIFI_2, 2402, 2472);
+        assertRange(QuickSelectPreset.BLE, 2400, 2484);
         assertRange(QuickSelectPreset.WIFI_5, 5170, 5895);
         assertRange(QuickSelectPreset.LTE_1, 1695, 2200);
         assertRange(QuickSelectPreset.LTE_2, 617, 960);
@@ -91,6 +92,9 @@ class QuickSelectPresetTest {
                 .noneMatch(p -> p == QuickSelectPreset.FM));
         assertTrue(QuickSelectPreset.visibleInView(2402, 2472).stream()
                 .noneMatch(p -> p == QuickSelectPreset.WIFI_2));
+        assertTrue(QuickSelectPreset.visibleInView(2400, 2484).stream()
+                .noneMatch(p -> p == QuickSelectPreset.BLE));
+        assertTrue(QuickSelectPreset.visibleInView(2400, 2484).contains(QuickSelectPreset.WIFI_2));
         assertTrue(QuickSelectPreset.visibleInView(300, 3000).stream()
                 .noneMatch(p -> p == QuickSelectPreset.UHF));
     }
@@ -100,6 +104,7 @@ class QuickSelectPresetTest {
         java.util.List<QuickSelectPreset> wide = QuickSelectPreset.visibleInView(1, 7250);
         assertTrue(wide.contains(QuickSelectPreset.FM));
         assertTrue(wide.contains(QuickSelectPreset.WIFI_2));
+        assertTrue(wide.contains(QuickSelectPreset.BLE));
         assertTrue(wide.contains(QuickSelectPreset.WIFI_5));
         assertTrue(wide.contains(QuickSelectPreset.LTE_1));
         assertTrue(wide.contains(QuickSelectPreset.UHF));

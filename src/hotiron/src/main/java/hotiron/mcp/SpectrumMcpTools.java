@@ -42,36 +42,49 @@ public final class SpectrumMcpTools
 		void sweep();
 	}
 
+	@FunctionalInterface
+	public interface BleSniffHook
+	{
+		void setEnabled(boolean enabled);
+	}
+
 	private final SpectrumSnapshotStore store;
 	private final TvWatchHook tvWatch;
 	private final FmListenHook fmListen;
 	private final NfcSniffHook nfcSniff;
 	private final AutoGainHook autoGain;
 	private final SweepHook sweep;
+	private final BleSniffHook bleSniff;
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store)
 	{
-		this(store, null, null, null, null, null);
+		this(store, null, null, null, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch)
 	{
-		this(store, tvWatch, null, null, null, null);
+		this(store, tvWatch, null, null, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen)
 	{
-		this(store, tvWatch, fmListen, null, null, null);
+		this(store, tvWatch, fmListen, null, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
 			NfcSniffHook nfcSniff)
 	{
-		this(store, tvWatch, fmListen, nfcSniff, null, null);
+		this(store, tvWatch, fmListen, nfcSniff, null, null, null);
 	}
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
 			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep)
+	{
+		this(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, null);
+	}
+
+	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
+			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep, BleSniffHook bleSniff)
 	{
 		if (store == null)
 			throw new IllegalArgumentException("store");
@@ -81,6 +94,7 @@ public final class SpectrumMcpTools
 		this.nfcSniff = nfcSniff;
 		this.autoGain = autoGain;
 		this.sweep = sweep;
+		this.bleSniff = bleSniff;
 	}
 
 	public SpectrumSnapshotStore store()
@@ -145,7 +159,7 @@ public final class SpectrumMcpTools
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("spectrum_occupancy",
-						"Emitters above noise+8 dB: width, occupied fraction, optional Wi-Fi ch or NFC feature label.",
+						"Emitters above noise+8 dB: width, occupied fraction, optional BLE / Wi-Fi / NFC label.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("spectrum_history",
@@ -177,6 +191,18 @@ public final class SpectrumMcpTools
 				+ tool("sweep",
 						"Leave Listen/Watch/Sniff and restart the wideband sweep (same as Stop / restartSweep).",
 						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("ble_sniff",
+						"Start or stop parallel nRF BLE sniff. Sets the HackRF sweep to 2400–2484 MHz. Does not park USB. Optional enabled (default true).",
+						"{\"type\":\"object\",\"properties\":{\"enabled\":{\"type\":\"boolean\"}}}")
+				+ ","
+				+ tool("ble_frames",
+						"Recent Nordic sniffer UART frames (name, address, channel, RSSI, hex). Empty until ble_sniff. Optional maxSamples (1-200).",
+						"{\"type\":\"object\",\"properties\":{\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}}")
+				+ ","
+				+ tool("ble_activity",
+						"HackRF spectrum summary plus the BLE frame ring in one payload (same stream). Optional maxSamples.",
+						"{\"type\":\"object\",\"properties\":{\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}}")
 				+ "]}";
 	}
 
@@ -219,6 +245,12 @@ public final class SpectrumMcpTools
 			return autoGainCall(args);
 		if ("sweep".equals(name))
 			return sweepCall();
+		if ("ble_sniff".equals(name))
+			return bleSniffCall(args);
+		if ("ble_frames".equals(name))
+			return textResult(store.bleFramesJson(McpJson.getInt(args, "maxSamples")), false);
+		if ("ble_activity".equals(name))
+			return textResult(store.bleActivityJson(McpJson.getInt(args, "maxSamples")), false);
 		if ("fm_spectrum".equals(name))
 		{
 			FmListenSpectrum fm = store.fmListenSpectrum();
@@ -313,6 +345,16 @@ public final class SpectrumMcpTools
 		return textResult("{\"ok\":true,\"radioMode\":\"sweep\"}", false);
 	}
 
+	private String bleSniffCall(Map<String, Object> args)
+	{
+		if (bleSniff == null)
+			throw new IllegalArgumentException("ble_sniff is not bound");
+		Boolean enabled = McpJson.getBoolean(args, "enabled");
+		boolean on = enabled == null || enabled.booleanValue();
+		bleSniff.setEnabled(on);
+		return textResult("{\"ok\":true,\"bleSniff\":" + on + ",\"startMHz\":2400,\"endMHz\":2484}", false);
+	}
+
 	private String fmListenCall(Map<String, Object> args)
 	{
 		if (fmListen == null)
@@ -359,9 +401,10 @@ public final class SpectrumMcpTools
 		Integer max = McpJson.getInt(args, "maxPoints");
 		Double min = McpJson.getDouble(args, "minDbm");
 		if (max == null && min == null)
-			return textResult(latest.toJson(), latest.isEmpty());
+			return textResult(store.attachBle(latest.toJson(), 20), latest.isEmpty());
 		int cap = max == null ? latest.mhz.length : Math.max(1, max.intValue());
-		return textResult(latest.downsampled(cap, min == null ? null : min.floatValue()).toJson(), latest.isEmpty());
+		return textResult(store.attachBle(latest.downsampled(cap, min == null ? null : min.floatValue()).toJson(), 20),
+				latest.isEmpty());
 	}
 
 	private static String textResult(String json, boolean isError)

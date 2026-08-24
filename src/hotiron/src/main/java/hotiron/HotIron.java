@@ -83,6 +83,7 @@ import hotiron.core.FmChannelPlan;
 import hotiron.core.FmListenEngine;
 import hotiron.core.FmStationDial;
 import hotiron.core.FmStationHit;
+import hotiron.core.BleSniffEngine;
 import hotiron.core.NfcActivity;
 import hotiron.core.NfcFrame;
 import hotiron.core.NfcSniffEngine;
@@ -242,6 +243,8 @@ public class HotIron {
 	private SweepStatusBar sweepStatusBar;
 	private final FmListenEngine fmEngine = new FmListenEngine();
 	private final NfcSniffEngine nfcEngine = new NfcSniffEngine();
+	private final Object bleLock = new Object();
+	private volatile BleSniffEngine bleEngine;
 	private volatile NfcFrame lastNfcFrame;
 	private volatile boolean nfcFieldOn;
 	private volatile boolean fmAudioOk;
@@ -344,6 +347,16 @@ public class HotIron {
 			}
 
 			@Override
+			public void startBleSniff() {
+				startBleSniffSession();
+			}
+
+			@Override
+			public void stopBleSniff() {
+				stopBleSniffSession();
+			}
+
+			@Override
 			public java.util.List<String> listRadioSerials() {
 				return HackRFDeviceQuery.listSerials();
 			}
@@ -439,6 +452,7 @@ public class HotIron {
 			if (radioSession != null)
 				radioSession.stopLauncher();
 			stopHackrfSweep();
+			stopBleSniffSession();
 		}));
 
 		if (captureGIF) {
@@ -491,7 +505,12 @@ public class HotIron {
 		}, () -> runOnEdt(settings::startSniff), on -> runOnEdt(() -> {
 			settings.isAutoGain().setValue(on);
 			snapshotStore.publishContext(settings, fmStations, 0);
-		}), () -> runOnEdt(settings::restartSweep));
+		}), () -> runOnEdt(settings::restartSweep), on -> runOnEdt(() -> {
+			if (on)
+				settings.startBleSniff();
+			else
+				settings.stopBleSniff();
+		}));
 		mcpServer.addStatusListener(s -> settings.getMcpStatus().setValue(s));
 	}
 
@@ -1004,6 +1023,7 @@ public class HotIron {
 				FrequencyRange range = getFreq();
 				QuickSelectBandOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz());
 				WifiChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz());
+				hotiron.ui.BleChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz());
 				FmChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), fmStations,
 						settings.getListenKHz().getValue());
 				hotiron.ui.TvChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), tvStations,
@@ -1763,6 +1783,76 @@ public class HotIron {
 				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
 						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
 		}
+	}
+
+	private void startBleSniffSession()
+	{
+		synchronized (bleLock)
+		{
+			stopBleSniffSessionLocked();
+			String path = BleSniffEngine.discoverPort();
+			if (path == null)
+			{
+				snapshotStore.publishBleStatus(true, "", "no nRF ACM (attach J-Link 1366:1015)");
+				SwingUtilities.invokeLater(() -> {
+					if (settingsPanel != null)
+						settingsPanel.bleSniffPanel().setStatus("no nRF ACM");
+				});
+				return;
+			}
+			try
+			{
+				BleSniffEngine.Port port = BleSniffEngine.openLinux(path);
+				bleEngine = new BleSniffEngine(port, frame -> {
+					snapshotStore.publishBleFrame(frame);
+					SwingUtilities.invokeLater(() -> {
+						if (settingsPanel != null)
+							settingsPanel.bleSniffPanel().setFrames(snapshotStore.bleFrames());
+					});
+				}, status -> {
+					snapshotStore.publishBleStatus(true, path, status);
+					SwingUtilities.invokeLater(() -> {
+						if (settingsPanel != null)
+							settingsPanel.bleSniffPanel().setStatus(status);
+					});
+				});
+				snapshotStore.publishBleStatus(true, path, "open " + path);
+				bleEngine.start();
+			}
+			catch (IOException e)
+			{
+				String msg = e.getMessage() == null ? "port error" : e.getMessage();
+				snapshotStore.publishBleStatus(true, path, msg);
+				SwingUtilities.invokeLater(() -> {
+					if (settingsPanel != null)
+						settingsPanel.bleSniffPanel().setStatus(msg);
+				});
+			}
+		}
+	}
+
+	private void stopBleSniffSession()
+	{
+		synchronized (bleLock)
+		{
+			stopBleSniffSessionLocked();
+		}
+	}
+
+	private void stopBleSniffSessionLocked()
+	{
+		BleSniffEngine engine = bleEngine;
+		bleEngine = null;
+		if (engine != null)
+			engine.close();
+		snapshotStore.publishBleStatus(false, "", "idle");
+		SwingUtilities.invokeLater(() -> {
+			if (settingsPanel != null)
+			{
+				settingsPanel.bleSniffPanel().setSniffing(false);
+				settingsPanel.bleSniffPanel().setStatus("idle");
+			}
+		});
 	}
 
 	private void runNfcSniff() {

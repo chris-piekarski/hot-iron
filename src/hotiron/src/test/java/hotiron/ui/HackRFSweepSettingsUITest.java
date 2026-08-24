@@ -185,6 +185,27 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
+    void bleSniffButtonDoesNotParkTheHackrf() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Sniff", ui.bleSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.bleSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.startBleSniffCalls);
+        assertTrue(settings.isBleSniffing().getValue());
+        assertFalse(settings.isListening().getValue());
+        assertEquals(hotiron.core.RadioMode.SWEEP, settings.radioMode());
+        assertEquals(hotiron.core.BleBandPlan.VIEW_START_MHZ, settings.getFrequency().getValue().getStartMHz());
+        assertEquals(hotiron.core.BleBandPlan.VIEW_END_MHZ, settings.getFrequency().getValue().getEndMHz());
+        assertEquals("Stop", ui.bleSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.bleSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.stopBleSniffCalls);
+        assertFalse(settings.isBleSniffing().getValue());
+    }
+
+    @Test
     void stationKnobJumpsBetweenDetectedStations() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         settings.getDetectedFmStations().setValue(java.util.List.of(

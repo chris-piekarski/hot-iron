@@ -164,6 +164,61 @@ class AnalyzerSettingsTest {
 	}
 
 	@Test
+	void bleSniffSetsTheIsmWindowWithoutParking() {
+		AnalyzerSettings s = new AnalyzerSettings();
+		AtomicInteger ble = new AtomicInteger();
+		s.setHardware(new AnalyzerSettings.Hardware()
+		{
+			@Override
+			public void restartSweep()
+			{
+			}
+
+			@Override
+			public void releaseRadio()
+			{
+			}
+
+			@Override
+			public void startListen()
+			{
+			}
+
+			@Override
+			public void startWatch()
+			{
+			}
+
+			@Override
+			public void startBleSniff()
+			{
+				ble.incrementAndGet();
+			}
+
+			@Override
+			public List<String> listRadioSerials()
+			{
+				return List.of();
+			}
+		});
+		assertEquals(RadioMode.SWEEP, s.radioMode());
+		s.startBleSniff();
+		assertEquals(RadioMode.SWEEP, s.radioMode());
+		assertFalse(s.isListening().getValue());
+		assertTrue(s.isBleSniffing().getValue());
+		assertEquals(BleBandPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(BleBandPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertEquals(1, ble.get());
+		assertFalse(s.isRadioSetting(s.isBleSniffing()));
+		s.startListen();
+		s.getFrequency().setValue(new FrequencyRange(88, 108));
+		s.startBleSniff();
+		assertEquals(88, s.getFrequency().getValue().getStartMHz(), "parked listen keeps its window");
+		s.stopBleSniff();
+		assertFalse(s.isBleSniffing().getValue());
+	}
+
+	@Test
 	void fmScanQsyzTheBandAndStopsListen() {
 		AnalyzerSettings s = new AnalyzerSettings();
 		AtomicInteger restarts = new AtomicInteger();

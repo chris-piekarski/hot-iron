@@ -31,6 +31,14 @@ public final class AnalyzerSettings implements HackRFSettings
 		{
 		}
 
+		default void startBleSniff()
+		{
+		}
+
+		default void stopBleSniff()
+		{
+		}
+
 		List<String> listRadioSerials();
 
 		Hardware NOOP = new Hardware()
@@ -108,6 +116,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValueBoolean spurRemoval = new ModelValueBoolean("Spur removal", false);
 	private final ModelValueBoolean waterfallVisible = new ModelValueBoolean("Waterfall visible", true);
 	private final ModelValueBoolean listening = new ModelValueBoolean("Listening", false);
+	private final ModelValueBoolean bleSniffing = new ModelValueBoolean("BLE sniffing", false);
 	private final ModelValue<ListenService> listenService = new ModelValue<ListenService>("Listen service",
 			ListenService.FM);
 	private final ModelValueInt listenKHz = new ModelValueInt("Listen [kHz]", 97300, 200,
@@ -341,6 +350,35 @@ public final class AnalyzerSettings implements HackRFSettings
 				|| getFrequency().getValue().getEndMHz() != NfcBandPlan.VIEW_END_MHZ)
 			getFrequency().setValue(NfcBandPlan.phyWindow());
 		hardware.startSniff();
+	}
+
+	@Override
+	public void startBleSniff()
+	{
+		if (!Boolean.TRUE.equals(listening.getValue()))
+		{
+			FrequencyRange want = BleBandPlan.viewWindow();
+			if (getFrequency().getValue() == null || getFrequency().getValue().getStartMHz() != want.getStartMHz()
+					|| getFrequency().getValue().getEndMHz() != want.getEndMHz())
+				getFrequency().setValue(want);
+		}
+		bleSniffing.setValue(true);
+		hardware.startBleSniff();
+	}
+
+	@Override
+	public void stopBleSniff()
+	{
+		if (!Boolean.TRUE.equals(bleSniffing.getValue()))
+			return;
+		bleSniffing.setValue(false);
+		hardware.stopBleSniff();
+	}
+
+	@Override
+	public ModelValueBoolean isBleSniffing()
+	{
+		return bleSniffing;
 	}
 
 	@Override

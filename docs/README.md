@@ -11,6 +11,7 @@ This directory contains the first-class documentation for **HotIron**: a HackRF 
 - [HackRF Hardware Setup](hardware.md)
 - [Usage](operator.md) — operator UI (Quick Select, auto-gain, waterfall)
 - [NFC / HF RFID](nfc.md) — 13.56 MHz PHY, sidebands, live overlay / `nfc_activity`, parked Sniff / `nfc_frames`
+- [nRF 2.4 GHz sniffer](nrf-sniffer.md) — bench J-Link / nRF DK, BLE overlay + UART host (15.4 / ANT decode not wired)
 - [Architecture](architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies, MCP snapshot store
 - [Repository stats](stats.md) — first-party LOC, packages, tests (`make stats`)
 - [Contributing](contributing.md)
@@ -28,6 +29,7 @@ Current diagrams cover:
 - Getting started / radio setup
 - Usage interaction loop
 - NFC carrier / sidebands and reader-state flow
+- nRF J-Link vs HackRF USB (2.4 GHz)
 - Generated pies in [stats.md](stats.md)
 
 `make mermaid` extracts every fence and parses it with mermaid-cli when `mmdc` is on `PATH` (Mermaid 11, matching current GitHub). Avoid `deploymentDiagram` (dropped in Mermaid 11) and unquoted `>` in sequence `Note` lines.

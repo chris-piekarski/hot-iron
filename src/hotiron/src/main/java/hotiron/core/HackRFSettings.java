@@ -94,6 +94,20 @@ public interface HackRFSettings {
 	/** Parked NFC sniff at 11.56 MHz / 10 MS/s. Stops the sweep; USB stays owned. */
 	public void startSniff();
 
+	/** Parallel nRF BLE sniff. Sets 2400–2484; does not park the HackRF. */
+	public default void startBleSniff()
+	{
+	}
+
+	public default void stopBleSniff()
+	{
+	}
+
+	public default ModelValueBoolean isBleSniffing()
+	{
+		return new ModelValueBoolean("BLE sniffing", false);
+	}
+
 	/** Leave listen mode and resume the sweep unless Stop was pressed. */
 	public void stopListen();
 

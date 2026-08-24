@@ -80,6 +80,44 @@ class SpectrumOccupancyTest {
 	}
 
 	@Test
+	void bleAdv39GetsAChannelLabel()
+	{
+		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 2400, 2484, -150f);
+		for (int i = 0; i < ds.spectrumLength(); i++)
+			ds.getSpectrumArray()[i] = -80f;
+		double targetHz = 2480 * 1_000_000d;
+		int best = 0;
+		double bestErr = Double.POSITIVE_INFINITY;
+		for (int i = 0; i < ds.spectrumLength(); i++)
+		{
+			double err = Math.abs(ds.getFrequency(i) - targetHz);
+			if (err < bestErr)
+			{
+				bestErr = err;
+				best = i;
+			}
+		}
+		ds.getSpectrumArray()[best] = -30f;
+		float[] mhz = ds.frequencyAxisMHz();
+		float[] dbm = ds.getSpectrumArray();
+		int n = 0;
+		float[] m = new float[mhz.length];
+		float[] d = new float[mhz.length];
+		for (int i = 0; i < mhz.length; i++)
+		{
+			if (DatasetSpectrum.isChartHole(dbm[i]))
+				continue;
+			m[n] = mhz[i];
+			d[n] = dbm[i];
+			n++;
+		}
+		SpectrumOccupancy.Result r = SpectrumOccupancy.from(java.util.Arrays.copyOf(m, n),
+				java.util.Arrays.copyOf(d, n), -80f, 100_000f, 2400, 2484);
+		assertEquals(1, r.emitters.size(), r.toJson());
+		assertEquals("BLE 39", r.emitters.get(0).label);
+	}
+
+	@Test
 	void twoSeparatedPeaksAreTwoEmittersStrongestFirst() {
 		float[] mhz = new float[20];
 		float[] dbm = new float[20];

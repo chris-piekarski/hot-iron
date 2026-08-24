@@ -64,6 +64,9 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("fm_listen"));
 		assertTrue(list.contains("auto_gain"));
 		assertTrue(list.contains("sweep"));
+		assertTrue(list.contains("ble_sniff"));
+		assertTrue(list.contains("ble_frames"));
+		assertTrue(list.contains("ble_activity"));
 		assertNull(tools.handleRpc("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"));
 	}
 
@@ -265,6 +268,40 @@ class SpectrumMcpToolsTest {
 		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
 		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
 				() -> unbound.call("auto_gain", Map.of("enabled", false)));
+		assertTrue(ex.getMessage().contains("not bound"));
+	}
+
+	@Test
+	void bleSniffAndActivityShareSpectrumAndFrames()
+	{
+		boolean[] enabled = { false };
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 2400, 2484, -150f);
+		for (int i = 0; i < ds.spectrumLength(); i++)
+			ds.getSpectrumArray()[i] = -70f;
+		store.publishSweep(SpectrumSnapshot.fromDataset(ds, 11L, 500, null), 11L);
+		AnalyzerSettings settings = new AnalyzerSettings();
+		settings.getFrequency().setValue(new FrequencyRange(2400, 2484));
+		store.publishContext(settings, java.util.List.of(), 20.0);
+		store.publishBleStatus(true, "/dev/ttyACM0", "scan");
+		store.publishBleFrame(new hotiron.core.BleFrame(11L, 37, -42, "ADV_IND", "AA:BB:CC:DD:EE:FF", "00", true));
+		SpectrumMcpTools tools = new SpectrumMcpTools(store, null, null, null, null, null, on -> enabled[0] = on);
+		String start = tools.call("ble_sniff", Map.of());
+		assertTrue(enabled[0]);
+		assertTrue(start.contains("2400"));
+		assertTrue(start.contains("2484"));
+		String frames = tools.call("ble_frames", Map.of("maxSamples", 10));
+		assertTrue(frames.contains("ADV_IND"));
+		assertTrue(frames.contains("sniffing"));
+		String activity = tools.call("ble_activity", Map.of());
+		assertTrue(activity.contains("ADV_IND"));
+		assertTrue(activity.contains("peakDbm") || activity.contains("2400"));
+		String snap = tools.call("spectrum_snapshot", Map.of());
+		assertTrue(snap.contains("ble"));
+		assertTrue(snap.contains("ADV_IND"));
+		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> unbound.call("ble_sniff", Map.of()));
 		assertTrue(ex.getMessage().contains("not bound"));
 	}
 

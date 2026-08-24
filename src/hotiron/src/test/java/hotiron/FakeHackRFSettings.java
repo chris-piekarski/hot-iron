@@ -23,6 +23,8 @@ public class FakeHackRFSettings implements HackRFSettings {
 	public int startListenCalls;
 	public int startWatchCalls;
 	public int startSniffCalls;
+	public int startBleSniffCalls;
+	public int stopBleSniffCalls;
 	public List<String> listedSerials = new ArrayList<String>();
 
 	public FakeHackRFSettings() {
@@ -50,6 +52,16 @@ public class FakeHackRFSettings implements HackRFSettings {
 			@Override
 			public void startSniff() {
 				startSniffCalls++;
+			}
+
+			@Override
+			public void startBleSniff() {
+				startBleSniffCalls++;
+			}
+
+			@Override
+			public void stopBleSniff() {
+				stopBleSniffCalls++;
 			}
 
 			@Override
@@ -197,6 +209,21 @@ public class FakeHackRFSettings implements HackRFSettings {
 	@Override
 	public void startSniff() {
 		inner.startSniff();
+	}
+
+	@Override
+	public void startBleSniff() {
+		inner.startBleSniff();
+	}
+
+	@Override
+	public void stopBleSniff() {
+		inner.stopBleSniff();
+	}
+
+	@Override
+	public ModelValueBoolean isBleSniffing() {
+		return inner.isBleSniffing();
 	}
 
 	@Override

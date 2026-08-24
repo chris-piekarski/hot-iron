@@ -13,6 +13,7 @@ Living implementation plans live here so later work (and agents) can pick them u
 
 | Plan | Notes |
 |---|---|
+| [nRF 2.4 GHz sniff](nrf-sniffer.md) | In progress 2026-08-24. Quick Select **BLE** 2400–2484, overlay, Nordic UART host + MCP `ble_sniff` / `ble_frames`. PCA10031 / nRF51822 identified; flash recipe in [nrf-sniffer.md](../nrf-sniffer.md#flash-recipe); HEX not written yet. |
 | [NFC park + nfc-laboratory](nfc-laboratory.md) | In progress 2026-08-23. `RadioMode.NFC`, parked 11.56 / 10 MS/s, nfc-lab frames, MCP `nfc_sniff` / `nfc_frames`. Hardware IT still open. |
 | [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; hardware IT still open. |
 

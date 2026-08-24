@@ -7,6 +7,7 @@ import java.util.Locale;
 
 import hotiron.core.FmBandLayer;
 import hotiron.core.FmStationHit;
+import hotiron.core.BleFrame;
 import hotiron.core.NfcActivity;
 import hotiron.core.NfcFrame;
 import hotiron.core.HackRFSettings;
@@ -50,6 +51,10 @@ public final class SpectrumSnapshotStore
 	private TvWatchSpectrum tvWatchSpectrum = TvWatchSpectrum.empty();
 	private NfcActivity nfc = NfcActivity.hidden();
 	private final ArrayDeque<NfcFrame> nfcFrames = new ArrayDeque<NfcFrame>(DEFAULT_RING);
+	private final ArrayDeque<BleFrame> bleFrames = new ArrayDeque<BleFrame>(DEFAULT_RING);
+	private volatile boolean bleSniffing;
+	private volatile String bleStatus = "idle";
+	private volatile String blePort = "";
 
 	public SpectrumSnapshotStore()
 	{
@@ -178,6 +183,109 @@ public final class SpectrumSnapshotStore
 		{
 			return List.copyOf(nfcFrames);
 		}
+	}
+
+	public void publishBleFrame(BleFrame frame)
+	{
+		if (frame == null)
+			return;
+		synchronized (lock)
+		{
+			bleFrames.addLast(frame);
+			while (bleFrames.size() > ringCap)
+				bleFrames.removeFirst();
+		}
+	}
+
+	public void publishBleStatus(boolean sniffing, String port, String status)
+	{
+		bleSniffing = sniffing;
+		if (port != null)
+			blePort = port;
+		if (status != null)
+			bleStatus = status;
+	}
+
+	public List<BleFrame> bleFrames()
+	{
+		synchronized (lock)
+		{
+			return List.copyOf(bleFrames);
+		}
+	}
+
+	public String bleFramesJson(Integer max)
+	{
+		int cap = max == null ? 50 : Math.max(1, Math.min(200, max.intValue()));
+		List<BleFrame> all = bleFrames();
+		int from = Math.max(0, all.size() - cap);
+		StringBuilder sb = new StringBuilder(64 + all.size() * 80);
+		sb.append("{\"count\":").append(all.size()).append(",\"sniffing\":").append(bleSniffing);
+		sb.append(",\"port\":").append(quote(blePort));
+		sb.append(",\"status\":").append(quote(bleStatus));
+		sb.append(",\"frames\":[");
+		for (int i = from; i < all.size(); i++)
+		{
+			if (i > from)
+				sb.append(',');
+			sb.append(all.get(i).toJson());
+		}
+		sb.append("]}");
+		return sb.toString();
+	}
+
+	/** Spectrum summary plus the BLE frame ring — one MCP payload. */
+	public String bleActivityJson(Integer maxFrames)
+	{
+		SpectrumSnapshot snap;
+		RadioContext ctx;
+		synchronized (lock)
+		{
+			snap = latest;
+			ctx = context;
+		}
+		int cap = maxFrames == null ? 50 : Math.max(1, Math.min(200, maxFrames.intValue()));
+		List<BleFrame> all = bleFrames();
+		int from = Math.max(0, all.size() - cap);
+		StringBuilder sb = new StringBuilder(128 + all.size() * 80);
+		sb.append("{\"sniffing\":").append(bleSniffing);
+		sb.append(",\"port\":").append(quote(blePort));
+		sb.append(",\"status\":").append(quote(bleStatus));
+		if (ctx != null)
+		{
+			sb.append(",\"startMHz\":").append(ctx.radioStartMHz);
+			sb.append(",\"endMHz\":").append(ctx.radioEndMHz);
+			sb.append(",\"radioMode\":").append(quote(ctx.radioMode));
+		}
+		if (snap != null && !snap.isEmpty())
+		{
+			sb.append(",\"peakMhz\":").append(SpectrumSnapshot.Json.num(snap.peakMhz));
+			sb.append(",\"peakDbm\":").append(SpectrumSnapshot.Json.num(snap.peakDbm));
+			sb.append(",\"noiseDbm\":").append(SpectrumSnapshot.Json.num(snap.noiseDbm));
+			sb.append(",\"timestampMs\":").append(snap.timestampMs);
+		}
+		sb.append(",\"count\":").append(all.size());
+		sb.append(",\"frames\":[");
+		for (int i = from; i < all.size(); i++)
+		{
+			if (i > from)
+				sb.append(',');
+			sb.append(all.get(i).toJson());
+		}
+		sb.append("]}");
+		return sb.toString();
+	}
+
+	public String attachBle(String snapshotJson, Integer maxFrames)
+	{
+		if (snapshotJson == null || snapshotJson.isEmpty() || snapshotJson.charAt(snapshotJson.length() - 1) != '}')
+			return snapshotJson;
+		return snapshotJson.substring(0, snapshotJson.length() - 1) + ",\"ble\":" + bleFramesJson(maxFrames) + "}";
+	}
+
+	private static String quote(String s)
+	{
+		return SpectrumSnapshot.Json.quote(s == null ? "" : s);
 	}
 
 	public String nfcFramesJson(Integer max)

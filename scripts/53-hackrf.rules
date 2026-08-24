@@ -9,3 +9,6 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="6089", MODE="0666", 
 SUBSYSTEM=="usb", ATTR{idVendor}=="1d50", ATTR{idProduct}=="cc15", MODE="0666", GROUP="plugdev", SYMLINK+="rad1o-%k"
 # LPC43xx DFU (recovery)
 SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", MODE="0666", GROUP="plugdev", SYMLINK+="nxp-dfu-%k"
+# Bench nRF DK J-Link OB. 1015 = CDC+MSD+BULK; 0101 = J-Link-only if VCOM was disabled.
+SUBSYSTEM=="usb", ATTR{idVendor}=="1366", ATTR{idProduct}=="1015", MODE="0666", GROUP="plugdev", SYMLINK+="jlink-ob-%k"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1366", ATTR{idProduct}=="0101", MODE="0666", GROUP="plugdev", SYMLINK+="jlink-%k"
