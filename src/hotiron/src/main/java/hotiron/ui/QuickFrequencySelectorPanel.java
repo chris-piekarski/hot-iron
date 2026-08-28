@@ -1,85 +1,115 @@
 package hotiron.ui;
 
-import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.GridLayout;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Insets;
+import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.beans.PropertyVetoException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import javax.swing.AbstractButton;
+import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JToggleButton;
-import javax.swing.SwingConstants;
+
+import net.miginfocom.swing.MigLayout;
+
+import hotiron.core.FrequencyRange;
+import hotiron.ui.SurveyChipLayout.Chip;
+import hotiron.ui.SurveyChipLayout.Side;
 
 /**
- * Quick Select buttons. Labels and MHz ranges live in {@link QuickSelectPreset}.
- * Hover range is an in-panel line so X11 cannot stack leftover tooltip windows.
+ * Quick Select on the HackRF 1–7250 MHz survey: services above the wave,
+ * HF/VHF/UHF + All below. Chip width follows the band; color matches the
+ * dividers.
  */
 public class QuickFrequencySelectorPanel extends JPanel
 {
-	private static final long	serialVersionUID	= -4830755053319335365L;
-	static final String			HOVER_HINT_NAME		= "quickSelectHoverHint";
-	private String			value			= QuickSelectPreset.WIFI_2.label;
-	private final JPanel		grid;
-	private final JLabel		hoverHint;
-	private final ButtonGroup	group		= new ButtonGroup();
+	private static final long serialVersionUID = -4830755053319335365L;
+	private String value = QuickSelectPreset.WIFI_2.label;
+	private final ButtonGroup group = new ButtonGroup();
+	private final JPanel topHost = new JPanel(null);
+	private final JPanel bottomHost = new JPanel(null);
+	private final SpectrumWaveStrip wave = new SpectrumWaveStrip();
+	private final Map<QuickSelectPreset, JToggleButton> buttons = new HashMap<>();
+	private List<Chip> chips = List.of();
+	private FrequencyRange window = new FrequencyRange(QuickSelectPreset.WIFI_2.startMHz,
+			QuickSelectPreset.WIFI_2.endMHz);
+	private final Font chipFont;
 
 	public QuickFrequencySelectorPanel()
 	{
 		AnalyzerLookAndFeel.install();
-
-		QuickSelectPreset[] presets = QuickSelectPreset.values();
-		int cols = 3;
-		int rows = (presets.length + cols - 1) / cols;
-		setLayout(new BorderLayout(0, 2));
-
-		grid = new JPanel(new GridLayout(rows, cols, 0, 0));
-		for (QuickSelectPreset preset : presets)
+		setLayout(new MigLayout("insets 0, fillx, hidemode 3",
+				"[grow,fill][" + OperatorLayout.RANGE_WIDTH + "!]",
+				"[][" + SurveyChipLayout.WAVE_H + "!][]"));
+		setOpaque(false);
+		chipFont = getFont().deriveFont(Font.PLAIN, SurveyChipLayout.FONT_PT);
+		topHost.setOpaque(false);
+		bottomHost.setOpaque(false);
+		for (QuickSelectPreset preset : QuickSelectPreset.values())
 		{
 			JToggleButton button = new JToggleButton(preset.label);
 			button.setFocusPainted(false);
+			button.setMargin(new Insets(3, 6, 3, 6));
+			button.setFont(chipFont);
+			button.setForeground(SpectrumSurveyStyle.TEXT);
 			button.addActionListener(addListener(preset.label));
-			button.addItemListener(e -> button.setFont(button.getFont().deriveFont(
-					button.isSelected() ? Font.BOLD : Font.PLAIN)));
+			button.addItemListener(e -> styleButton(preset, button));
+			ExclusiveToolTip.setText(button, preset.tooltip());
 			ExclusiveToolTip.install(button);
-			button.addMouseListener(new HoverHintListener(preset.tooltip()));
 			group.add(button);
-			grid.add(button);
+			buttons.put(preset, button);
+			if (SurveyChipLayout.bottomSide(preset))
+				bottomHost.add(button);
+			else
+				topHost.add(button);
+			styleButton(preset, button);
 		}
-		add(grid, BorderLayout.CENTER);
-
-		hoverHint = new JLabel(" ");
-		hoverHint.setName(HOVER_HINT_NAME);
-		hoverHint.setFont(hoverHint.getFont().deriveFont(Font.PLAIN, 11f));
-		hoverHint.setHorizontalAlignment(SwingConstants.CENTER);
-		Dimension line = new Dimension(300, 16);
-		hoverHint.setPreferredSize(line);
-		hoverHint.setMinimumSize(line);
-		hoverHint.setMaximumSize(line);
-		add(hoverHint, BorderLayout.SOUTH);
-
-		Dimension d = new Dimension(300, 25 * rows + 16);
-		setPreferredSize(d);
-		setMaximumSize(d);
-		setMinimumSize(d);
+		add(topHost, "cell 0 0, growx");
+		add(wave, "cell 0 1, growx, h " + SurveyChipLayout.WAVE_H + "!");
+		add(bottomHost, "cell 0 2, growx");
 		highlight(QuickSelectPreset.WIFI_2);
+		layoutChips();
+	}
+
+	void installRangeControls(FrequencyRangePanel range)
+	{
+		if (range == null)
+			return;
+		add(range.displayPanel(), "cell 1 0, growx, bottom");
+		add(range.keysPanel(), "cell 1 1, grow, h " + SurveyChipLayout.WAVE_H + "!");
+		add(range.spanLabel(), "cell 1 2, growx, top");
+		setSweepWindow(range.getRange());
+		range.addRangeListener(e -> setSweepWindow(range.getRange()));
+	}
+
+	JPanel waveStrip()
+	{
+		return wave;
+	}
+
+	public void setSweepWindow(FrequencyRange range)
+	{
+		if (range == null)
+			return;
+		window = range;
+		wave.setWindow(range);
 	}
 
 	public String getValue()
 	{
 		return value;
-	}
-
-	String hoverHintText()
-	{
-		return hoverHint.getText();
 	}
 
 	boolean isHighlighted(String label)
@@ -99,17 +129,26 @@ public class QuickFrequencySelectorPanel extends JPanel
 		{
 			group.clearSelection();
 			value = "";
+			restyleAll();
+			wave.repaint();
 			return;
 		}
 		AbstractButton button = findButton(preset.label);
 		if (button != null)
 			button.setSelected(true);
 		value = preset.label;
+		restyleAll();
+		wave.repaint();
 	}
 
 	AbstractButton findButton(String label)
 	{
 		return findButton(this, label);
+	}
+
+	List<Chip> chips()
+	{
+		return chips;
 	}
 
 	static AbstractButton findButton(Container root, String label)
@@ -128,14 +167,71 @@ public class QuickFrequencySelectorPanel extends JPanel
 		return null;
 	}
 
+	FrequencyRange sweepWindow()
+	{
+		return window;
+	}
+
+	private void layoutChips()
+	{
+		int width = Math.max(SurveyChipLayout.MIN_BUTTON_W * 4, topHost.getWidth());
+		if (width < 8)
+			width = Math.max(SurveyChipLayout.MIN_BUTTON_W * 4, getWidth() - OperatorLayout.RANGE_WIDTH);
+		if (width < 8)
+			width = 800;
+		FontMetrics fm = getFontMetrics(chipFont);
+		chips = SurveyChipLayout.place(width, preset -> {
+			int tw = fm.stringWidth(preset.label) + 20;
+			return Math.max(SurveyChipLayout.MIN_BUTTON_W, tw);
+		});
+		int topH = SurveyChipLayout.rowsHeight(SurveyChipLayout.topRows(chips));
+		int botH = SurveyChipLayout.rowsHeight(SurveyChipLayout.bottomRows(chips));
+		topHost.setPreferredSize(new Dimension(width, topH));
+		topHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, topH));
+		bottomHost.setPreferredSize(new Dimension(width, botH));
+		bottomHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, botH));
+		for (Chip chip : chips)
+		{
+			JToggleButton b = buttons.get(chip.preset);
+			if (b != null)
+				b.setBounds(chip.x, chip.y, chip.w, chip.h);
+		}
+		wave.setChips(chips);
+		wave.setWindow(window);
+		wave.setSelected(QuickSelectPreset.findByLabel(value).orElse(null));
+	}
+
+	@Override
+	public void doLayout()
+	{
+		super.doLayout();
+		layoutChips();
+	}
+
+	private void restyleAll()
+	{
+		for (Map.Entry<QuickSelectPreset, JToggleButton> e : buttons.entrySet())
+			styleButton(e.getKey(), e.getValue());
+	}
+
+	private void styleButton(QuickSelectPreset preset, JToggleButton button)
+	{
+		boolean on = button.isSelected();
+		Color c = SpectrumSurveyStyle.color(preset);
+		button.setFont(chipFont.deriveFont(on ? Font.BOLD : Font.PLAIN));
+		button.setForeground(SpectrumSurveyStyle.TEXT);
+		button.setBackground(SpectrumSurveyStyle.chipBackground(preset, on));
+		button.setOpaque(true);
+		button.setContentAreaFilled(true);
+		button.setBorder(BorderFactory.createLineBorder(c, on ? 3 : 2));
+	}
+
 	private ActionListener addListener(String type)
 	{
 		return e -> {
 			System.out.println("quick link click: " + type);
 			try
 			{
-				// Re-apply even if this button is already selected so a
-				// second click restores the FCC/ITU envelope after digit edits.
 				fireValueChange(value, type);
 			}
 			catch (PropertyVetoException ee)
@@ -147,41 +243,68 @@ public class QuickFrequencySelectorPanel extends JPanel
 
 	private void fireValueChange(String oldValue, String newValue) throws PropertyVetoException
 	{
-		// VetoableChangeSupport drops equal old/new; pass null so a second
-		// click on the same button still reapplies the range.
 		fireVetoableChange("value", null, newValue);
 		QuickFrequencySelectorPanel.this.value = newValue;
 		firePropertyChange("value", oldValue, newValue);
+		restyleAll();
+		wave.setSelected(QuickSelectPreset.findByLabel(newValue).orElse(null));
 	}
 
 	@Override
 	public void removeNotify()
 	{
-		hoverHint.setText(" ");
 		ExclusiveToolTip.hide();
 		super.removeNotify();
 	}
 
-	private final class HoverHintListener extends MouseAdapter
+	@Override
+	public Dimension getPreferredSize()
 	{
-		private final String text;
+		int w = Math.max(400, getWidth());
+		int h = SurveyChipLayout.heightFor(chips);
+		return new Dimension(w, h);
+	}
 
-		HoverHintListener(String text)
+	static final class SpectrumWaveStrip extends JPanel
+	{
+		private static final long serialVersionUID = 1L;
+		private List<Chip> chips = List.of();
+		private FrequencyRange window;
+		private QuickSelectPreset selected;
+
+		SpectrumWaveStrip()
 		{
-			this.text = text;
+			setOpaque(true);
+			setPreferredSize(new Dimension(100, SurveyChipLayout.WAVE_H));
+			setMinimumSize(new Dimension(40, SurveyChipLayout.WAVE_H));
+			setMaximumSize(new Dimension(Integer.MAX_VALUE, SurveyChipLayout.WAVE_H));
+		}
+
+		void setChips(List<Chip> next)
+		{
+			chips = next == null ? List.of() : next;
+			repaint();
+		}
+
+		void setWindow(FrequencyRange range)
+		{
+			window = range;
+			repaint();
+		}
+
+		void setSelected(QuickSelectPreset preset)
+		{
+			selected = preset;
+			repaint();
 		}
 
 		@Override
-		public void mouseEntered(MouseEvent e)
+		protected void paintComponent(Graphics g)
 		{
-			hoverHint.setText(text);
-		}
-
-		@Override
-		public void mouseExited(MouseEvent e)
-		{
-			if (text.equals(hoverHint.getText()))
-				hoverHint.setText(" ");
+			Graphics2D g2 = (Graphics2D) g;
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			SpectrumWavePainter.paint(g2, new java.awt.geom.Rectangle2D.Double(0, 0, getWidth(), getHeight()),
+					window, chips, selected);
 		}
 	}
 }

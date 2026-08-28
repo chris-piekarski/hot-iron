@@ -8,13 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- USB hot-load: if a HackRF appears after launch (WSL `usbipd attach`), the sweep starts without restarting the window. **Stop** still owns USB until **Restart**.
 - BLE Quick Select **2400–2484 MHz** (includes adv 39 at 2480; Wi-Fi 2 stays 2402–2472), `BleBandPlan` / `BleBandLayer` ticks, occupancy labels, and parallel nRF BLE sniff on the J-Link ACM (does not park the HackRF). MCP write `ble_sniff`, read `ble_frames` / `ble_activity`. Flash recipe (PCA10031 / nRF51822, not 4.1.1 nRF52 HEX): [docs/nrf-sniffer.md](docs/nrf-sniffer.md#flash-recipe).
 - MCP `auto_gain` writes the existing Auto gain checkbox; `sweep` leaves a park and restarts the wideband sweep.
 - NFC **Sniff**: parks the HackRF at 11.56 MHz / 10 MS/s (same exclusive IQ path as Listen/Watch) and decodes Type A/B frames with nfc-laboratory. Sidebar frame list + HUD show field on/off, REQA/ATQA/UID/SELECT, raw hex. MCP write `nfc_sniff`, read `nfc_frames`. Sweep classifier `nfc_activity` is unchanged. Loop antenna, receive only. Notes: [docs/nfc.md](docs/nfc.md).
 - NFC spectrum overlay + live classifier: Quick Select is **12–15 MHz**, `NfcBandPlan` ticks carrier / A/B / F / V / 27.12 / 40.68, HUD + MCP `nfc_activity` report quiet / field on / polling / HiFER CW / card sidebands. Click a header tick to Scan PHY then harmonics. AirTags are not in this band.
 - MCP `spectrum_history_bins`: same snapshot ring as `spectrum_history`, but each tick includes filled `points` (capped `maxSamples` / `maxPoints`). Not the waterfall image.
 
+### Fixed
+- BLE sniff on this bench PCA10031: Nordic UART SLIP is `0xAB`/`0xBC` (not RFC 1055), host commands are protocol v1, device frames are v2, and `sniffer_pca10031_1c2a221.hex` talks at **460800** (not 1 Mbps). Engine tries 1M then 460800, enables RTS/CTS, and names ADV PDUs after stripping the radio AA + padding byte.
+
 ### Changed
+- README hero shot is the live survey banner + Wi‑Fi 2 sweep; copy covers Listen dual waterfalls, NFC/BLE sniff, and USB hot-load.
+- FM Listen keeps the ±2 MHz parked-IQ line chart on top and splits the strip into **RF · ±2 MHz** (same FFT) beside **AUDIO · 0–16 kHz**. Leave Listen to restore one RF waterfall.
+- Quick Select chips are 16 pt on a HackRF **1 MHz–7.25 GHz** chirp survey (no 0 Hz gutter): services above the wave, HF/VHF/UHF/All below (blue / teal / copper / cream), color-coded dividers, chip width follows the band. Range digits (`2402 – 2472 MHz`) sit above `◀ − + ▶` in the column immediately right of the wave; − / + expand or shrink the gold sweep window.
+- Operator layout: Quick Select and sweep range sit in a top banner; the tools column is a fixed **400 px** with a locked-height band slot. FM / TV / NFC / BLE faces show only when that service is in view (or pinned while parked / scanning). Spectrum/waterfall split defaults to ~55/45. Window minimum is 1100×640. Chrome is composed (`OperatorShell`, `BandToolsSlot`, `BandToolKind`) so a new band face registers instead of editing a settings-column if/else.
+- Band-channel header is taller (24 px) with bold 13 pt cream labels and gold occupancy ticks so BLE 37/38/39 do not disappear into the blue waterfall.
 - NFC Sniff waterfall is the 12–15 MHz parked FFT (seconds of RF history). The 13.56 |IQ| scope is a 500 ms sidebar strip after mixing the +2 MHz IF — wideband hash no longer dominates, and 2–10 Hz polls stay in the window.
 - Startup sizes to the current monitor (4K fills the screen minus a margin). Only a spanned WSLg virtual desktop uses the compact 1600-wide fallback, and that fallback keeps packed settings-panel height instead of 900 px.
 - Radio USB apply (Auto off, Listen/Watch retune, coalesced Auto writes) lives in `RadioCoordinator` with characterization tests. Operator UI and MCP still mutate the same `AnalyzerSettings`; they no longer grow `HotIron` listener flags.

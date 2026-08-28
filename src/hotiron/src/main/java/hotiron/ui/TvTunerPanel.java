@@ -45,7 +45,7 @@ public final class TvTunerPanel extends JPanel
 	public TvTunerPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 6, wrap 1", "[grow,fill]", ""));
+		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][][grow][]"));
 		setBorder(BorderFactory.createTitledBorder("TV tuner"));
 		ch.setFont(new Font(Font.MONOSPACED, Font.BOLD, 32));
 		ch.setForeground(LCD_DIM);
@@ -78,11 +78,11 @@ public final class TvTunerPanel extends JPanel
 		actionRow.add(scan, "growx");
 		actionRow.add(watch, "growx");
 		add(actionRow, "growx");
-		preview.setPreferredSize(new Dimension(220, 124));
+		preview.setPreferredSize(new Dimension(360, 180));
 		preview.setMinimumSize(new Dimension(160, 90));
 		preview.setStatus("no picture");
 		ExclusiveToolTip.setText(preview, "Decoded ATSC video. IQ spectrogram until MPEG-2 locks.");
-		add(preview, "growx, h 90:124:160");
+		add(preview, "grow, hmin 90");
 		add(volume, "growx");
 		tuneDown.addActionListener(e -> tune(-1));
 		tuneUp.addActionListener(e -> tune(+1));

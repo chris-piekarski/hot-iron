@@ -352,4 +352,62 @@ class HackRFSweepSettingsUITest {
         ExclusiveToolTip.hide();
     }
 
+    @Test
+    void wifi2ShowsBleToolsNotBroadcast() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals(OperatorLayout.TOOLS_WIDTH, ui.getPreferredSize().width);
+        assertTrue(ui.bandSlot().hosts(ui.bleSniffPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.tunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.tvTunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.nfcSniffPanel()));
+        assertTrue(ui.bandContext().shows(hotiron.core.BandToolKind.BLE));
+        assertEquals(OperatorLayout.BAND_SLOT_HEIGHT, ui.bandSlot().getPreferredSize().height);
+    }
+
+    @Test
+    void bandToolsFollowTheViewAndStayPinnedWhileParked() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        Dimension before = ui.getPreferredSize();
+
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.FM.label).doClick());
+        flushEdt();
+        assertTrue(ui.bandSlot().hosts(ui.tunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.bleSniffPanel()));
+        assertEquals(before.width, ui.getPreferredSize().width);
+        assertEquals(OperatorLayout.BAND_SLOT_HEIGHT, ui.bandSlot().getPreferredSize().height);
+
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.V_TV.label).doClick());
+        flushEdt();
+        assertTrue(ui.bandSlot().hosts(ui.tunerPanel()));
+        assertTrue(ui.bandSlot().hosts(ui.tvTunerPanel()));
+
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.ALL.label).doClick());
+        flushEdt();
+        assertFalse(ui.bandSlot().hosts(ui.tunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.tvTunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.bleSniffPanel()));
+
+        SwingUtilities.invokeAndWait(() -> ui.listenButton().doClick());
+        flushEdt();
+        assertTrue(ui.bandSlot().hosts(ui.tunerPanel()), "Listen pins FM on All");
+        assertEquals(before.width, ui.getPreferredSize().width);
+    }
+
+    @Test
+    void navBannerOwnsQuickSelectAndRange() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertNotNull(ui.navBanner());
+        assertSame(ui.quickFrequencySelector(), ui.navBanner().quickSelector());
+        assertSame(ui.frequencyRangePanel(), ui.navBanner().rangePanel());
+    }
+
 }

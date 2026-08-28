@@ -1,5 +1,6 @@
 package hotiron.nativebridge;
 
+import java.io.File;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -185,8 +186,43 @@ public final class HackRFDeviceQuery {
 	}
 
 	/**
-	 * USB serials from {@code hackrf_device_list}. Does not open a device, so
-	 * it can run while a sweep holds the radio.
+	 * True when a HackRF usbfs node is enumerated (sysfs 1d50:6089 / 604b /
+	 * cc15). No libhackrf open — safe while a sweep holds the radio.
+	 */
+	public static boolean usbEnumerated() {
+		File root = new File("/sys/bus/usb/devices");
+		File[] kids = root.listFiles();
+		if (kids == null)
+			return false;
+		for (int i = 0; i < kids.length; i++) {
+			String vendor = readSysfs(new File(kids[i], "idVendor"));
+			String product = readSysfs(new File(kids[i], "idProduct"));
+			if (!"1d50".equalsIgnoreCase(vendor))
+				continue;
+			if ("6089".equalsIgnoreCase(product) || "604b".equalsIgnoreCase(product)
+					|| "cc15".equalsIgnoreCase(product))
+				return true;
+		}
+		return false;
+	}
+
+	private static String readSysfs(File f) {
+		if (f == null || !f.isFile())
+			return "";
+		try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+			byte[] buf = new byte[16];
+			int n = in.read(buf);
+			if (n <= 0)
+				return "";
+			return new String(buf, 0, n, java.nio.charset.StandardCharsets.US_ASCII).trim();
+		} catch (java.io.IOException e) {
+			return "";
+		}
+	}
+
+	/**
+	 * USB serials from {@code hackrf_device_list}. Does not open RX, but
+	 * still talks to libusb — do not call this while a sweep is streaming.
 	 */
 	public static List<String> listSerials() {
 		try {

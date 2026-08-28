@@ -1,20 +1,23 @@
 package hotiron.core;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
+import com.sun.jna.Library;
+import com.sun.jna.Native;
+
 /**
  * Second USB: Nordic nRF Sniffer on ACM. Does not touch the HackRF.
  */
 public final class BleSniffEngine implements AutoCloseable
 {
-	public static final int BAUD = 1_000_000;
+	public static final int BAUD = 460_800;
+	/** nRF51 HEX on this bench is 460800; nRF52 4.x is 1 Mbps. Wrong baud on J-Link VCOM garbles the bridge until the port is closed. */
+	public static final int[] BAUDS = { 460_800, 1_000_000 };
 	public static final String DEFAULT_PORT = "/dev/ttyACM0";
 
 	public interface Port extends AutoCloseable
@@ -98,13 +101,48 @@ public final class BleSniffEngine implements AutoCloseable
 	{
 		try
 		{
-			port.configure(BAUD);
-			status.accept("ping " + port.path());
-			port.write(NordicSlip.encode(NordicSnifferProto.pingReq(txCounter++)));
-			port.write(NordicSlip.encode(NordicSnifferProto.scanCont(txCounter++)));
-			status.accept("scan " + port.path());
 			NordicSlip.Decoder slip = new NordicSlip.Decoder();
 			byte[] buf = new byte[1024];
+			boolean talking = false;
+			int baudUsed = BAUD;
+			for (int baud : BAUDS)
+			{
+				if (stop)
+					return;
+				port.configure(baud);
+				status.accept("ping " + baud + " " + port.path());
+				writeHost();
+				long until = System.currentTimeMillis() + 800;
+				while (!stop && System.currentTimeMillis() < until)
+				{
+					int n = port.read(buf);
+					if (n < 0)
+						return;
+					if (n == 0)
+					{
+						try
+						{
+							Thread.sleep(20);
+						}
+						catch (InterruptedException e)
+						{
+							Thread.currentThread().interrupt();
+							return;
+						}
+						continue;
+					}
+					if (consume(slip, buf, n))
+						talking = true;
+				}
+				if (talking)
+				{
+					baudUsed = baud;
+					status.accept("scan " + baud + " " + port.path());
+					break;
+				}
+			}
+			if (!talking)
+				status.accept("waiting for Nordic sniffer firmware on " + port.path() + " (tried 1M and 460800)");
 			int idle = 0;
 			while (!stop)
 			{
@@ -114,20 +152,24 @@ public final class BleSniffEngine implements AutoCloseable
 				if (n == 0)
 				{
 					idle++;
-					if (idle == 20)
+					if (!talking && idle == 20)
 						status.accept("waiting for Nordic sniffer firmware on " + port.path());
+					try
+					{
+						Thread.sleep(20);
+					}
+					catch (InterruptedException e)
+					{
+						Thread.currentThread().interrupt();
+						break;
+					}
 					continue;
 				}
 				idle = 0;
-				List<byte[]> got = slip.push(buf, 0, n);
-				for (byte[] raw : got)
+				if (consume(slip, buf, n) && !talking)
 				{
-					NordicSnifferProto.HostHeader h = NordicSnifferProto.parseHost(raw);
-					if (h != null && h.type == NordicSnifferProto.PING_RESP)
-						status.accept("firmware " + h.version);
-					BleFrame frame = NordicSnifferProto.toFrame(raw, System.currentTimeMillis());
-					if (frame != null)
-						frames.accept(frame);
+					talking = true;
+					status.accept("scan " + baudUsed + " " + port.path());
 				}
 			}
 		}
@@ -146,6 +188,33 @@ public final class BleSniffEngine implements AutoCloseable
 			}
 			status.accept("idle");
 		}
+	}
+
+	private void writeHost() throws IOException
+	{
+		port.write(NordicSlip.encode(NordicSnifferProto.pingReq(txCounter++)));
+		port.write(NordicSlip.encode(NordicSnifferProto.advHop(txCounter++)));
+		port.write(NordicSlip.encode(NordicSnifferProto.scanCont(txCounter++)));
+	}
+
+	private boolean consume(NordicSlip.Decoder slip, byte[] buf, int n)
+	{
+		boolean any = false;
+		List<byte[]> got = slip.push(buf, 0, n);
+		for (byte[] raw : got)
+		{
+			NordicSnifferProto.HostHeader h = NordicSnifferProto.parseHost(raw);
+			if (h != null)
+			{
+				any = true;
+				if (h.type == NordicSnifferProto.PING_RESP)
+					status.accept("firmware proto " + h.version);
+			}
+			BleFrame frame = NordicSnifferProto.toFrame(raw, System.currentTimeMillis());
+			if (frame != null)
+				frames.accept(frame);
+		}
+		return any;
 	}
 
 	@Override
@@ -181,9 +250,29 @@ public final class BleSniffEngine implements AutoCloseable
 
 	static final class LinuxAcmPort implements Port
 	{
+		private static final int O_RDWR = 2;
+		private static final int O_NOCTTY = 256;
+		private static final int O_NONBLOCK = 2048;
+		private static final int EAGAIN = 11;
+		private static final int EWOULDBLOCK = 11;
+
+		interface LibC extends Library
+		{
+			LibC INSTANCE = Native.load("c", LibC.class);
+
+			int open(String path, int flags);
+
+			long read(int fd, byte[] buf, long len);
+
+			long write(int fd, byte[] buf, long len);
+
+			int close(int fd);
+
+			int ioctl(int fd, long request, int[] argp);
+		}
+
 		private final String path;
-		private FileInputStream in;
-		private FileOutputStream out;
+		private int fd = -1;
 
 		LinuxAcmPort(String path)
 		{
@@ -199,47 +288,112 @@ public final class BleSniffEngine implements AutoCloseable
 		@Override
 		public void configure(int baud) throws IOException
 		{
+			closeFd();
+			stty(baud);
+			int nfd = LibC.INSTANCE.open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
+			if (nfd < 0)
+				throw new IOException("open " + path + " errno " + Native.getLastError());
+			fd = nfd;
+			// pyserial rtscts=True raises RTS/DTR; J-Link VCOM needs that
+			int[] bits = { 0x002 | 0x004 };
+			LibC.INSTANCE.ioctl(fd, 0x541CL, bits);
+		}
+
+		private void stty(int baud) throws IOException
+		{
 			try
 			{
-				Process stty = new ProcessBuilder("stty", "-F", path, String.valueOf(baud), "cs8", "-cstopb",
-						"-parenb", "raw", "-echo", "min", "0", "time", "1").start();
+				Process stty = new ProcessBuilder("timeout", "2", "stty", "-F", path, String.valueOf(baud), "cs8",
+						"-cstopb", "-parenb", "crtscts", "raw", "-echo", "clocal", "min", "0", "time", "1").start();
 				int rc = stty.waitFor();
 				if (rc != 0)
-					throw new IOException("stty " + path + " exited " + rc);
+				{
+					stty = new ProcessBuilder("timeout", "2", "stty", "-F", path, String.valueOf(baud), "cs8",
+							"-cstopb", "-parenb", "raw", "-echo", "clocal", "min", "0", "time", "1").start();
+					rc = stty.waitFor();
+					if (rc != 0)
+						throw new IOException("stty " + path + " " + baud + " exited " + rc);
+				}
 			}
 			catch (InterruptedException e)
 			{
 				Thread.currentThread().interrupt();
 				throw new IOException("stty interrupted", e);
 			}
-			in = new FileInputStream(path);
-			out = new FileOutputStream(path);
 		}
 
 		@Override
 		public int read(byte[] buf) throws IOException
 		{
-			if (in == null)
+			if (fd < 0)
 				return -1;
-			return in.read(buf);
+			long n = LibC.INSTANCE.read(fd, buf, buf.length);
+			if (n < 0)
+			{
+				int err = Native.getLastError();
+				if (err == EAGAIN || err == EWOULDBLOCK)
+					return 0;
+				throw new IOException("read " + path + " errno " + err);
+			}
+			return (int) n;
 		}
 
 		@Override
 		public void write(byte[] buf) throws IOException
 		{
-			if (out == null)
+			if (fd < 0 || buf == null || buf.length == 0)
 				return;
-			out.write(buf);
-			out.flush();
+			int off = 0;
+			while (off < buf.length)
+			{
+				long n = LibC.INSTANCE.write(fd, slice(buf, off), (long) (buf.length - off));
+				if (n < 0)
+				{
+					int err = Native.getLastError();
+					if (err == EAGAIN || err == EWOULDBLOCK)
+					{
+						try
+						{
+							Thread.sleep(5);
+						}
+						catch (InterruptedException e)
+						{
+							Thread.currentThread().interrupt();
+							throw new IOException("write interrupted", e);
+						}
+						continue;
+					}
+					throw new IOException("write " + path + " errno " + err);
+				}
+				if (n == 0)
+					break;
+				off += n;
+			}
+		}
+
+		private static byte[] slice(byte[] buf, int off)
+		{
+			if (off == 0)
+				return buf;
+			byte[] rest = new byte[buf.length - off];
+			System.arraycopy(buf, off, rest, 0, rest.length);
+			return rest;
 		}
 
 		@Override
 		public void close() throws IOException
 		{
-			if (in != null)
-				in.close();
-			if (out != null)
-				out.close();
+			closeFd();
+		}
+
+		private void closeFd() throws IOException
+		{
+			if (fd < 0)
+				return;
+			int n = LibC.INSTANCE.close(fd);
+			fd = -1;
+			if (n < 0)
+				throw new IOException("close " + path + " errno " + Native.getLastError());
 		}
 	}
 }

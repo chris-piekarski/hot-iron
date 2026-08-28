@@ -64,12 +64,15 @@ class BandHeaderPainterTest {
 
 	@Test
 	void labelsSitInTheTopHeader() {
-		java.awt.Font font = new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 10);
+		java.awt.Font font = BandHeaderPainter.labelFont(false);
 		BufferedImage img = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB);
 		java.awt.FontMetrics fm = img.createGraphics().getFontMetrics(font);
 		Rectangle2D area = new Rectangle2D.Double(20, 10, 860, 270);
 		float y = BandHeaderPainter.labelBaselineY(area, fm);
 		assertTrue(y < area.getMinY() + BandHeaderPainter.HEADER_H);
 		assertTrue(y < area.getCenterY());
+		assertTrue(BandHeaderPainter.HEADER_H >= fm.getHeight() + 4,
+				"header must fit the bold channel labels");
+		assertEquals(13, BandHeaderPainter.LABEL_SIZE);
 	}
 }

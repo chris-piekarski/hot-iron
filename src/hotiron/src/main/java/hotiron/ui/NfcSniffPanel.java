@@ -43,7 +43,7 @@ public final class NfcSniffPanel extends JPanel
 	public NfcSniffPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 6, wrap 1", "[grow,fill]", "[][][][][][grow]"));
+		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][][grow]"));
 		setBorder(BorderFactory.createTitledBorder("NFC sniff"));
 		title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 18));
 		title.setForeground(LCD_DIM);
@@ -62,8 +62,8 @@ public final class NfcSniffPanel extends JPanel
 		add(hint);
 		add(status);
 		add(sniff, "growx");
-		add(envelope, "growx, h 108!");
-		add(new JScrollPane(list), "grow, h 110!");
+		add(envelope, "growx, h 80!");
+		add(new JScrollPane(list), "grow");
 	}
 
 	public JButton sniffButton()

@@ -23,8 +23,14 @@ class BleSniffEngineTest
 		payload[3] = 40;
 		payload[10] = 0x00;
 		payload[11] = 6;
-		byte[] slip = NordicSlip.encode(
-				NordicSnifferProto.hostPacket(NordicSnifferProto.EVENT_PACKET_ADV, payload, 3));
+		byte[] v2 = new byte[NordicSnifferProto.HEADER_LEN + payload.length];
+		v2[0] = (byte) payload.length;
+		v2[1] = 0;
+		v2[2] = 2;
+		v2[3] = 3;
+		v2[5] = (byte) NordicSnifferProto.EVENT_PACKET_ADV;
+		System.arraycopy(payload, 0, v2, NordicSnifferProto.HEADER_LEN, payload.length);
+		byte[] slip = NordicSlip.encode(v2);
 		QueuePort port = new QueuePort();
 		port.inbound.offer(slip);
 		List<BleFrame> got = new ArrayList<>();

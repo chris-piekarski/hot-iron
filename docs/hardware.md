@@ -79,6 +79,8 @@ usbipd attach --wsl --auto-attach --hardware-id 1d50:6089
 
 `--hardware-id` survives bus-id changes. `--auto-attach` re-attaches after firmware reset or unplug. `bind` only marks the device shared; it does not attach it to WSL.
 
+HotIron hot-loads a newly attached HackRF (WSL `usbipd attach` while the window is open) and starts the sweep. If you pressed **Stop**, it leaves USB alone until **Restart**.
+
 **Once in WSL:**
 
 ```bash

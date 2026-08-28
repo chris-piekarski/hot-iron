@@ -2,7 +2,7 @@
 
 Reference for the **SEGGER J-Link / Nordic nRF5x DK** on this bench, the 2.4 GHz protocols that chip family can run, and which of those have an official **packet sniffer**. Spectrum energy is still the HackRF. Packets come from this second USB device. Implementation plan: [plans/nrf-sniffer.md](plans/nrf-sniffer.md).
 
-Quick Select **BLE** is **2400–2484 MHz** (`BleBandPlan` / `BleBandLayer`) so advertising 37/38/39 are on-screen. Sidebar **BLE sniff** / MCP `ble_sniff` opens the J-Link CDC and consumes Nordic UART/SLIP v3 (`BleSniffEngine`). That does **not** park the HackRF. Do not open `/dev/ttyACM0` from a snapshot tool (`ble_frames` / `ble_activity` only read the ring). Packet decode needs the matching sniffer HEX on the nRF — flash is operator work, not `make build`. Recipe below.
+Quick Select **BLE** is **2400–2484 MHz** (`BleBandPlan` / `BleBandLayer`) so advertising 37/38/39 are on-screen. Sidebar **BLE sniff** / MCP `ble_sniff` opens the J-Link CDC and consumes Nordic UART/SLIP (`BleSniffEngine`: v1 host commands, v2 device frames, 1 Mbps then 460800). That does **not** park the HackRF. Do not open `/dev/ttyACM0` from a snapshot tool (`ble_frames` / `ble_activity` only read the ring). Packet decode needs the matching sniffer HEX on the nRF — flash is operator work, not `make build`. Recipe below.
 
 ## What is plugged in
 
@@ -20,7 +20,7 @@ USB shows a debugger, not a “BLE radio” product name.
 
 That is the **on-board J-Link OB** (Atmel SAM3U, firmware `J-Link OB-SAM3U128-V2-NordicSemi` compiled Jul 12 2018). It programs the **nRF SoC** on the same PCB and bridges that SoC’s UART to ACM. The nRF52840 **USB dongle** (PCA10059) is a different gadget (`1915:…` Nordic DFU/USB); it is **not** this VID:PID.
 
-**Identified 2026-08-24** with `nrfutil device device-info` (J-Link DLL + writable usbfs): **PCA10031 / nRF51822** (`NRF51_FAMILY`, `NRF51xxx_xxAC_REV3`). Official nRF Sniffer **4.1.1** HEX files are nRF52-only and must **not** be written to this chip. Last Nordic image for this board is the v2.x `sniffer_pca10031_*.hex` (nRF51 Dongle). Current HotIron host speaks UART/SLIP v3; nRF51 firmware is the older v2 generation.
+**Identified 2026-08-24** with `nrfutil device device-info` (J-Link DLL + writable usbfs): **PCA10031 / nRF51822** (`NRF51_FAMILY`, `NRF51xxx_xxAC_REV3`). Official nRF Sniffer **4.1.1** HEX files are nRF52-only and must **not** be written to this chip. Last Nordic image for this board is the v2.x `sniffer_pca10031_*.hex` (nRF51 Dongle). Current HotIron host sends UART/SLIP **v1** commands (same as nrfutil) and parses **v2** device frames from this HEX; nRF52 4.x images still use 1 Mbps.
 
 `make udev` also covers `1366:1015` and `1366:0101` so the J-Link usbfs node is `0666` like the HackRF.
 
@@ -188,7 +188,7 @@ ls -l /dev/ttyACM0 /dev/serial/by-id/*J-Link*
 
 Then sidebar **BLE sniff** or MCP `ble_sniff`. HackRF stays in `radioMode: sweep` on 2400–2484. `ble_frames` listing ADV_IND means the image is talking.
 
-This nRF51 HEX is Nordic UART **v2**. HotIron’s host is **v3**, so the ACM can be open and the ring still empty until that decoder is adjusted. Spectrum overlay does not need the flash.
+This nRF51 HEX (`sniffer_pca10031_1c2a221.hex`, flashed 2026-08-27) is Nordic UART **v2** at **460800** baud with SLIP `0xAB`/`0xBC`. HotIron sends nrfutil-style **v1** host packets, parses v2 EVENT_PACKET, and falls back from 1 Mbps to 460800. `ble_frames` listing ADV_IND means the image is talking. Spectrum overlay does not need the flash.
 
 Newer nRF52 DKs: use the **nRF USB** port with current `nrfutil ble-sniffer` (Academy note), not only the interface-MCU USB. Host capture remains UART/SLIP v3 (or `nrfutil`/extcap as a child) — do not rewrite BLE in Java.
 

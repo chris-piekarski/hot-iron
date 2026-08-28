@@ -9,7 +9,7 @@
         heat on the dial -- agents copy the RF bins
 ```
 
-**Heat on the dial. QSY to live hits. Agents copy the RF bins.**
+**Heat on the dial. Click a band. QSY to the hit. Agents copy the RF bins.**
 
 [![Release](https://img.shields.io/github/v/release/chris-piekarski/hot-iron)](https://github.com/chris-piekarski/hot-iron/releases/latest)
 [![MCP](https://img.shields.io/badge/MCP-localhost%208765-7c3aed.svg)](docs/agents.md)
@@ -20,50 +20,61 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-informational.svg)](docs/building.md)
 [![Last commit](https://img.shields.io/github/last-commit/chris-piekarski/hot-iron/master)](https://github.com/chris-piekarski/hot-iron/commits/master)
 
-A Java 21 desktop for the [HackRF One](https://greatscottgadgets.com/hackrf/) (and Pro). Sweep the waterfall, **QSY** to live FM/TV hits, and let agents **copy** the same RF bins over MCP — **one rig**, no second USB open.
+A Java 21 desktop for the [HackRF One](https://greatscottgadgets.com/hackrf/) (and Pro). One rig. The whole **1 MHz–7.25 GHz** window on a chirp. Sweep. Listen. Watch. Sniff. Local agents **copy** the same bins over MCP — they never open USB.
 
 ```bash
 make mcp    # GUI + MCP on 127.0.0.1:8765
 ```
 
-Agent setup: **[docs/agents.md](docs/agents.md)**. Operator UI: **[docs/operator.md](docs/operator.md)**.
+Operator UI: **[docs/operator.md](docs/operator.md)**. Agent setup: **[docs/agents.md](docs/agents.md)**.
 
 ![HotIron](screenshot.png)
 
-*Live ATSC Watch with a decoded MPEG-2 frame in the TV-tuner preview.*
+*Live **Wi‑Fi 2** sweep (2402–2472 MHz). Survey wave across the HackRF floor→ceiling; gold window is the radio. BLE sniff sits in the tools slot because 2.4 GHz is in view.*
 
-## Three modes, one rig
+## One radio. Several ways to use it.
 
-| Mode | What it does |
+Sweep, Listen, Watch, and NFC Sniff **share the HackRF**. Last one wins. BLE sniff is a **second USB** (bench nRF) and does not park the One.
+
+| | What you get |
 |---|---|
-| **Sweep** | Wideband bins, waterfall, occupancy, live FM/TV/Wi-Fi labels |
-| **Listen** | Park on a detected US FM station (knob / header / MCP `fm_listen`), mono WFM |
-| **Watch** | Park on a detected ATSC channel (MCP `tv_watch`), 8VSB → MPEG-2 preview |
+| **Sweep** | Hop the stick. Live spectrum + RF waterfall. Occupancy. Wi‑Fi / FM / TV / BLE labels on the header. |
+| **Listen** | Park 4 MS/s on a US FM dial. Top chart is the ±2 MHz neighborhood. Bottom strip splits: **RF ±2 MHz** waterfall beside **AUDIO 0–16 kHz**. Mono WFM on the speakers. |
+| **Watch** | Park 16 MS/s on US ATSC 1.0. ±8 MHz RF chart, **VIDEO** IQ waterfall, MPEG-2 in the tuner, AC-3 on the speakers. |
+| **NFC Sniff** | Park 10 MS/s (LO 11.56 MHz). 12–15 MHz chart + waterfall. Type A/B frames in the sidebar. Receive only. |
+| **BLE sniff** | nRF / J-Link ACM. Advertising PDUs on a second USB. HackRF keeps sweeping 2.4 GHz. |
 
-Listen and Watch **QRT** the sweep. **Restart** puts the rig back on sweep.
+**Restart** QSY’s back to sweep. **Stop** drops USB so `make info` or GNU Radio can have the stick.
+
+## Why the banner exists
+
+The top of the window is the HackRF’s whole playground, log-scaled so NFC and FM are not a one-pixel joke next to 5 GHz.
+
+- **Services above** the chirp, **HF / VHF / UHF / All** below (blue / teal / copper / cream)
+- Chip width follows the band; gold window is the live sweep
+- Digits + `◀ − + ▶` sit beside the wave — **− / +** grow or shrink that gold slice
+- Band tuners appear in the **400 px** tools column only when that service is in view
+
+Click **FM**. The gold window jumps to 88–108. Click **Listen**. The hop-sweep **QRT**s and you are parked on the dial.
 
 ## Why MCP
 
 | | |
 |---|---|
-| **Agents copy the plot** | Snapshots come from `onFullSweepProcessed`, not screenshots or log scrape |
-| **One rig** | MCP is in-process; a second `hackrf_sweep` would steal USB |
-| **Local, explicit control** | Read tools plus `fm_listen` / `tv_watch`; localhost / stdio; hop holes omitted (not −150 dBm) |
-| **Operator-ready GUI** | Auto gain, auto-scale dB, waterfall time axis, Quick Select |
+| **Agents copy the plot** | Snapshots come from live bins (`onFullSweepProcessed` / parked IQ), not screenshots or log scrape |
+| **One rig** | MCP is in-process. A second `hackrf_sweep` would steal USB. |
+| **Local, explicit** | Read tools plus `fm_listen` / `tv_watch` / `nfc_sniff` / `ble_sniff`. Localhost / stdio. Hop holes omitted (not −150 dBm). |
 
 Ask an attached agent: *peak and noise on this window? any live FM dial hits? watch RF 28; where is ATSC failing? what firmware is on the HackRF?*
 
-## What the GUI does
+## Also on the glass
 
-- Sweeps a range and draws live spectrum + waterfall (time scale on the left)
-- **Quick Select** for All (1–7250 MHz), Wi‑Fi, LTE, FM, TV, NFC, amateur 6m / 2m / 70 cm / 33 cm
-- Auto gain (default) and auto-scale dB so FM/Wi‑Fi peaks are readable
-- Live FM labels snap to the US dial; the analog **knob** detents on detected stations only
-- FM Listen keeps the audio waterfall while the main chart shows the live ±2 MHz local RF spectrum
-- ATSC 1.0 Watch with live ±8 MHz RF chart, MPEG-2 preview, AC-3 audio, and stage diagnostics
-- Peak hold, persistent display, spur filter, EU/USA allocation overlays
+- Auto gain and auto-scale dB so FM and Wi‑Fi peaks fill the axis instead of hiding in the blue
+- Peak hold, persistence glow, spur filter, EU/USA allocation overlays
+- Analog **knob** that detents on scanned FM stations
 - Bias-tee and onboard **Antenna LNA +14 dB**
-- Sidebar: board, serial, firmware, Restart / Stop / CLKOUT
+- USB hot-load: attach the HackRF after launch and the sweep starts (Stop still owns the bus until Restart)
+- Board, serial, firmware on the tools strip — hover for the rest
 
 ## Quick Start
 
@@ -75,7 +86,7 @@ make deps          # Ubuntu/Debian build packages
 make mcp           # build if needed, launch GUI + MCP
 ```
 
-Plug in the radio first. On Linux, run `make udev` once so the USB device stays writable. Full walkthrough: [docs/getting-started.md](docs/getting-started.md). Agent wiring: [docs/agents.md](docs/agents.md).
+Plug in the radio first. On Linux, run `make udev` once so the USB device stays writable. Walkthrough: [docs/getting-started.md](docs/getting-started.md). Agents: [docs/agents.md](docs/agents.md).
 
 ### How it is put together
 
@@ -100,8 +111,8 @@ flowchart TD
 - [Development & Testing](docs/develop.md)
 - [Radio setup](docs/hardware.md) (udev, firmware, Windows drivers)
 - [Operator UI](docs/operator.md)
-- [NFC / HF RFID](docs/nfc.md) — 13.56 MHz overlay, classifier, and what not to decode
-- [nRF 2.4 GHz sniffer](docs/nrf-sniffer.md) — bench J-Link / BLE overlay + UART host (15.4 / ANT decode not wired)
+- [NFC / HF RFID](docs/nfc.md) — 13.56 MHz overlay, classifier, parked Sniff
+- [nRF 2.4 GHz sniffer](docs/nrf-sniffer.md) — bench J-Link / BLE overlay + UART host
 - [Architecture](docs/architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies
 - [Repository stats](docs/stats.md) (`make stats`)
 - [Contributing](docs/contributing.md)

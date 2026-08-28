@@ -40,6 +40,10 @@ class SweepStatusBarTest {
 		assertTrue(bar.getModeText().contains("parked IQ"));
 		assertTrue(bar.getModeText().contains("AUDIO"));
 		assertTrue(bar.getPeakText().contains("dBFS"));
+		bar.setListenDualInfo(46.875, 342, 30, Double.valueOf(-12));
+		assertTrue(bar.getModeText().contains("RF ±2 MHz"));
+		assertTrue(bar.getModeText().contains("AUDIO"));
+		assertTrue(bar.getPeakText().contains("dBFS"));
 		bar.setSweepInfo(11718.75, 1024, 30, Double.valueOf(-8), false, true);
 		assertTrue(bar.getModeText().contains("VIDEO"));
 		assertTrue(bar.getPeakText().contains("dBFS"));

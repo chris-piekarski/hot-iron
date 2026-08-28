@@ -40,9 +40,9 @@ import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
+
 import javax.swing.JSplitPane;
-import javax.swing.ScrollPaneConstants;
+
 import javax.swing.SwingUtilities;
 
 import org.jfree.chart.ChartFactory;
@@ -96,6 +96,7 @@ import hotiron.core.FrequencyRange;
 import hotiron.core.AutoGainPolicy;
 import hotiron.core.GainPolicy;
 import hotiron.core.RadioCoordinator;
+import hotiron.core.RadioHotPlug;
 import hotiron.core.RadioMode;
 import hotiron.core.RadioSession;
 import hotiron.core.StationDetectSink;
@@ -127,6 +128,8 @@ import hotiron.nativebridge.NfcDecNative;
 import hotiron.ui.BandHeaderPainter;
 import hotiron.ui.HackRFSweepSettingsUI;
 import hotiron.ui.ListenHud;
+import hotiron.ui.OperatorLayout;
+import hotiron.ui.OperatorShell;
 import hotiron.ui.NfcSniffHud;
 import hotiron.ui.SweepStatusBar;
 import hotiron.ui.WaterfallPlot;
@@ -201,6 +204,8 @@ public class HotIron {
 	private final AutoGainPolicy.Loop				autoGainLoop						= new AutoGainPolicy.Loop();
 	private RadioCoordinator radio;
 	private RadioSession radioSession;
+	private final RadioHotPlug radioHotPlug = new RadioHotPlug();
+	private Thread usbWatch;
 	private volatile boolean						forceStopSweep						= false;
 	/**
 	 * Capture a GIF of the program for the GITHUB page
@@ -237,6 +242,9 @@ public class HotIron {
 	private RuntimePerformanceWatch					perfWatch							= new RuntimePerformanceWatch();
 	private JFrame									uiFrame;
 	private WaterfallPlot							waterfallPlot;
+	private WaterfallPlot							listenRfWaterfall;
+	private JSplitPane								listenWaterfalls;
+	private boolean									listenDualWaterfalls;
 	private JSplitPane								splitPane;
 	private HackRFSweepSettingsUI					settingsPanel;
 	private JLabel labelMessages;
@@ -388,13 +396,13 @@ public class HotIron {
 		setupSpectrumZoom();
 
 		waterfallPlot = new WaterfallPlot(chartPanel, 300);
+		listenRfWaterfall = new WaterfallPlot(chartPanel, 300);
+		listenRfWaterfall.setAlignToChart(false);
 
 		refreshRadioIdentity();
 		settingsPanel = new HackRFSweepSettingsUI(settings);
 
-		splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, chartPanel, waterfallPlot);
-		splitPane.setResizeWeight(0.8);
-		splitPane.setBorder(null);
+		splitPane = OperatorShell.verticalPlots(chartPanel, waterfallPlot);
 
 		labelMessages = new JLabel("dsadasd");
 		labelMessages.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -413,34 +421,27 @@ public class HotIron {
 		uiFrame.setLayout(new BorderLayout());
 		uiFrame.setTitle("HotIron");
 		((javax.swing.JComponent) uiFrame.getContentPane()).setBorder(BorderFactory.createEmptyBorder(8, 8, 16, 8));
-		uiFrame.add(splitPanePanel, BorderLayout.CENTER);
 		uiFrame.setResizable(true);
-		uiFrame.setMinimumSize(new Dimension(900, 560));
-		JScrollPane settingsScroll = new JScrollPane(settingsPanel);
-		settingsScroll.setBorder(null);
-		settingsScroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		settingsScroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-		settingsScroll.getVerticalScrollBar().setUnitIncrement(16);
-		settingsScroll.setMinimumSize(new Dimension(260, 200));
-		uiFrame.add(settingsScroll, BorderLayout.EAST);
 		sweepStatusBar = new SweepStatusBar();
 		settings.getMcpStatus().addListener(s -> javax.swing.SwingUtilities.invokeLater(() -> sweepStatusBar.setMcp(s)));
 		sweepStatusBar.setMcp(settings.getMcpStatus().getValue());
-		uiFrame.add(sweepStatusBar, BorderLayout.SOUTH);
+		OperatorShell.place(uiFrame, settingsPanel.navBanner(), splitPanePanel, settingsPanel, sweepStatusBar);
 		applyAppIcons(uiFrame);
 		
 		setupFrequencyAllocationTable();
 		
 		uiFrame.pack();
-		uiFrame.setMinimumSize(new Dimension(900, 560));
+		uiFrame.setMinimumSize(OperatorLayout.minFrame());
 		uiFrame.setResizable(true);
 		placeInitialWindow(uiFrame);
 		uiFrame.setVisible(true);
+		SwingUtilities.invokeLater(() -> OperatorShell.applyPlotSplit(splitPane));
 
 		sweepEngine = new SpectrumSweepEngine(settings, spectrumInitValue, new SweepUiHooks());
 		radioSession.startLauncher();
 		radio.applyAutoSweep(settings.getFrequency().getValue(), false);
 		radioSession.applyNow();
+		startUsbWatch();
 
 		/**
 		 * register parameter observers
@@ -449,6 +450,7 @@ public class HotIron {
 
 		//shutdown on exit
 		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			stopUsbWatch();
 			if (radioSession != null)
 				radioSession.stopLauncher();
 			stopHackrfSweep();
@@ -627,6 +629,61 @@ public class HotIron {
 			identity = RadioIdentity.ABSENT;
 		}
 		settings.getRadioIdentity().setValue(identity);
+	}
+
+	private void startUsbWatch() {
+		if (usbWatch != null)
+			return;
+		usbWatch = new Thread(() -> {
+			while (!Thread.currentThread().isInterrupted()) {
+				try {
+					boolean released = Boolean.TRUE.equals(settings.isRadioReleased().getValue());
+					RadioIdentity id = settings.getRadioIdentity().getValue();
+					boolean present = id != null && id.present;
+					java.util.List<String> serials;
+					if (present && !released)
+						serials = HackRFDeviceQuery.usbEnumerated() ? java.util.List.of("enumerated")
+								: java.util.List.of();
+					else
+						serials = HackRFDeviceQuery.listSerials();
+					RadioHotPlug.Action action = radioHotPlug.observe(serials, released, present);
+					if (action != RadioHotPlug.Action.IDLE)
+						SwingUtilities.invokeLater(() -> applyUsbHotPlug(action));
+					Thread.sleep(1000);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return;
+				} catch (Throwable t) {
+					try {
+						Thread.sleep(1000);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						return;
+					}
+				}
+			}
+		}, "usb-hotplug");
+		usbWatch.setDaemon(true);
+		usbWatch.start();
+	}
+
+	private void stopUsbWatch() {
+		Thread t = usbWatch;
+		if (t == null)
+			return;
+		t.interrupt();
+		usbWatch = null;
+	}
+
+	private void applyUsbHotPlug(RadioHotPlug.Action action) {
+		if (action == RadioHotPlug.Action.MARK_ABSENT) {
+			settings.getRadioIdentity().setValue(RadioIdentity.ABSENT);
+			return;
+		}
+		if (action == RadioHotPlug.Action.START) {
+			System.out.println("USB hotplug: starting sweep");
+			settings.restartSweep();
+		}
 	}
 
 	private void fireHardwareStateChanged(boolean sendingData) {
@@ -1442,7 +1499,14 @@ public class HotIron {
 				/*
 				 * Align the waterfall plot and the spectrum chart
 				 */
-				if (waterfallPlot != null)
+				if (listenDualWaterfalls)
+				{
+					if (listenRfWaterfall != null)
+						listenRfWaterfall.layoutToOwnWidth();
+					if (waterfallPlot != null)
+						waterfallPlot.layoutToOwnWidth();
+				}
+				else if (waterfallPlot != null)
 					waterfallPlot.setDrawingOffsets((int) area.getX(), (int) area.getWidth());
 
 				/**
@@ -1633,7 +1697,8 @@ public class HotIron {
 
 	/**
 	 * Parked-IQ FFT uses the same peak half-life, persistence overlay, and
-	 * snapshot-history ring as the wideband sweep. Waterfall stays AUDIO/VIDEO/NFC.
+	 * snapshot-history ring as the wideband sweep. Listen also paints that
+	 * FFT into a side-by-side RF waterfall next to AUDIO.
 	 */
 	private void paintParkedRf(float[] mhz, float[] dbfs, float binHz, java.util.function.BooleanSupplier stillLive) {
 		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
@@ -1699,6 +1764,48 @@ public class HotIron {
 		});
 	}
 
+	private void enterListenWaterfalls(long captureCenterHz)
+	{
+		runOnEdt(() -> {
+			listenDualWaterfalls = true;
+			if (waterfallPlot != null)
+			{
+				waterfallPlot.setAlignToChart(false);
+				waterfallPlot.setAudioMode(true);
+			}
+			if (listenRfWaterfall != null)
+				listenRfWaterfall.setListenRfMode(true, captureCenterHz, WfmDemodulator.IQ_RATE_HZ);
+			listenWaterfalls = OperatorShell.listenWaterfalls(listenRfWaterfall, waterfallPlot);
+			OperatorShell.showBottom(splitPane, listenWaterfalls);
+			int w = listenWaterfalls.getWidth();
+			if (w > 40)
+				listenWaterfalls.setDividerLocation(w / 2);
+			if (listenRfWaterfall != null)
+				listenRfWaterfall.layoutToOwnWidth();
+			if (waterfallPlot != null)
+				waterfallPlot.layoutToOwnWidth();
+		});
+	}
+
+	private void leaveListenWaterfalls()
+	{
+		runOnEdt(() -> {
+			listenDualWaterfalls = false;
+			if (waterfallPlot != null)
+			{
+				waterfallPlot.setAudioMode(false);
+				waterfallPlot.setAlignToChart(true);
+			}
+			if (listenRfWaterfall != null)
+				listenRfWaterfall.setListenRfMode(false, 0, 0);
+			OperatorShell.showBottom(splitPane, waterfallPlot);
+			listenWaterfalls = null;
+			Rectangle2D area = chartDataArea.getValue();
+			if (area != null && waterfallPlot != null)
+				waterfallPlot.setDrawingOffsets((int) area.getX(), (int) area.getWidth());
+		});
+	}
+
 	private void runFmListen() {
 		FmChannel ch = FmChannelPlan.clamp(settings.getListenKHz().getValue() / 1000.0);
 		long loHz = (long) ch.centerKHz * 1000L - WfmDemodulator.OFFSET_HZ;
@@ -1706,7 +1813,7 @@ public class HotIron {
 			loHz = 1_000_000L;
 		final long captureCenterHz = loHz;
 		fmEngine.setVolume(settings.getListenVolume().getValue());
-		waterfallPlot.setAudioMode(true);
+		enterListenWaterfalls(captureCenterHz);
 		final long[] lastRowMs = { 0L };
 		final long[] lastRfMs = { 0L };
 		final long[] lastStationMs = { 0L };
@@ -1719,6 +1826,12 @@ public class HotIron {
 					fmEngine.rfSpectrum().sampleRate(), fmEngine.rfSpectrum().binHz(), row);
 			snapshotStore.publishFmListenSpectrum(snap);
 			showFmRfSpectrum(snap);
+			if (listenRfWaterfall != null)
+			{
+				listenRfWaterfall.addListenRfFrame(row, fmEngine.rfSpectrum().sampleRate(),
+						captureCenterHz);
+				listenRfWaterfall.repaint();
+			}
 			if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
 			{
 				lastStationMs[0] = now;
@@ -1747,8 +1860,8 @@ public class HotIron {
 			final int bins = row.length;
 			SwingUtilities.invokeLater(() -> {
 				if (sweepStatusBar != null && settings.isListening().getValue())
-					sweepStatusBar.setSweepInfo(AudioSpectrum.BIN_HZ, bins, waterfallPlot.getFps(),
-							Double.valueOf(peakDb), true);
+					sweepStatusBar.setListenDualInfo(AudioSpectrum.BIN_HZ, bins, waterfallPlot.getFps(),
+							Double.valueOf(peakDb));
 			});
 		});
 		AudioSink sink = AudioSinks.openPlayback();
@@ -1778,7 +1891,7 @@ public class HotIron {
 			fmEngine.setSpectrumListener(null);
 			fmEngine.stop();
 			snapshotStore.publishFmListenSpectrum(FmListenSpectrum.empty());
-			waterfallPlot.setAudioMode(false);
+			leaveListenWaterfalls();
 			if (chart != null)
 				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
 						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));

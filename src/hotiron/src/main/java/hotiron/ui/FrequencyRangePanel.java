@@ -39,6 +39,7 @@ public final class FrequencyRangePanel extends JPanel
 	private final JTextField edit = new JTextField();
 	private final CardLayout cards = new CardLayout();
 	private final JPanel display = new JPanel(cards);
+	private final JPanel keys = new JPanel();
 	private final JButton panLeft = new JButton("◀");
 	private final JButton panRight = new JButton("▶");
 	private final JButton zoomIn = new JButton("+");
@@ -47,35 +48,43 @@ public final class FrequencyRangePanel extends JPanel
 	public FrequencyRangePanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 0, wrap 1, gapy 2", "[grow,fill]", "[][]"));
-		readout.setFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+		setOpaque(false);
+		setLayout(new MigLayout("insets 2, wrap 1, fill, gapy 4", "[grow,fill]", "[][grow][]"));
+		readout.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
 		readout.setCursor(Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR));
-		span.setFont(span.getFont().deriveFont(Font.PLAIN, 11f));
+		span.setFont(span.getFont().deriveFont(Font.PLAIN, 12f));
 		span.setEnabled(false);
+		span.setHorizontalAlignment(SwingConstants.CENTER);
 		edit.setFont(readout.getFont());
 		edit.setHorizontalAlignment(SwingConstants.CENTER);
 		ExclusiveToolTip.setText(edit, "Type a range like 88-108 or 2402 2472, or a center like 97");
 		ExclusiveToolTip.setText(readout, "Click to type a range. Plot drag/scroll also zooms.");
-		JPanel readCard = new JPanel(new MigLayout("insets 2, wrap 1", "[grow,fill]", "[][]"));
-		readCard.add(readout);
-		readCard.add(span);
+		JPanel readCard = new JPanel(new MigLayout("insets 2, wrap 1", "[grow,fill]", "[]"));
+		readCard.setOpaque(false);
+		readCard.add(readout, "growx");
+		display.setOpaque(false);
 		display.add(readCard, CARD_READ);
 		display.add(edit, CARD_EDIT);
-		add(display);
-		JPanel keys = new JPanel(new MigLayout("insets 0", "[grow][grow][grow][grow]", "[]"));
 		panLeft.setName("pan-left");
 		panRight.setName("pan-right");
 		zoomIn.setName("zoom-in");
 		zoomOut.setName("zoom-out");
+		Font keyFont = getFont().deriveFont(Font.BOLD, 16f);
+		for (JButton b : new JButton[] { panLeft, zoomOut, zoomIn, panRight })
+			b.setFont(keyFont);
 		ExclusiveToolTip.setText(panLeft, "Pan lower in frequency (¼ of the span)");
 		ExclusiveToolTip.setText(panRight, "Pan higher in frequency (¼ of the span)");
-		ExclusiveToolTip.setText(zoomIn, "Zoom in (half the span, same center)");
-		ExclusiveToolTip.setText(zoomOut, "Zoom out (double the span, same center)");
-		keys.add(panLeft, "growx");
-		keys.add(zoomOut, "growx");
-		keys.add(zoomIn, "growx");
-		keys.add(panRight, "growx");
-		add(keys);
+		ExclusiveToolTip.setText(zoomIn, "Zoom in (half the span, same center). Narrows the gold window on the survey.");
+		ExclusiveToolTip.setText(zoomOut, "Zoom out (double the span, same center). Expands the gold window on the survey.");
+		keys.setLayout(new MigLayout("insets 0, fill, gapx 4", "[grow][grow][grow][grow]", "[grow]"));
+		keys.setOpaque(false);
+		keys.add(panLeft, "grow");
+		keys.add(zoomOut, "grow");
+		keys.add(zoomIn, "grow");
+		keys.add(panRight, "grow");
+		add(display, "growx");
+		add(keys, "grow");
+		add(span, "growx");
 		panLeft.addActionListener(e -> apply(SpectrumZoom.pan(range, -0.25)));
 		panRight.addActionListener(e -> apply(SpectrumZoom.pan(range, 0.25)));
 		zoomIn.addActionListener(e -> apply(SpectrumZoom.around(range, mid(), SpectrumZoom.ZOOM_IN_FACTOR)));
@@ -162,6 +171,21 @@ public final class FrequencyRangePanel extends JPanel
 	JLabel readoutLabel()
 	{
 		return readout;
+	}
+
+	JLabel spanLabel()
+	{
+		return span;
+	}
+
+	JPanel displayPanel()
+	{
+		return display;
+	}
+
+	JPanel keysPanel()
+	{
+		return keys;
 	}
 
 	JTextField editField()

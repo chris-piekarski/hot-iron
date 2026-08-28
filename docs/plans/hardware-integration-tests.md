@@ -4,9 +4,9 @@
 |---|---|
 | **Status** | Done |
 | **Started** | 2026-08-17 |
-| **Last updated** | 2026-08-22 |
+| **Last updated** | 2026-08-28 |
 | **Finished** | 2026-08-17 |
-| **Measured** | Eight hardware ITs pass, including analyzer queue/dataset and parked FM IQ → sweep resume. |
+| **Measured** | Hardware ITs pass, including analyzer queue/dataset, parked FM IQ → sweep resume, and USB hot-load (`listSerials` during live sweep). |
 
 ## Goal
 
@@ -37,6 +37,7 @@ This is application integration against a real HackRF, plus a basic board health
 | `src/hotiron/src/test/java/hotiron/hw/HardwareSweepSession.java` | start → callback(s) → stop; optional full-sweep + `SpectrumSink` |
 | `core/SpectrumSweepEngine.java` | Real queue + processing loop + native sweep; analyzer UI is a hook |
 | `src/hotiron/src/test/java/hotiron/hw/HackRFSweepHardwareIT.java` | 8 gated ITs including engine queue/dataset and parked FM IQ → sweep resume |
+| `src/hotiron/src/test/java/hotiron/hw/HackRFHotPlugHardwareIT.java` | USB hot-load: sysfs during live sweep; after stop, `listSerials` + START on appear, IDLE after Stop; sweep recovers |
 | `nativebridge/HackRFSweepNativeBridge.java` | `hackrf.sweep.lib.dir` so tests can point at the built `.so` |
 | `pom.xml` | default exclude `*IT` + `hardware` tag; profile `hardware` |
 | Root + `src/hotiron` Makefiles | `test-hw` target |
@@ -52,6 +53,7 @@ Contracts (when device + `.so` + writable node):
 - antenna port power + Antenna LNA start/stop does not throw
 - restart after FFT bin + frequency change still produces data in the new band
 - parked FM Listen produces IQ, stops cleanly, then sweep resumes
+- USB hot-load: sysfs still sees 1d50:6089 during a live sweep; after stop, `listSerials` + `RadioHotPlug` START on appear and IDLE after Stop; sweep recovers
 
 Does **not** launch Swing / `HotIron` ctor. Does **not** assert live RF levels (no “LNA made it louder”).
 
@@ -68,6 +70,7 @@ Does **not** launch Swing / `HotIron` ctor. Does **not** assert live RF levels (
 - [x] LNA / antenna-power start/stop does not crash
 - [x] Restart after FFT bin / freq change
 - [x] Parked FM Listen IQ then sweep resume
+- [x] USB hot-load IT: `listSerials` during live sweep + `RadioHotPlug` START/Stop ownership
 
 ## How to run
 

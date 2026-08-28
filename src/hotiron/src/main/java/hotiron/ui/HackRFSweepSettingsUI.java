@@ -1,8 +1,8 @@
 package hotiron.ui;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.GridLayout;
 import java.beans.PropertyChangeEvent;
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -23,11 +23,12 @@ import javax.swing.JTabbedPane;
 import javax.swing.JSpinner.ListEditor;
 import javax.swing.JTextField;
 import javax.swing.SpinnerListModel;
-import javax.swing.UIManager;
 
 import hotiron.HotIron;
 import hotiron.Version;
 import hotiron.core.AutoSweepPolicy;
+import hotiron.core.BandContext;
+import hotiron.core.BandToolKind;
 import hotiron.core.FrequencyAllocationTable;
 import hotiron.core.FrequencyAllocations;
 import hotiron.core.FrequencyRange;
@@ -50,12 +51,18 @@ public class HackRFSweepSettingsUI extends JPanel
 	 */
 	private HackRFSettings hRF;
 	private static final long serialVersionUID = 7721079457485020637L;
+	public static final int TOOLS_WIDTH = OperatorLayout.TOOLS_WIDTH;
+	public static final int BAND_SLOT_HEIGHT = OperatorLayout.BAND_SLOT_HEIGHT;
 	private JLabel txtHackrfConnected;
 	private JLabel txtMcpStatus;
 	private boolean radioSweeping;
 	private boolean syncingRadioCombo;
+	private OperatorNavBanner navBanner;
 	private FrequencyRangePanel frequencyRangePanel;
 	private QuickFrequencySelectorPanel quickFrequencySelector;
+	private RadioSessionStrip radioStrip;
+	private GainStrip gainStrip;
+	private BandToolsSlot bandSlot;
 	private JSpinner spinnerFFTBinHz;
 	private JSlider sliderGain;
 	private JSpinner spinner_numberOfSamples;
@@ -81,7 +88,7 @@ public class HackRFSweepSettingsUI extends JPanel
 	private JSlider sliderVolume;
 	private JComboBox<String> comboRadio;
 	private JCheckBox checkBoxClkout;
-	static final String FIRST_RADIO = "First radio";
+	static final String FIRST_RADIO = RadioSessionStrip.FIRST_RADIO;
 	private SpinnerListModel spinnerModelFFTBinHz;
 	private FrequencySelectorRangeBinder frequencyRangeSelector;
 	private JSpinner spinnerPeakFallSpeed;
@@ -107,47 +114,23 @@ public class HackRFSweepSettingsUI extends JPanel
 			throw new IllegalArgumentException("hackRFSettings");
 		this.hRF	= hackRFSettings;
 		AnalyzerLookAndFeel.install();
-		setBorder(new EmptyBorder(4, 8, 16, 8));
-		JPanel panelMainSettings	= new JPanel(new MigLayout("", "[123.00px,grow,leading]", "[][grow]"));
+		setBorder(new EmptyBorder(4, 8, 8, 8));
+		navBanner = new OperatorNavBanner();
+		quickFrequencySelector = navBanner.quickSelector();
+		frequencyRangePanel = navBanner.rangePanel();
 
-		panelMainSettings.setBorder(new EmptyBorder(UIManager.getInsets("TabbedPane.tabAreaInsets")));;
-
-		JLabel lblQuickSelect = new JLabel("Quick Select");
-		panelMainSettings.add(lblQuickSelect, "cell 0 0,alignx left,aligny center");
-
-		quickFrequencySelector = new QuickFrequencySelectorPanel();
-		panelMainSettings.add(quickFrequencySelector, "cell 0 1,growx,aligny center");
-
-		JLabel lblSweepRange = new JLabel("Sweep range");
-		panelMainSettings.add(lblSweepRange, "cell 0 2,growx,aligny center");
-
-		frequencyRangePanel = new FrequencyRangePanel();
-		panelMainSettings.add(frequencyRangePanel, "cell 0 3,growx,aligny center");
-		
-		txtHackrfConnected = new JLabel();
-		txtHackrfConnected.setText(RadioIdentity.ABSENT.statusHtml());
-		ExclusiveToolTip.setText(txtHackrfConnected, RadioIdentity.ABSENT.tooltip(false));
-		txtHackrfConnected.setVerticalAlignment(SwingConstants.TOP);
-		txtHackrfConnected.setBorder(null);
-
-		txtMcpStatus = new JLabel();
-		txtMcpStatus.setText(McpStatus.OFF.statusHtml());
-		ExclusiveToolTip.setText(txtMcpStatus, McpStatus.OFF.tooltip(System.currentTimeMillis()));
-		txtMcpStatus.setVerticalAlignment(SwingConstants.TOP);
-		txtMcpStatus.setBorder(null);
-
-		comboRadio = new JComboBox<>(new String[] { FIRST_RADIO });
-		ExclusiveToolTip.setText(comboRadio, "Which HackRF to open. First radio = libhackrf default.");
+		radioStrip = new RadioSessionStrip();
+		txtHackrfConnected = radioStrip.connectedLabel();
+		txtMcpStatus = radioStrip.mcpStatusLabel();
+		comboRadio = radioStrip.radioCombo();
+		btnRestart = radioStrip.restartButton();
+		btnStop = radioStrip.stopButton();
+		btnPause = radioStrip.pauseButton();
 
 		checkBoxClkout = new JCheckBox("CLKOUT 10 MHz");
 		ExclusiveToolTip.setText(checkBoxClkout, "Drive CLKOUT so another radio can lock. CLKIN is used automatically when a 10 MHz signal is present.");
+		ExclusiveToolTip.install(checkBoxClkout);
 
-		btnRestart = new JButton("Restart");
-		ExclusiveToolTip.setText(btnRestart, "Stop and start the sweep again. Use this if the plot freezes after a setting change.");
-		btnStop = new JButton("Stop");
-		ExclusiveToolTip.setText(btnStop, "Halt the native sweep and release USB so other tools can open the radio.");
-		btnPause = new JButton("Pause");
-		ExclusiveToolTip.setText(btnPause, "Freeze the display. The radio keeps sweeping; click Resume to show live data again.");
 		tunerPanel = new TunerPanel();
 		btnListen = tunerPanel.listenButton();
 		stationKnob = tunerPanel.knob();
@@ -156,39 +139,32 @@ public class HackRFSweepSettingsUI extends JPanel
 		btnWatch = tvTunerPanel.watchButton();
 		nfcSniffPanel = new NfcSniffPanel();
 		bleSniffPanel = new BleSniffPanel();
-		ExclusiveToolTip.install(txtHackrfConnected);
-		ExclusiveToolTip.install(txtMcpStatus);
-		ExclusiveToolTip.install(comboRadio);
-		ExclusiveToolTip.install(checkBoxClkout);
-		ExclusiveToolTip.install(btnRestart);
-		ExclusiveToolTip.install(btnStop);
-		ExclusiveToolTip.install(btnPause);
-		JPanel radioButtons = new JPanel(new GridLayout(1, 2, 4, 0));
-		radioButtons.add(btnRestart);
-		radioButtons.add(btnStop);
+		bandSlot = new BandToolsSlot(
+				new BandTool(BandToolKind.FM, tunerPanel),
+				new BandTool(BandToolKind.TV, tvTunerPanel),
+				new BandTool(BandToolKind.NFC, nfcSniffPanel),
+				new BandTool(BandToolKind.BLE, bleSniffPanel));
 
-		JPanel radioStrip = new JPanel(new MigLayout("insets 0, wrap 1, gapy 4", "[grow,fill]", ""));
-		radioStrip.add(txtHackrfConnected);
-		radioStrip.add(txtMcpStatus);
-		radioStrip.add(comboRadio);
-		radioStrip.add(checkBoxClkout);
-		radioStrip.add(radioButtons);
-		radioStrip.add(tunerPanel);
-		radioStrip.add(tvTunerPanel);
-		radioStrip.add(nfcSniffPanel);
-		radioStrip.add(bleSniffPanel);
-		radioStrip.add(btnPause);
-		panelMainSettings.add(radioStrip, "cell 0 4,growx");
+		gainStrip = new GainStrip();
+		chckbxAutoGain = gainStrip.autoGainCheckbox();
+		sliderGain = gainStrip.gainSlider();
+		sliderGainLNA = gainStrip.lnaSlider();
+		sliderGainVGA = gainStrip.vgaSlider();
+		gainStrip.setCaption(hRF.getGain() + "dB");
+		hRF.getGain().addListener((gain) -> gainStrip.setCaption(String.format(" %ddB  [LNA: %ddB  VGA: %ddB]",
+				gain, hRF.getGainLNA().getValue(), hRF.getGainVGA().getValue())));
 
-		
-		
-		
+		JPanel north = new JPanel(new MigLayout("insets 0, wrap 1, fillx, gapy 6", "[grow,fill]", ""));
+		north.add(radioStrip, "growx");
+		north.add(bandSlot, "growx, h " + OperatorLayout.BAND_SLOT_HEIGHT + "!");
+		north.add(gainStrip, "growx");
+
 		JTabbedPane tabbedPane	= new JTabbedPane(JTabbedPane.TOP);
 		setLayout(new BorderLayout());
-		add(panelMainSettings, BorderLayout.NORTH);
+		add(north, BorderLayout.NORTH);
 		add(tabbedPane, BorderLayout.CENTER);
 
-		JPanel tab1	= new JPanel(new MigLayout("", "[123.00px,grow,leading]", "[][][0][][][0][][][0][][][0][][][0][][0][][grow,fill]"));
+		JPanel tab1	= new JPanel(new MigLayout("wrap 1, fillx, insets 4 0 12 0", "[grow,fill]", ""));
 		
 		JPanel tab2	= new JPanel(new MigLayout("", "[123.00px,grow,leading]", "[][0][][][0][][][0][][][][][0][][0][][][0][0][][][0][][0][grow,fill]"));
 		
@@ -197,64 +173,29 @@ public class HackRFSweepSettingsUI extends JPanel
 		tabbedPane.addTab("HackRF Settings", tab1);
 		tabbedPane.addTab("Chart options", tab2);
 
-		
-		JLabel lblNewLabel_2 = new JLabel("LNA Gain [dB]");
-		tab1.add(lblNewLabel_2, "cell 0 3");
-		
-		sliderGainLNA = new JSlider(SwingConstants.HORIZONTAL, 0, 100, 2);
-		sliderGainLNA.setFont(new Font("Monospaced", Font.BOLD, 16));
-		tab1.add(sliderGainLNA, "cell 0 4,growx");
-		
-		JLabel lblVgfaGaindb = new JLabel("VGA Gain [dB]");
-		tab1.add(lblVgfaGaindb, "cell 0 6");
-		
-		sliderGainVGA = new JSlider(SwingConstants.HORIZONTAL, 0, 100, 2);
-		sliderGainVGA.setFont(new Font("Monospaced", Font.BOLD, 16));
-		tab1.add(sliderGainVGA, "cell 0 7,growx");
-
-		
-
 		JLabel lblFftBinhz = new JLabel("FFT Bin [Hz]");
-		tab1.add(lblFftBinhz, "flowx,cell 0 9,growx");
-
 		chckbxAutoSweep = new JCheckBox("Auto");
 		chckbxAutoSweep.setSelected(true);
 		ExclusiveToolTip.setText(chckbxAutoSweep,
 				"Pick FFT bin and samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast.");
-		tab1.add(chckbxAutoSweep, "cell 0 9,alignx right");
+		JPanel fftHead = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
+		fftHead.setOpaque(false);
+		fftHead.add(lblFftBinhz, "growx");
+		fftHead.add(chckbxAutoSweep);
+		tab1.add(fftHead, "growx");
 
 		spinnerFFTBinHz = new JSpinner();
 		spinnerFFTBinHz.setFont(new Font("Monospaced", Font.BOLD, 16));
 		spinnerModelFFTBinHz = new SpinnerListModel(AutoSweepPolicy.binLabels());
 		spinnerFFTBinHz.setModel(spinnerModelFFTBinHz);
 		ExclusiveToolTip.setText(spinnerFFTBinHz, "Resolution bandwidth. Locked while Auto is on.");
-		tab1.add(spinnerFFTBinHz, "cell 0 10,growx");
+		tab1.add(spinnerFFTBinHz, "growx");
 		((ListEditor) spinnerFFTBinHz.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
-		
-
-		JLabel lblGain = new JLabel("Gain [dB]");
-		tab1.add(lblGain, "flowx,cell 0 0,growx");
-
-		chckbxAutoGain = new JCheckBox("Auto");
-		chckbxAutoGain.setSelected(true);
-		ExclusiveToolTip.setText(chckbxAutoGain, "Pick LNA/VGA for this band so the plot is not all blue or all red.");
-		tab1.add(chckbxAutoGain, "cell 0 0,alignx right");
-
-		sliderGain = new JSlider(JSlider.HORIZONTAL, 0, 100, 2);
-		sliderGain.setFont(new Font("Monospaced", Font.BOLD, 16));
-		tab1.add(sliderGain, "flowy,cell 0 1,growx");
-
-		JLabel lbl_gainValue = new JLabel(hRF.getGain() + "dB");
-		tab1.add(lbl_gainValue, "cell 0 1,alignx right");
-
-		hRF.getGain().addListener((gain) -> lbl_gainValue.setText(String.format(" %ddB  [LNA: %ddB  VGA: %ddB]",
-				gain, hRF.getGainLNA().getValue(), hRF.getGainVGA().getValue())));
-		
 
 		JLabel lblNumberOfSamples = new JLabel("Number of samples");
 		ExclusiveToolTip.setText(lblNumberOfSamples,
 				"Samples captured per tuning step. Higher values average more FFT blocks for a smoother, slower sweep. Locked while Auto is on.");
-		tab1.add(lblNumberOfSamples, "cell 0 12");
+		tab1.add(lblNumberOfSamples);
 
 		spinner_numberOfSamples = new JSpinner();
 		spinner_numberOfSamples.setModel(new SpinnerListModel(new String[] { "8192", "16384", "32768", "65536", "131072", "262144" }));
@@ -263,7 +204,26 @@ public class HackRFSweepSettingsUI extends JPanel
 		spinner_numberOfSamples.setFont(new Font("Monospaced", Font.BOLD, 16));
 		((ListEditor) spinner_numberOfSamples.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
 		((ListEditor) spinner_numberOfSamples.getEditor()).getTextField().setEditable(false);
-		tab1.add(spinner_numberOfSamples, "cell 0 13,growx");
+		tab1.add(spinner_numberOfSamples, "growx");
+
+		JLabel lblAntennaPower = new JLabel("Antenna power");
+		chckbxAntennaPower = new JCheckBox("");
+		chckbxAntennaPower.setHorizontalTextPosition(SwingConstants.LEADING);
+		JPanel antPower = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
+		antPower.setOpaque(false);
+		antPower.add(lblAntennaPower, "growx");
+		antPower.add(chckbxAntennaPower);
+		tab1.add(antPower, "growx");
+
+		JLabel lblLNAEnable = new JLabel("Antenna LNA +14dB");
+		chckbxAntennaLNA = new JCheckBox("");
+		chckbxAntennaLNA.setHorizontalTextPosition(SwingConstants.LEADING);
+		JPanel antLna = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
+		antLna.setOpaque(false);
+		antLna.add(lblLNAEnable, "growx");
+		antLna.add(chckbxAntennaLNA);
+		tab1.add(antLna, "growx");
+		tab1.add(checkBoxClkout, "growx");
 
 		JButton btnAbout = new JButton("Visit homepage");
 		btnAbout.addActionListener(e -> {
@@ -273,24 +233,12 @@ public class HackRFSweepSettingsUI extends JPanel
 				ex.printStackTrace();
 			}
 		});
-		
 		JLabel labelVersion = new JLabel("Version: "+Version.version);
-		tab1.add(labelVersion, "flowx,cell 0 17");
-		tab1.add(btnAbout, "cell 0 17,alignx right");
-		
-		JLabel lblAntennaPower = new JLabel("Antenna power");
-		tab1.add(lblAntennaPower, "flowx,cell 0 15,growx");
-		
-		chckbxAntennaPower = new JCheckBox("");
-		chckbxAntennaPower.setHorizontalTextPosition(SwingConstants.LEADING);
-		tab1.add(chckbxAntennaPower, "cell 0 15,alignx right");
-
-		JLabel lblLNAEnable = new JLabel("Antenna LNA +14dB");
-		tab1.add(lblLNAEnable, "flowx,cell 0 16,growx");
-
-		chckbxAntennaLNA = new JCheckBox("");
-		chckbxAntennaLNA.setHorizontalTextPosition(SwingConstants.LEADING);
-		tab1.add(chckbxAntennaLNA, "cell 0 16,alignx right");
+		JPanel about = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
+		about.setOpaque(false);
+		about.add(labelVersion, "growx");
+		about.add(btnAbout);
+		tab1.add(about, "growx");
 		
 		JLabel lblWaterfallEnabled = new JLabel("Waterfall enabled");
 		tab2.add(lblWaterfallEnabled, "flowx,cell 0 0,growx");
@@ -521,6 +469,7 @@ public class HackRFSweepSettingsUI extends JPanel
 			nfcSniffPanel.setSniffing(nfc);
 			bleSniffPanel.setSniffing(Boolean.TRUE.equals(hRF.isBleSniffing().getValue()));
 			btnPause.setEnabled(!parked && !released);
+			refreshBandTools();
 		};
 		hRF.isListening().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		hRF.getListenService().addListener(s -> SwingUtilities.invokeLater(syncListen));
@@ -534,6 +483,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		hRF.getTvChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
 		hRF.getDetectedFmStations().addListener(hits -> SwingUtilities.invokeLater(() -> tunerPanel.setStations(hits)));
 		hRF.isBleSniffing().addListener(() -> SwingUtilities.invokeLater(syncListen));
+		hRF.getFrequency().addListener(r -> SwingUtilities.invokeLater(this::refreshBandTools));
 		syncListen.run();
 		new MVCController(checkBoxClkout, hRF.getClkoutEnable());
 		refreshRadioCombo();
@@ -595,7 +545,10 @@ public class HackRFSweepSettingsUI extends JPanel
 		});
 		hRF.isPersistentDisplayVisible().callObservers();
 		
-		hRF.getRadioIdentity().addListener(id -> SwingUtilities.invokeLater(this::refreshRadioStatus));
+		hRF.getRadioIdentity().addListener(id -> SwingUtilities.invokeLater(() -> {
+			refreshRadioStatus();
+			refreshRadioCombo();
+		}));
 		hRF.getMcpStatus().addListener(s -> SwingUtilities.invokeLater(this::refreshMcpStatus));
 		hRF.registerListener(new HackRFSettings.HackRFEventAdapter()
 		{
@@ -608,6 +561,33 @@ public class HackRFSweepSettingsUI extends JPanel
 		refreshRadioStatus();
 		refreshMcpStatus();
 		ExclusiveToolTip.bindColumn(this);
+		refreshBandTools();
+	}
+
+	private void refreshBandTools()
+	{
+		BandContext next = BandContext.of(hRF).stabilize(bandSlot.shown(), hRF.getFrequency().getValue());
+		bandSlot.apply(next);
+	}
+
+	@Override
+	public Dimension getPreferredSize()
+	{
+		Dimension d = super.getPreferredSize();
+		return new Dimension(TOOLS_WIDTH, d.height);
+	}
+
+	@Override
+	public Dimension getMinimumSize()
+	{
+		Dimension d = super.getMinimumSize();
+		return new Dimension(TOOLS_WIDTH, Math.max(200, d.height));
+	}
+
+	@Override
+	public Dimension getMaximumSize()
+	{
+		return new Dimension(TOOLS_WIDTH, Integer.MAX_VALUE);
 	}
 
 	private void refreshRadioStatus() {
@@ -701,12 +681,24 @@ public class HackRFSweepSettingsUI extends JPanel
 		return txtMcpStatus;
 	}
 
+	public OperatorNavBanner navBanner() {
+		return navBanner;
+	}
+
 	FrequencyRangePanel frequencyRangePanel() {
 		return frequencyRangePanel;
 	}
 
 	QuickFrequencySelectorPanel quickFrequencySelector() {
 		return quickFrequencySelector;
+	}
+
+	BandToolsSlot bandSlot() {
+		return bandSlot;
+	}
+
+	BandContext bandContext() {
+		return bandSlot.shown();
 	}
 
 	JSpinner fftBinSpinner() {

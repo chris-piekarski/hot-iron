@@ -1,6 +1,6 @@
 # nRF 2.4 GHz spectrum + packet sniff
 
-**Status:** in progress 2026-08-24 — PCA identified as **PCA10031 / nRF51822**; official 4.1.1 HEX is nRF52-only so not flashed; nRF51 v2 HEX ready; J-Link may be on PID `1366:0101` until VCOM is restored
+**Status:** in progress 2026-08-27 — PCA **PCA10031 / nRF51822**; `sniffer_pca10031_1c2a221.hex` flashed; host is Nordic SLIP + v1 TX / v2 RX with 1M then 460800 fallback
 **Started:** 2026-08-23
 
 Living plan so a later agent can implement without chat history. Study notes live in [`docs/nrf-sniffer.md`](../nrf-sniffer.md). NFC on the HackRF is a different radio ([nfc-laboratory.md](nfc-laboratory.md)).
@@ -63,8 +63,8 @@ v1 success (proposed):
 
 ### Packet sniff BLE
 
-- [ ] Flash matching BLE sniffer HEX for the identified board (operator/docs, not `make build`). Recipe: [`docs/nrf-sniffer.md`](../nrf-sniffer.md#flash-recipe). This bench is nRF51 — do not write 4.1.1 nRF52 HEX.
-- [x] Host reader for UART/SLIP v3 (`NordicSlip` + `NordicSnifferProto` + `BleSniffEngine`); unit tests with synthetic frames (no radio)
+- [x] Flash matching BLE sniffer HEX for the identified board (operator/docs, not `make build`). Recipe: [`docs/nrf-sniffer.md`](../nrf-sniffer.md#flash-recipe). This bench is nRF51 — `sniffer_pca10031_1c2a221.hex` (do not write 4.1.1 nRF52 HEX).
+- [x] Host reader for Nordic UART/SLIP (`0xAB`/`0xBC`, v1 host / v2 device) (`NordicSlip` + `NordicSnifferProto` + `BleSniffEngine`); unit tests with synthetic frames (no radio); 1M then 460800
 - [x] Sidebar `BleSniffPanel` + MCP `ble_sniff` / `ble_frames` / `ble_activity` (second USB; does not park the HackRF)
 - [ ] Hardware IT later: ACM open → frame → close without touching HackRF
 

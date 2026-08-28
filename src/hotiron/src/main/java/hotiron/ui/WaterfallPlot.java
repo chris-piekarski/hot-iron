@@ -64,6 +64,8 @@ public class WaterfallPlot extends JPanel {
 	private boolean				audioMode				= false;
 	private boolean				videoMode				= false;
 	private boolean				nfcMode					= false;
+	private boolean				listenRfMode			= false;
+	private boolean				alignToChart			= true;
 	private float				nfcStartMHz				= 12f;
 	private float				nfcEndMHz				= 15f;
 	private float				audioHzMax				= 16_000f;
@@ -78,6 +80,8 @@ public class WaterfallPlot extends JPanel {
 			@Override
 			public void componentResized(ComponentEvent e) {
 				setHistorySize(getHeight());
+				if (!alignToChart)
+					layoutToOwnWidth();
 			}
 		});
 
@@ -235,6 +239,20 @@ public class WaterfallPlot extends JPanel {
 		this.chartWidth = width;
 	}
 
+	/** Fill this panel (time-axis gutter on the left). Used when the strip is
+	 * not aligned under the full-width spectrum chart. */
+	public void layoutToOwnWidth() {
+		int gutter = TIME_AXIS_MIN_GUTTER;
+		int w = Math.max(8, getWidth() - gutter);
+		setDrawingOffsets(gutter, w);
+	}
+
+	public void setAlignToChart(boolean align) {
+		alignToChart = align;
+		if (!align)
+			layoutToOwnWidth();
+	}
+
 	/**
 	 * One row of audio dBFS vs Hz (0…{@code hzMax}), newest at the top.
 	 * Call only while listen mode owns this panel.
@@ -245,6 +263,7 @@ public class WaterfallPlot extends JPanel {
 		audioMode = true;
 		videoMode = false;
 		nfcMode = false;
+		listenRfMode = false;
 		audioHzMax = hzMax > 0 ? hzMax : 16_000f;
 		lastSpectrum = null;
 		addParkedDbRow(db);
@@ -259,6 +278,7 @@ public class WaterfallPlot extends JPanel {
 		videoMode = true;
 		audioMode = false;
 		nfcMode = false;
+		listenRfMode = false;
 		videoSpanHz = spanHz > 0 ? spanHz : 12_000_000f;
 		videoCenterHz = centerHz;
 		lastSpectrum = null;
@@ -274,8 +294,26 @@ public class WaterfallPlot extends JPanel {
 		nfcMode = true;
 		audioMode = false;
 		videoMode = false;
+		listenRfMode = false;
 		nfcStartMHz = startMHz;
 		nfcEndMHz = endMHz > startMHz ? endMHz : startMHz + 3f;
+		lastSpectrum = null;
+		addParkedDbRow(db);
+	}
+
+	/**
+	 * One row of parked-IQ RF (Listen ±2 MHz). Same raster as Watch VIDEO,
+	 * different banner so it is not mistaken for ATSC.
+	 */
+	public synchronized void addListenRfFrame(float[] db, float spanHz, double centerHz) {
+		if (db == null || db.length == 0)
+			return;
+		listenRfMode = true;
+		audioMode = false;
+		videoMode = false;
+		nfcMode = false;
+		videoSpanHz = spanHz > 0 ? spanHz : 4_000_000f;
+		videoCenterHz = centerHz;
 		lastSpectrum = null;
 		addParkedDbRow(db);
 	}
@@ -332,13 +370,14 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	public synchronized void setAudioMode(boolean on) {
-		if (audioMode == on && !videoMode && !nfcMode)
+		if (audioMode == on && !videoMode && !nfcMode && !listenRfMode)
 			return;
 		audioMode = on;
 		if (on)
 		{
 			videoMode = false;
 			nfcMode = false;
+			listenRfMode = false;
 		}
 		clearHistory();
 	}
@@ -350,6 +389,7 @@ public class WaterfallPlot extends JPanel {
 		{
 			audioMode = false;
 			nfcMode = false;
+			listenRfMode = false;
 			videoCenterHz = centerHz;
 			videoSpanHz = hotiron.core.IqSpectrum.DISPLAY_HZ;
 		}
@@ -364,6 +404,22 @@ public class WaterfallPlot extends JPanel {
 		{
 			audioMode = false;
 			videoMode = false;
+			listenRfMode = false;
+		}
+		if (was != on)
+			clearHistory();
+	}
+
+	public synchronized void setListenRfMode(boolean on, double centerHz, float spanHz) {
+		boolean was = listenRfMode;
+		listenRfMode = on;
+		if (on)
+		{
+			audioMode = false;
+			videoMode = false;
+			nfcMode = false;
+			videoCenterHz = centerHz;
+			videoSpanHz = spanHz > 0 ? spanHz : 4_000_000f;
 		}
 		if (was != on)
 			clearHistory();
@@ -497,7 +553,7 @@ public class WaterfallPlot extends JPanel {
 				u = 1;
 			return (nfcStartMHz + u * (nfcEndMHz - nfcStartMHz)) * 1_000_000d;
 		}
-		if (videoMode) {
+		if (videoMode || listenRfMode) {
 			if (chartWidth <= 0)
 				return -1;
 			double u = x / (double) chartWidth;
@@ -539,6 +595,20 @@ public class WaterfallPlot extends JPanel {
 		return "RF waterfall";
 	}
 
+	public static String modeBannerListenRf() {
+		return "parked IQ  ·  RF  ·  ±2 MHz";
+	}
+
+	public static String modeBannerListenDual() {
+		return "parked IQ  ·  RF ±2 MHz + AUDIO 0–16 kHz";
+	}
+
+	private String instanceBanner() {
+		if (listenRfMode)
+			return modeBannerListenRf();
+		return modeBanner(audioMode, videoMode, nfcMode);
+	}
+
 	static String formatAudioHz(double hz) {
 		if (!(hz >= 0) || Double.isNaN(hz) || Double.isInfinite(hz))
 			return "—";
@@ -548,7 +618,7 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	private void drawModeBanner(Graphics2D g, int x0) {
-		String title = modeBanner(audioMode, videoMode, nfcMode);
+		String title = instanceBanner();
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12) : getFont().deriveFont(Font.BOLD, 12f);
 		g.setFont(font);
@@ -559,7 +629,7 @@ public class WaterfallPlot extends JPanel {
 		int th = fm.getAscent() + fm.getDescent();
 		int x = x0 + 8;
 		int y = 8;
-		boolean gold = audioMode || videoMode || nfcMode;
+		boolean gold = audioMode || videoMode || nfcMode || listenRfMode;
 		g.setColor(gold ? BANNER_AUDIO : BANNER_RF);
 		g.fillRoundRect(x, y, tw + padX * 2, th + padY * 2, 8, 8);
 		g.setColor(gold ? BANNER_AUDIO_TEXT : BANNER_RF_TEXT);
@@ -710,7 +780,7 @@ public class WaterfallPlot extends JPanel {
 		drawModeBanner(g, chartXOffset);
 		if (audioMode)
 			drawAudioHzAxis(g, chartXOffset, w, h);
-		else if (videoMode)
+		else if (videoMode || listenRfMode)
 			drawVideoMhzAxis(g, chartXOffset, w, h);
 		else if (nfcMode)
 			drawNfcMhzAxis(g, chartXOffset, w, h);

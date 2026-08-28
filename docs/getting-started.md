@@ -9,7 +9,7 @@ flowchart LR
     D --> F[Agent: MCP tools on :8765]
 ```
 
-Turn a HackRF into **HotIron**: live waterfall, QSY to Listen/Watch, **and** MCP so local agents copy the RF bins.
+Turn a HackRF into **HotIron**: 1 MHz–7.25 GHz survey, live waterfall, QSY to Listen / Watch / NFC Sniff, **and** MCP so local agents copy the RF bins.
 
 ## What you need
 
@@ -33,7 +33,7 @@ make udev          # Linux once: persistent USB permissions
 make mcp           # build if needed, launch GUI + MCP on 127.0.0.1:8765
 ```
 
-The sidebar shows the board name, short serial, and firmware when the radio opens. Hover that line for the full serial and USB API.
+The tools column shows the board name, short serial, and firmware when the radio opens. Hover that line for the full serial and USB API. Quick Select lives in the **banner** above the plots: a 1 MHz–7.25 GHz chirp, services above, HF/VHF/UHF/All below, gold window = the live sweep.
 
 ## If you already have a zip / installer
 
@@ -43,7 +43,7 @@ The sidebar shows the board name, short serial, and firmware when the radio open
 ## First run
 
 - Plug the radio in before you click around. The sweep starts on its own on **WiFi 2** (2402–2472 MHz; that Quick Select button is highlighted). **Auto gain** and **auto-scale dB** are on by default.
-- **Quick Select** jumps to common bands (Wi‑Fi, LTE, FM, amateur 2 m / 70 cm, …). Hover a button for the MHz range. If you are in Listen or Watch, it stops playback and sweeps that band. Details: [operator.md](operator.md).
+- **Quick Select** in the top banner jumps to common bands (Wi‑Fi, LTE, FM, amateur 2 m / 70 cm, …). Hover a button for the MHz range. If you are in Listen or Watch, it stops playback and sweeps that band. Band tuners (FM / TV / NFC / BLE) appear in the right-hand slot only when that band is in view. Details: [operator.md](operator.md).
 - **Antenna LNA +14 dB** turns on the amplifier on the radio. Use it when the signal is weak; skip it on strong local transmitters.
 - Changing the sweep range (Quick Select, the range readout, or plot zoom), gain, or FFT bin retunes automatically.
 - Attach an agent with the stdio proxy — **[MCP for AI agents](agents.md)**.

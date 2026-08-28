@@ -50,6 +50,17 @@ class FrequencyRangePanelTest {
 		assertTrue(panel.readoutLabel().getText().contains("2402"));
 		assertTrue(panel.readoutLabel().getText().contains("2472"));
 		assertTrue(panel.readoutLabel().getText().contains("MHz"));
+		assertTrue(panel.spanLabel().getText().contains("70"));
+	}
+
+	@Test
+	void digitsSitAboveTheAdjustmentButtons() {
+		FrequencyRangePanel panel = new FrequencyRangePanel();
+		panel.setSize(248, 180);
+		panel.doLayout();
+		assertTrue(panel.displayPanel().getY() < panel.keysPanel().getY(),
+				"range digits must sit above ◀ − + ▶");
+		assertTrue(panel.keysPanel().getY() <= panel.spanLabel().getY());
 	}
 
 	@Test

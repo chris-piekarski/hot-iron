@@ -5,15 +5,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * SLIP framing used by the Nordic nRF Sniffer UART. Consume their bytes;
+ * Nordic nRF Sniffer UART SLIP (not RFC 1055). Consume their bytes;
  * do not invent a second link layer.
  */
 public final class NordicSlip
 {
-	public static final int END = 0xC0;
-	public static final int ESC = 0xDB;
-	public static final int ESC_END = 0xDC;
-	public static final int ESC_ESC = 0xDD;
+	public static final int START = 0xAB;
+	public static final int END = 0xBC;
+	public static final int ESC = 0xCD;
+	public static final int ESC_START = 0xAC;
+	public static final int ESC_END = 0xBD;
+	public static final int ESC_ESC = 0xCE;
 
 	private NordicSlip()
 	{
@@ -24,11 +26,16 @@ public final class NordicSlip
 		if (payload == null)
 			payload = new byte[0];
 		ByteArrayOutputStream out = new ByteArrayOutputStream(payload.length + 4);
-		out.write(END);
+		out.write(START);
 		for (byte b : payload)
 		{
 			int v = b & 0xFF;
-			if (v == END)
+			if (v == START)
+			{
+				out.write(ESC);
+				out.write(ESC_START);
+			}
+			else if (v == END)
 			{
 				out.write(ESC);
 				out.write(ESC_END);
@@ -60,10 +67,8 @@ public final class NordicSlip
 			for (int i = Math.max(0, off); i < end; i++)
 			{
 				int v = data[i] & 0xFF;
-				if (v == END)
+				if (v == START)
 				{
-					if (inFrame && buf.size() > 0)
-						frames.add(buf.toByteArray());
 					buf.reset();
 					esc = false;
 					inFrame = true;
@@ -71,9 +76,20 @@ public final class NordicSlip
 				}
 				if (!inFrame)
 					continue;
+				if (v == END)
+				{
+					if (buf.size() > 0)
+						frames.add(buf.toByteArray());
+					buf.reset();
+					esc = false;
+					inFrame = false;
+					continue;
+				}
 				if (esc)
 				{
-					if (v == ESC_END)
+					if (v == ESC_START)
+						buf.write(START);
+					else if (v == ESC_END)
 						buf.write(END);
 					else if (v == ESC_ESC)
 						buf.write(ESC);

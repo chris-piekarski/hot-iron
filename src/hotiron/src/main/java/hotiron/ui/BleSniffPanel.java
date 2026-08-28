@@ -37,7 +37,7 @@ public final class BleSniffPanel extends JPanel
 	public BleSniffPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 6, wrap 1", "[grow,fill]", "[][][][][grow]"));
+		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][grow]"));
 		setBorder(BorderFactory.createTitledBorder("BLE sniff"));
 		title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 18));
 		title.setForeground(LCD_DIM);
@@ -56,7 +56,7 @@ public final class BleSniffPanel extends JPanel
 		add(hint);
 		add(status);
 		add(sniff, "growx");
-		add(new JScrollPane(list), "grow, h 110!");
+		add(new JScrollPane(list), "grow");
 	}
 
 	public JButton sniffButton()

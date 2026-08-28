@@ -80,4 +80,9 @@ class HackRFDeviceQueryTest {
 		assertTrue(HackRFDeviceQuery.isKnownHackrfBoard(5));
 		assertFalse(HackRFDeviceQuery.isKnownHackrfBoard(0xFF));
 	}
+
+	@Test
+	void usbEnumeratedDoesNotThrow() {
+		HackRFDeviceQuery.usbEnumerated();
+	}
 }

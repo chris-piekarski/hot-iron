@@ -1,6 +1,6 @@
 # Documentation
 
-This directory contains the first-class documentation for **HotIron**: a HackRF desktop with Sweep / Listen / Watch, QSY to live hits, and a live **MCP** interface so agents copy the RF bins.
+This directory contains the first-class documentation for **HotIron**: a HackRF desktop with Sweep / Listen / Watch / NFC Sniff, a parallel nRF BLE sniff, QSY to live hits, and a live **MCP** interface so agents copy the RF bins.
 
 ## Quick Navigation
 

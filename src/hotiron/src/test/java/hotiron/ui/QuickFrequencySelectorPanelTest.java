@@ -2,19 +2,16 @@ package hotiron.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyVetoException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.AbstractButton;
-import javax.swing.JLabel;
 
 import org.junit.jupiter.api.Test;
+
+import hotiron.core.FrequencyRange;
 
 class QuickFrequencySelectorPanelTest {
 
@@ -53,52 +50,100 @@ class QuickFrequencySelectorPanelTest {
     }
 
     @Test
-    void hoverHintIsASingleInPanelLineAndReplacesOnMove() {
+    void buttonsUseExclusiveToolTipNotSwingTooltips() {
         QuickFrequencySelectorPanel panel = new QuickFrequencySelectorPanel();
-        assertEquals(1, countNamed(panel, QuickFrequencySelectorPanel.HOVER_HINT_NAME));
-        assertEquals(" ", panel.hoverHintText());
-
         AbstractButton wifi = panel.findButton(QuickSelectPreset.WIFI_2.label);
         AbstractButton fm = panel.findButton(QuickSelectPreset.FM.label);
         assertNotNull(wifi);
         assertNotNull(fm);
         assertNull(wifi.getToolTipText());
         assertNull(fm.getToolTipText());
-
-        enter(wifi);
-        assertEquals(QuickSelectPreset.WIFI_2.tooltip(), panel.hoverHintText());
-        enter(fm);
-        exit(wifi);
-        assertEquals(QuickSelectPreset.FM.tooltip(), panel.hoverHintText(),
-                "moving to FM must replace WiFi 2, not keep both");
-        assertEquals(1, countNamed(panel, QuickFrequencySelectorPanel.HOVER_HINT_NAME));
-        exit(fm);
-        assertEquals(" ", panel.hoverHintText());
+        assertEquals(QuickSelectPreset.WIFI_2.tooltip(), ExclusiveToolTip.hintOf(wifi));
+        assertEquals(QuickSelectPreset.FM.tooltip(), ExclusiveToolTip.hintOf(fm));
     }
 
-    private static void enter(Component c) {
-        c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_ENTERED, 0, 0, 1, 1, 0, false));
+    @Test
+    void bannerGroupsCoverEveryPresetAndKeepAllLast() {
+        int n = 0;
+        for (QuickSelectPreset.Group g : QuickSelectPreset.Group.values())
+            n += QuickSelectPreset.inGroup(g).size();
+        assertEquals(QuickSelectPreset.values().length, n);
+        java.util.List<QuickSelectPreset> survey = QuickSelectPreset.inGroup(QuickSelectPreset.Group.SURVEY);
+        assertEquals(QuickSelectPreset.ALL, survey.get(survey.size() - 1));
+        QuickFrequencySelectorPanel panel = new QuickFrequencySelectorPanel();
+        for (QuickSelectPreset preset : QuickSelectPreset.values())
+            assertNotNull(panel.findButton(preset.label), preset.label);
     }
 
-    private static void exit(Component c) {
-        c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_EXITED, 0, 0, 1, 1, 0, false));
-    }
-
-    private static int countNamed(Container root, String name) {
-        AtomicInteger n = new AtomicInteger();
-        walk(root, c -> {
-            if (name.equals(c.getName()) && c instanceof JLabel)
-                n.incrementAndGet();
-        });
-        return n.get();
-    }
-
-    private static void walk(Container root, java.util.function.Consumer<Component> visit) {
-        for (Component child : root.getComponents()) {
-            visit.accept(child);
-            if (child instanceof Container)
-                walk((Container) child, visit);
+    @Test
+    void chipsAreLargeAndSitOnTheSurveyAxis() {
+        QuickFrequencySelectorPanel panel = new QuickFrequencySelectorPanel();
+        panel.setSize(1200, 220);
+        panel.doLayout();
+        panel.validate();
+        AbstractButton fm = panel.findButton(QuickSelectPreset.FM.label);
+        AbstractButton wifi = panel.findButton(QuickSelectPreset.WIFI_2.label);
+        assertNotNull(fm);
+        assertTrue(fm.getFont().getSize() >= 16, "Quick Select type was " + fm.getFont().getSize());
+        assertTrue(fm.getHeight() >= SurveyChipLayout.BUTTON_H - 2);
+        java.util.List<SurveyChipLayout.Chip> chips = panel.chips();
+        assertFalse(chips.isEmpty());
+        SurveyChipLayout.Chip fmChip = null;
+        SurveyChipLayout.Chip wifiChip = null;
+        for (SurveyChipLayout.Chip c : chips) {
+            if (c.preset == QuickSelectPreset.FM)
+                fmChip = c;
+            if (c.preset == QuickSelectPreset.WIFI_2)
+                wifiChip = c;
         }
+        assertNotNull(fmChip);
+        assertNotNull(wifiChip);
+        assertTrue(fmChip.anchorX() < wifiChip.anchorX(), "FM must sit left of WiFi 2 on the 0–7.25 GHz strip");
+        assertEquals(SurveyChipLayout.Side.TOP, fmChip.side);
+        assertEquals(SurveyChipLayout.Side.BOTTOM, panel.chips().stream()
+                .filter(c -> c.preset == QuickSelectPreset.ALL).findFirst().orElseThrow().side);
+    }
+
+    @Test
+    void zoomOutExpandsTheSurveyWindow() {
+        OperatorNavBanner banner = new OperatorNavBanner();
+        banner.setSize(1400, 280);
+        banner.doLayout();
+        FrequencyRange before = banner.quickSelector().sweepWindow();
+        int[] goldBefore = SpectrumWavePainter.windowPixels(before, 1000);
+        banner.rangePanel().zoomOutButton().doClick();
+        FrequencyRange after = banner.quickSelector().sweepWindow();
+        int[] goldAfter = SpectrumWavePainter.windowPixels(after, 1000);
+        assertTrue(after.spanMHz() > before.spanMHz(), "gold survey window must follow − bandwidth");
+        assertTrue(goldAfter[1] - goldAfter[0] > goldBefore[1] - goldBefore[0],
+                "gold overlay must grow when span doubles");
+        banner.rangePanel().zoomInButton().doClick();
+        assertEquals(before.spanMHz(), banner.quickSelector().sweepWindow().spanMHz());
+    }
+
+    @Test
+    void digitsSitAbovePanZoomBesideTheWave() {
+        OperatorNavBanner banner = new OperatorNavBanner();
+        banner.setSize(1400, 300);
+        banner.validate();
+        banner.doLayout();
+        banner.quickSelector().doLayout();
+        java.awt.Point wave = javax.swing.SwingUtilities.convertPoint(
+                banner.quickSelector().waveStrip().getParent(),
+                banner.quickSelector().waveStrip().getLocation(), banner);
+        java.awt.Point keys = javax.swing.SwingUtilities.convertPoint(
+                banner.rangePanel().keysPanel().getParent(),
+                banner.rangePanel().keysPanel().getLocation(), banner);
+        java.awt.Point digits = javax.swing.SwingUtilities.convertPoint(
+                banner.rangePanel().displayPanel().getParent(),
+                banner.rangePanel().displayPanel().getLocation(), banner);
+        int waveRight = wave.x + banner.quickSelector().waveStrip().getWidth();
+        assertTrue(keys.x >= waveRight - 2, "◀ − + ▶ must sit to the right of the wave");
+        assertTrue(digits.x >= waveRight - 2, "range digits must sit to the right of the wave");
+        assertTrue(Math.abs(wave.y - keys.y) <= 8, "◀ − + ▶ must share the wave row");
+        int digitBottom = digits.y + banner.rangePanel().displayPanel().getHeight();
+        assertTrue(digitBottom <= keys.y + 4, "2402–2472 digits must sit above the adjustment buttons");
+        assertTrue(keys.y - digitBottom <= 16, "digits must sit immediately above ◀ − + ▶, not at the banner top");
     }
 
     @Test

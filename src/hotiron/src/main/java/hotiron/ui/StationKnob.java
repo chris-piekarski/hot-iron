@@ -46,7 +46,7 @@ public final class StationKnob extends JComponent
 	public StationKnob()
 	{
 		setOpaque(false);
-		setPreferredSize(new Dimension(108, 108));
+		setPreferredSize(new Dimension(96, 96));
 		setMinimumSize(new Dimension(88, 88));
 		setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		ExclusiveToolTip.setText(this, "Turn clockwise for a higher station. Each click is one detected FM hit.");

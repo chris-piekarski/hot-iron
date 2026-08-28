@@ -20,23 +20,26 @@ import hotiron.core.FrequencyAxis;
  */
 public final class BandHeaderPainter
 {
-	public static final int HEADER_H = 16;
+	public static final int HEADER_H = 24;
+	public static final int LABEL_SIZE = 13;
 	public static final int MIN_LABEL_GAP_PX = 10;
 	private static final Color FILL_TUNED = new Color(255, 180, 50, 36);
 	private static final Color FILL_TUNED_HEADER = new Color(255, 196, 64, 230);
 	private static final Color LINE_TUNED = new Color(255, 214, 80, 245);
-	private static final Color LABEL_TUNED = new Color(255, 214, 90, 255);
+	private static final Color LABEL_TUNED = new Color(255, 248, 210, 255);
 	private static final Stroke TUNED_CURSOR = new BasicStroke(2.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
-	private static final Color FILL_PRIMARY = new Color(80, 160, 230, 110);
-	private static final Color FILL_SECONDARY = new Color(160, 160, 160, 70);
+	/** Gold, not cyan — the live trace/waterfall are blue-family. */
+	private static final Color FILL_PRIMARY = new Color(255, 168, 40, 175);
+	private static final Color FILL_SECONDARY = new Color(160, 160, 160, 90);
 	private static final Color FILL_SURVEY = new Color(160, 160, 160, 18);
-	private static final Color FILL_SURVEY_HEADER = new Color(160, 160, 160, 70);
-	private static final Color FILL_FULL_PRIMARY = new Color(80, 160, 230, 38);
-	private static final Color LINE_PRIMARY = new Color(130, 200, 255, 180);
-	private static final Color LINE_SECONDARY = new Color(170, 170, 170, 120);
+	private static final Color FILL_SURVEY_HEADER = new Color(160, 160, 160, 90);
+	private static final Color FILL_FULL_PRIMARY = new Color(255, 168, 40, 28);
+	private static final Color LINE_PRIMARY = new Color(255, 204, 72, 240);
+	private static final Color LINE_SECONDARY = new Color(190, 190, 190, 140);
 	private static final Color LINE_SURVEY = new Color(170, 170, 170, 80);
-	private static final Color HEADER_RULE = new Color(170, 170, 170, 80);
-	private static final Color LABEL = new Color(230, 230, 230, 230);
+	private static final Color HEADER_RULE = new Color(40, 32, 16, 160);
+	private static final Color LABEL = new Color(255, 244, 214, 255);
+	private static final Color LABEL_SHADOW = new Color(20, 14, 6, 200);
 	private static final Stroke DASH = new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 8f,
 			new float[] { 3f, 4f }, 0f);
 
@@ -91,7 +94,7 @@ public final class BandHeaderPainter
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 			g.setClip(area);
-			g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+			g.setFont(labelFont(false));
 			FontMetrics fm = g.getFontMetrics();
 			int top = (int) Math.round(area.getMinY());
 			int bottom = (int) Math.round(area.getMaxY());
@@ -184,8 +187,7 @@ public final class BandHeaderPainter
 	private static void paintLabels(Graphics2D g, FontMetrics fm, FrequencyAxis axis, Rectangle2D area,
 			List<BandMark> marks, List<double[]> placed, float labelY, boolean tuned)
 	{
-		g.setColor(tuned ? LABEL_TUNED : LABEL);
-		g.setFont(new Font(Font.SANS_SERIF, tuned ? Font.BOLD : Font.PLAIN, tuned ? 11 : 10));
+		g.setFont(labelFont(tuned));
 		for (BandMark mark : marks)
 		{
 			if (mark.label.isEmpty() || !mark.centerIn(axis))
@@ -209,14 +211,23 @@ public final class BandHeaderPainter
 				continue;
 			if (!tuned && overlaps(placed, left, right))
 				continue;
+			g.setColor(LABEL_SHADOW);
+			g.drawString(mark.label, (float) left + 1f, labelY + 1f);
+			g.setColor(tuned ? LABEL_TUNED : LABEL);
 			g.drawString(mark.label, (float) left, labelY);
 			placed.add(new double[] { left, right });
 		}
 	}
 
+	static Font labelFont(boolean tuned)
+	{
+		return new Font(Font.SANS_SERIF, Font.BOLD, tuned ? LABEL_SIZE + 1 : LABEL_SIZE);
+	}
+
 	public static float labelBaselineY(Rectangle2D area, FontMetrics fm)
 	{
-		return (float) (area.getMinY() + fm.getAscent() + 1);
+		int header = Math.min(HEADER_H, Math.max(1, (int) Math.round(area.getHeight())));
+		return (float) (area.getMinY() + (header + fm.getAscent() - fm.getDescent()) / 2.0);
 	}
 
 	public static boolean overlaps(List<double[]> placed, double left, double right)
