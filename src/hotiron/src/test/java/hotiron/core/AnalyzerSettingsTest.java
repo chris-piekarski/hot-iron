@@ -23,6 +23,8 @@ class AnalyzerSettingsTest {
 		assertTrue(s.isAutoSweep().getValue());
 		assertTrue(s.isPersistentDisplayVisible().getValue());
 		assertTrue(s.isWaterfallVisible().getValue());
+		assertNotNull(s.getFrequencyAllocationTable().getValue());
+		assertEquals("USA", s.getFrequencyAllocationTable().getValue().toString());
 		assertEquals(RadioIdentity.ABSENT, s.getRadioIdentity().getValue());
 		assertEquals(McpStatus.OFF, s.getMcpStatus().getValue());
 	}

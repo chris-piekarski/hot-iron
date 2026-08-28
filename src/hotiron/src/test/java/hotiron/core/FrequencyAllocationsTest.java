@@ -21,5 +21,7 @@ class FrequencyAllocationsTest {
         assertNotNull(europe);
         assertTrue(europe.getFrequencyBands(0L, Long.MAX_VALUE).size() > 10);
         assertNotNull(europe.lookupBand(100000000L));
+        assertEquals("USA", FrequencyAllocations.defaultTable().toString());
+        assertSame(tables.get("USA"), allocs.usa());
     }
 }

@@ -16,7 +16,8 @@ Make the window operator-friendly: plots a bit smaller, tools wider, no flicker 
 - [x] Spectrum/waterfall split ~0.55
 - [x] Unit tests (`BandContextTest`, settings UI parent checks, Quick Select groups)
 - [x] `docs/operator.md` / architecture / CHANGELOG
-- [x] Split chrome so a feature change does not retouch the others: `BandToolKind` policy, `BandToolsSlot` registry, `OperatorLayout` sizes, `OperatorShell` frame, `RadioSessionStrip` / `GainStrip` / `OperatorNavBanner` as siblings
+- [x] Split chrome so a feature change does not retouch the others: `BandToolKind` policy, `BandToolsSlot` registry, `OperatorLayout` sizes, `OperatorShell` frame, `RadioSessionStrip` / `SpectrumGainRail` / `ChartToggleBar` / `OperatorNavBanner` as siblings
+- [x] Gain + chart toggles on the field of play; HackRF Settings / Chart options tabs removed; Hardware ⋯ overflow; line width frozen at 1.5 px
 - [x] Survey banner: larger QS chips on `SpectrumSurveyAxis` (HackRF 1–7250 MHz log) over a chirp wave (`SpectrumWavePainter` / `SurveyChipLayout`)
 - [x] Sweep-range digits above `◀ − + ▶` in the column immediately right of the wave; gold window grows/shrinks with − / +
 - [x] Listen: top RF line chart, bottom RF ±2 MHz waterfall | AUDIO 0–16 kHz (same parked IQ; no second USB)

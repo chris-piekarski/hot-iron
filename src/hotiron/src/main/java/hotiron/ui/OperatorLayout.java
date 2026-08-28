@@ -17,6 +17,10 @@ public final class OperatorLayout
 	public static final double LISTEN_WATERFALL_SPLIT = 0.5;
 	public static final int MIN_FRAME_WIDTH = 1100;
 	public static final int MIN_FRAME_HEIGHT = 640;
+	/** Vertical LNA/VGA rail on the plot dB axis. */
+	public static final int GAIN_RAIL_WIDTH = 84;
+	/** Frozen spectrum trace width (px). Not an operator setting. */
+	public static final float SPECTRUM_LINE_WIDTH = 1.5f;
 
 	private OperatorLayout()
 	{

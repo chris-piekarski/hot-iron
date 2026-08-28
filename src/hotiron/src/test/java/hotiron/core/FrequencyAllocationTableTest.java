@@ -38,6 +38,15 @@ class FrequencyAllocationTableTest {
     }
 
     @Test
+    void tablesWithTheSameAreaAreEqual() {
+        FrequencyAllocationTable a = new FrequencyAllocationTable("USA", new java.util.ArrayList<>());
+        FrequencyAllocationTable b = new FrequencyAllocationTable("USA", new java.util.ArrayList<>());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+        assertNotEquals(a, new FrequencyAllocationTable("Europe", new java.util.ArrayList<>()));
+    }
+
+    @Test
     void testDrawAllocationTableExercisesGraphicsPath() {
         FrequencyAllocationTable table = createSmallTable();
         java.awt.image.BufferedImage img = table.drawAllocationTable(400, 30, 0.8f, 2300000000L, 2600000000L, java.awt.Color.WHITE, java.awt.Color.BLACK);

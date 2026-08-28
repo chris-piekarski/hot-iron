@@ -378,7 +378,7 @@ public class HotIron {
 			settings.isPersistentDisplayVisible().setValue(true);
 			settings.isAutoSweep().setValue(false);
 			settings.getFFTBinHz().setValue(500000);
-			settings.getFrequencyAllocationTable().setValue(new FrequencyAllocations().getTable().values().stream().findFirst().get());
+			settings.getFrequencyAllocationTable().setValue(FrequencyAllocations.defaultTable());
 		}
 
 		if (settings.isAutoGain().getValue()) {
@@ -402,7 +402,8 @@ public class HotIron {
 		refreshRadioIdentity();
 		settingsPanel = new HackRFSweepSettingsUI(settings);
 
-		splitPane = OperatorShell.verticalPlots(chartPanel, waterfallPlot);
+		splitPane = OperatorShell.verticalPlots(
+				OperatorShell.spectrumStack(settingsPanel.chartToggleBar(), chartPanel), waterfallPlot);
 
 		labelMessages = new JLabel("dsadasd");
 		labelMessages.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -412,7 +413,7 @@ public class HotIron {
 		settings.isDebugDisplay().callObservers();
 		
 		JPanel splitPanePanel	= new JPanel(new BorderLayout());
-		splitPanePanel.add(splitPane, BorderLayout.CENTER);
+		splitPanePanel.add(OperatorShell.fieldOfPlay(splitPane, settingsPanel.gainRail()), BorderLayout.CENTER);
 		splitPanePanel.add(labelMessages, BorderLayout.SOUTH);
 
 		uiFrame = new JFrame();
@@ -423,6 +424,7 @@ public class HotIron {
 		((javax.swing.JComponent) uiFrame.getContentPane()).setBorder(BorderFactory.createEmptyBorder(8, 8, 16, 8));
 		uiFrame.setResizable(true);
 		sweepStatusBar = new SweepStatusBar();
+		sweepStatusBar.installAutoSweep(settingsPanel.autoSweepCheckbox());
 		settings.getMcpStatus().addListener(s -> javax.swing.SwingUtilities.invokeLater(() -> sweepStatusBar.setMcp(s)));
 		sweepStatusBar.setMcp(settings.getMcpStatus().getValue());
 		OperatorShell.place(uiFrame, settingsPanel.navBanner(), splitPanePanel, settingsPanel, sweepStatusBar);
@@ -935,7 +937,7 @@ public class HotIron {
 		NumberAxis rangeAxis = ((NumberAxis) plot.getRangeAxis());
 		chartLineRenderer = new XYLineAndShapeRenderer();
 		chartLineRenderer.setDefaultShapesVisible(false);
-		chartLineRenderer.setDefaultStroke(new BasicStroke(settings.getSpectrumLineThickness().getValue().floatValue()));
+		chartLineRenderer.setDefaultStroke(new BasicStroke(OperatorLayout.SPECTRUM_LINE_WIDTH));
 
 		rangeAxis.setAutoRange(false);
 		rangeAxis.setRange(SpectrumPowerScale.DEFAULT_LOW, SpectrumPowerScale.DEFAULT_HIGH);
@@ -1467,9 +1469,7 @@ public class HotIron {
 				p.setPeakFalloutMillis(fallRate * 1000l);
 		});
 
-		settings.getSpectrumLineThickness().addListener((thickness) -> {
-			SwingUtilities.invokeLater(() -> chartLineRenderer.setDefaultStroke(new BasicStroke(thickness.floatValue())));
-		});
+		chartLineRenderer.setDefaultStroke(new BasicStroke(OperatorLayout.SPECTRUM_LINE_WIDTH));
 		
 		settings.getPersistentDisplayDecayRate().addListener((time) -> {
 			persistentDisplay.setPersistenceTime(time);

@@ -32,14 +32,18 @@ class HackRFSweepSettingsUITest {
                 "boot Quick Select is WiFi 2");
         assertEquals("20 000", ui.fftBinSpinner().getValue().toString());
         assertTrue(ui.autoScaleCheckbox().isSelected(), "dB auto-scale is on so FM/Wi-Fi peaks fill the axis");
+        assertEquals("USA", settings.getFrequencyAllocationTable().getValue().toString());
+        assertEquals("USA", ui.chartToggleBar().allocationCombo().getSelectedItem().toString());
         assertTrue(ui.autoGainCheckbox().isSelected(), "auto gain is the default");
         assertTrue(ui.autoSweepCheckbox().isSelected(), "auto FFT/samples is the default");
         assertFalse(ui.gainSlider().isEnabled(), "gain sliders stay locked while auto is on");
         assertFalse(ui.fftBinSpinner().isEnabled(), "FFT bin stays locked while auto is on");
         assertFalse(ui.samplesSpinner().isEnabled(), "samples stay locked while auto is on");
         assertEquals("Pause", ui.pauseButton().getText());
-        assertTrue(ui.peakFallSpinner().isVisible());
-        assertTrue(ui.decayRateCombo().isVisible());
+        assertTrue(ui.peakFallSpinner().isEnabled());
+        assertTrue(ui.decayRateCombo().isEnabled());
+        assertNotNull(ui.gainRail());
+        assertNotNull(ui.chartToggleBar());
         assertTrue(ui.connectedLabel().getText().contains("No radio detected"));
 
         SwingUtilities.invokeAndWait(() -> ui.pauseButton().doClick());
@@ -64,11 +68,11 @@ class HackRFSweepSettingsUITest {
 
         settings.isChartsPeaksVisible().setValue(false);
         flushEdt();
-        assertFalse(ui.peakFallSpinner().isVisible());
+        assertFalse(ui.peakFallSpinner().isEnabled());
 
         settings.isPersistentDisplayVisible().setValue(false);
         flushEdt();
-        assertFalse(ui.decayRateCombo().isVisible());
+        assertFalse(ui.decayRateCombo().isEnabled());
 
         settings.getRadioIdentity().setValue(
                 RadioIdentity.of("HackRF One", "0000000000000000a1b2c3d4e5f60708", "v2026.01.3", "1.16"));

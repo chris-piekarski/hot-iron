@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.awt.BorderLayout;
 import java.awt.Component;
 
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -52,6 +53,23 @@ class OperatorShellTest
 		assertSame(rf, dual.getLeftComponent());
 		assertSame(audio, dual.getRightComponent());
 		assertEquals(OperatorLayout.LISTEN_WATERFALL_SPLIT, dual.getResizeWeight(), 1e-9);
+	}
+
+	@Test
+	void fieldOfPlayPutsGainOnThePlot()
+	{
+		JPanel plots = new JPanel();
+		JPanel rail = new JPanel();
+		JComponent field = OperatorShell.fieldOfPlay(plots, rail);
+		BorderLayout layout = (BorderLayout) ((JPanel) field).getLayout();
+		assertSame(plots, layout.getLayoutComponent(BorderLayout.CENTER));
+		assertSame(rail, layout.getLayoutComponent(BorderLayout.WEST));
+		JPanel chips = new JPanel();
+		JPanel chart = new JPanel();
+		JComponent stack = OperatorShell.spectrumStack(chips, chart);
+		BorderLayout sl = (BorderLayout) ((JPanel) stack).getLayout();
+		assertSame(chips, sl.getLayoutComponent(BorderLayout.NORTH));
+		assertSame(chart, sl.getLayoutComponent(BorderLayout.CENTER));
 	}
 
 	@Test

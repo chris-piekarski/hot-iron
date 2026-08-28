@@ -4,6 +4,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 
 import javax.swing.BorderFactory;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
@@ -37,6 +38,14 @@ public class SweepStatusBar extends JPanel {
 		add(peak);
 		add(sep());
 		add(mcp);
+	}
+
+	public void installAutoSweep(JCheckBox auto)
+	{
+		if (auto == null)
+			return;
+		add(auto, 2);
+		add(sep(), 3);
 	}
 
 	public void setMcp(hotiron.core.McpStatus status) {

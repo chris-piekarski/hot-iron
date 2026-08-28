@@ -22,6 +22,14 @@ public class FrequencyAllocations {
 		return new HashMap<>(table);
 	}
 
+	public FrequencyAllocationTable usa() {
+		return table.get("USA");
+	}
+
+	public static FrequencyAllocationTable defaultTable() {
+		return new FrequencyAllocations().usa();
+	}
+
 	private void loadEurope() {
 		loadTableFromCSV("Europe", getClass().getResourceAsStream("/freq-europe.csv"));		
 		loadTableFromCSV("USA", getClass().getResourceAsStream("/freq-usa.csv"));

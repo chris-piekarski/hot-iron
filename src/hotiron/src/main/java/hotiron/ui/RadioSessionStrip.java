@@ -13,8 +13,8 @@ import hotiron.core.RadioIdentity;
 import net.miginfocom.swing.MigLayout;
 
 /**
- * Always-on radio chrome: identity, MCP, picker, Restart / Stop / Pause.
- * Band tuners and gain live in sibling panels.
+ * Always-on radio chrome: identity, MCP, picker, Restart / Stop / Pause / ⋯.
+ * Band tuners stay in the tools column; gain lives on the plot rail.
  */
 public final class RadioSessionStrip extends JPanel
 {
@@ -27,6 +27,8 @@ public final class RadioSessionStrip extends JPanel
 	private final JButton restart = new JButton("Restart");
 	private final JButton stop = new JButton("Stop");
 	private final JButton pause = new JButton("Pause");
+	private final JButton more = new JButton("⋯");
+	private JPanel overflow;
 
 	public RadioSessionStrip()
 	{
@@ -45,16 +47,20 @@ public final class RadioSessionStrip extends JPanel
 		ExclusiveToolTip.setText(restart, "Stop and start the sweep again. Use this if the plot freezes after a setting change.");
 		ExclusiveToolTip.setText(stop, "Halt the native sweep and release USB so other tools can open the radio.");
 		ExclusiveToolTip.setText(pause, "Freeze the display. The radio keeps sweeping; click Resume to show live data again.");
+		ExclusiveToolTip.setText(more, "Hardware: FFT bin, samples, bias tee, CLKOUT, About.");
 		ExclusiveToolTip.install(connected);
 		ExclusiveToolTip.install(mcp);
 		ExclusiveToolTip.install(radio);
 		ExclusiveToolTip.install(restart);
 		ExclusiveToolTip.install(stop);
 		ExclusiveToolTip.install(pause);
-		JPanel buttons = new JPanel(new GridLayout(1, 3, 4, 0));
+		ExclusiveToolTip.install(more);
+		more.addActionListener(e -> showOverflow());
+		JPanel buttons = new JPanel(new GridLayout(1, 4, 4, 0));
 		buttons.add(restart);
 		buttons.add(stop);
 		buttons.add(pause);
+		buttons.add(more);
 		add(connected);
 		add(mcp);
 		add(radio);
@@ -89,5 +95,26 @@ public final class RadioSessionStrip extends JPanel
 	JButton pauseButton()
 	{
 		return pause;
+	}
+
+	void setOverflow(JPanel pane)
+	{
+		overflow = pane;
+	}
+
+	JButton moreButton()
+	{
+		return more;
+	}
+
+	private void showOverflow()
+	{
+		if (overflow == null)
+			return;
+		javax.swing.JPopupMenu pop = new javax.swing.JPopupMenu();
+		if (overflow.getParent() != null)
+			overflow.getParent().remove(overflow);
+		pop.add(overflow);
+		pop.show(more, 0, more.getHeight());
 	}
 }

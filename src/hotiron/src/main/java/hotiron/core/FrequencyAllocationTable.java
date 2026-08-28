@@ -43,6 +43,22 @@ public class FrequencyAllocationTable {
 	public String toString() {
 		return area;
 	}
+
+	@Override
+	public boolean equals(Object o)
+	{
+		if (this == o)
+			return true;
+		if (!(o instanceof FrequencyAllocationTable))
+			return false;
+		return area.equals(((FrequencyAllocationTable) o).area);
+	}
+
+	@Override
+	public int hashCode()
+	{
+		return area.hashCode();
+	}
 	
 	public ArrayList<FrequencyBand> getFrequencyBands(long startHz, long endHz){
 		FrequencyBand startBand	= lookupBand(startHz);

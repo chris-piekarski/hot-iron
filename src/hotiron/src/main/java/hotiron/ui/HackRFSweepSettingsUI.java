@@ -2,30 +2,26 @@ package hotiron.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.beans.PropertyChangeEvent;
-import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.Vector;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import javax.swing.DefaultBoundedRangeModel;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.JSpinner;
-import javax.swing.JTabbedPane;
 import javax.swing.JSpinner.ListEditor;
 import javax.swing.JTextField;
 import javax.swing.SpinnerListModel;
+import javax.swing.SwingUtilities;
+import javax.swing.border.EmptyBorder;
 
-import hotiron.HotIron;
-import hotiron.Version;
 import hotiron.core.AutoSweepPolicy;
 import hotiron.core.BandContext;
 import hotiron.core.BandToolKind;
@@ -36,13 +32,8 @@ import hotiron.core.HackRFSettings;
 import hotiron.core.HackRFSettings.HackRFEventAdapter;
 import hotiron.core.McpStatus;
 import hotiron.core.RadioIdentity;
-import net.miginfocom.swing.MigLayout;
 import hotiron.mvc.MVCController;
-import javax.swing.border.EmptyBorder;
-import javax.swing.SpinnerNumberModel;
-import javax.swing.SwingUtilities;
-import javax.swing.JComboBox;
-import javax.swing.SwingConstants;
+import net.miginfocom.swing.MigLayout;
 
 public class HackRFSweepSettingsUI extends JPanel
 {
@@ -61,15 +52,14 @@ public class HackRFSweepSettingsUI extends JPanel
 	private FrequencyRangePanel frequencyRangePanel;
 	private QuickFrequencySelectorPanel quickFrequencySelector;
 	private RadioSessionStrip radioStrip;
-	private GainStrip gainStrip;
+	private SpectrumGainRail gainRail;
+	private ChartToggleBar chartToggles;
+	private HardwarePane hardwarePane;
 	private BandToolsSlot bandSlot;
 	private JSpinner spinnerFFTBinHz;
-	private JSlider sliderGain;
 	private JSpinner spinner_numberOfSamples;
 	private JCheckBox chckbxAntennaPower;
 	private JCheckBox chckbxAntennaLNA;
-	private JSlider slider_waterfallPaletteStart;
-	private JSlider slider_waterfallPaletteSize;
 	private JCheckBox chckbxShowPeaks;
 	private JCheckBox chckbxAutoScalePower;
 	private JCheckBox chckbxAutoGain;
@@ -95,14 +85,8 @@ public class HackRFSweepSettingsUI extends JPanel
 	private JComboBox<FrequencyAllocationTable> comboBoxFrequencyAllocationBands;
 	private JSlider sliderGainVGA;
 	private JSlider sliderGainLNA;
-	private JLabel lblPeakFall;
-	private JComboBox<BigDecimal> comboBoxLineThickness;
-	private JLabel lblPersistentDisplay;
 	private JCheckBox checkBoxPersistentDisplay;
-	private JCheckBox checkBoxWaterfallEnabled;
-	private JLabel lblDecayRate;
 	private JComboBox comboBoxDecayRate;
-	private JLabel lblDebugDisplay;
 	private JCheckBox checkBoxDebugDisplay;
 
 	/**
@@ -127,10 +111,6 @@ public class HackRFSweepSettingsUI extends JPanel
 		btnStop = radioStrip.stopButton();
 		btnPause = radioStrip.pauseButton();
 
-		checkBoxClkout = new JCheckBox("CLKOUT 10 MHz");
-		ExclusiveToolTip.setText(checkBoxClkout, "Drive CLKOUT so another radio can lock. CLKIN is used automatically when a 10 MHz signal is present.");
-		ExclusiveToolTip.install(checkBoxClkout);
-
 		tunerPanel = new TunerPanel();
 		btnListen = tunerPanel.listenButton();
 		stationKnob = tunerPanel.knob();
@@ -145,194 +125,53 @@ public class HackRFSweepSettingsUI extends JPanel
 				new BandTool(BandToolKind.NFC, nfcSniffPanel),
 				new BandTool(BandToolKind.BLE, bleSniffPanel));
 
-		gainStrip = new GainStrip();
-		chckbxAutoGain = gainStrip.autoGainCheckbox();
-		sliderGain = gainStrip.gainSlider();
-		sliderGainLNA = gainStrip.lnaSlider();
-		sliderGainVGA = gainStrip.vgaSlider();
-		gainStrip.setCaption(hRF.getGain() + "dB");
-		hRF.getGain().addListener((gain) -> gainStrip.setCaption(String.format(" %ddB  [LNA: %ddB  VGA: %ddB]",
-				gain, hRF.getGainLNA().getValue(), hRF.getGainVGA().getValue())));
+		gainRail = new SpectrumGainRail();
+		chckbxAutoGain = gainRail.autoGainCheckbox();
+		chckbxAntennaLNA = gainRail.antennaLnaCheckbox();
+		sliderGainLNA = gainRail.lnaSlider();
+		sliderGainVGA = gainRail.vgaSlider();
+		gainRail.setCaption(hRF.getGain() + "dB");
+		hRF.getGain().addListener((gain) -> gainRail.setCaption(String.format("%d dB", gain)));
+
+		chartToggles = new ChartToggleBar();
+		chckbxShowPeaks = chartToggles.peaksCheckbox();
+		checkBoxPersistentDisplay = chartToggles.persistCheckbox();
+		chckbxRemoveSpurs = chartToggles.spursCheckbox();
+		chckbxAutoScalePower = chartToggles.autoDbCheckbox();
+		comboBoxFrequencyAllocationBands = chartToggles.allocationCombo();
+		FrequencyAllocations frequencyAllocations = new FrequencyAllocations();
+		Vector<FrequencyAllocationTable> freqAllocValues = new Vector<>();
+		freqAllocValues.add(null);
+		freqAllocValues.addAll(frequencyAllocations.getTable().values());
+		comboBoxFrequencyAllocationBands.setModel(new DefaultComboBoxModel<>(freqAllocValues));
+
+		hardwarePane = new HardwarePane();
+		spinnerFFTBinHz = hardwarePane.fftBinSpinner();
+		spinner_numberOfSamples = hardwarePane.samplesSpinner();
+		chckbxAntennaPower = hardwarePane.antennaPowerCheckbox();
+		checkBoxClkout = hardwarePane.clkoutCheckbox();
+		checkBoxDebugDisplay = hardwarePane.debugCheckbox();
+		spinnerPeakFallSpeed = hardwarePane.peakFallSpinner();
+		comboBoxDecayRate = hardwarePane.persistHalfLifeCombo();
+		for (int i = hRF.getPersistentDisplayDecayRate().getMin(); i <= hRF.getPersistentDisplayDecayRate()
+				.getMax(); i++)
+			comboBoxDecayRate.addItem(Integer.valueOf(i));
+		spinnerModelFFTBinHz = new SpinnerListModel(AutoSweepPolicy.binLabels());
+		spinnerFFTBinHz.setModel(spinnerModelFFTBinHz);
+		((ListEditor) spinnerFFTBinHz.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
+		chckbxAutoSweep = new JCheckBox("FFT Auto");
+		chckbxAutoSweep.setSelected(true);
+		ExclusiveToolTip.setText(chckbxAutoSweep,
+				"Pick FFT bin from the sweep span so zoomed-in windows stay detailed. Samples stay 8192.");
+		ExclusiveToolTip.install(chckbxAutoSweep);
+		radioStrip.setOverflow(hardwarePane);
 
 		JPanel north = new JPanel(new MigLayout("insets 0, wrap 1, fillx, gapy 6", "[grow,fill]", ""));
 		north.add(radioStrip, "growx");
 		north.add(bandSlot, "growx, h " + OperatorLayout.BAND_SLOT_HEIGHT + "!");
-		north.add(gainStrip, "growx");
-
-		JTabbedPane tabbedPane	= new JTabbedPane(JTabbedPane.TOP);
 		setLayout(new BorderLayout());
 		add(north, BorderLayout.NORTH);
-		add(tabbedPane, BorderLayout.CENTER);
 
-		JPanel tab1	= new JPanel(new MigLayout("wrap 1, fillx, insets 4 0 12 0", "[grow,fill]", ""));
-		
-		JPanel tab2	= new JPanel(new MigLayout("", "[123.00px,grow,leading]", "[][0][][][0][][][0][][][][][0][][0][][][0][0][][][0][][0][grow,fill]"));
-		
-		tab1.setBorder(new EmptyBorder(4, 0, 12, 0));
-		tab2.setBorder(new EmptyBorder(4, 0, 12, 0));
-		tabbedPane.addTab("HackRF Settings", tab1);
-		tabbedPane.addTab("Chart options", tab2);
-
-		JLabel lblFftBinhz = new JLabel("FFT Bin [Hz]");
-		chckbxAutoSweep = new JCheckBox("Auto");
-		chckbxAutoSweep.setSelected(true);
-		ExclusiveToolTip.setText(chckbxAutoSweep,
-				"Pick FFT bin and samples from the sweep span so zoomed-in windows stay detailed and wide scans stay fast.");
-		JPanel fftHead = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
-		fftHead.setOpaque(false);
-		fftHead.add(lblFftBinhz, "growx");
-		fftHead.add(chckbxAutoSweep);
-		tab1.add(fftHead, "growx");
-
-		spinnerFFTBinHz = new JSpinner();
-		spinnerFFTBinHz.setFont(new Font("Monospaced", Font.BOLD, 16));
-		spinnerModelFFTBinHz = new SpinnerListModel(AutoSweepPolicy.binLabels());
-		spinnerFFTBinHz.setModel(spinnerModelFFTBinHz);
-		ExclusiveToolTip.setText(spinnerFFTBinHz, "Resolution bandwidth. Locked while Auto is on.");
-		tab1.add(spinnerFFTBinHz, "growx");
-		((ListEditor) spinnerFFTBinHz.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
-
-		JLabel lblNumberOfSamples = new JLabel("Number of samples");
-		ExclusiveToolTip.setText(lblNumberOfSamples,
-				"Samples captured per tuning step. Higher values average more FFT blocks for a smoother, slower sweep. Locked while Auto is on.");
-		tab1.add(lblNumberOfSamples);
-
-		spinner_numberOfSamples = new JSpinner();
-		spinner_numberOfSamples.setModel(new SpinnerListModel(new String[] { "8192", "16384", "32768", "65536", "131072", "262144" }));
-		ExclusiveToolTip.setText(spinner_numberOfSamples,
-				"8192 = one FFT block; each doubling adds linear-power averaging and roughly doubles dwell time.");
-		spinner_numberOfSamples.setFont(new Font("Monospaced", Font.BOLD, 16));
-		((ListEditor) spinner_numberOfSamples.getEditor()).getTextField().setHorizontalAlignment(JTextField.RIGHT);
-		((ListEditor) spinner_numberOfSamples.getEditor()).getTextField().setEditable(false);
-		tab1.add(spinner_numberOfSamples, "growx");
-
-		JLabel lblAntennaPower = new JLabel("Antenna power");
-		chckbxAntennaPower = new JCheckBox("");
-		chckbxAntennaPower.setHorizontalTextPosition(SwingConstants.LEADING);
-		JPanel antPower = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
-		antPower.setOpaque(false);
-		antPower.add(lblAntennaPower, "growx");
-		antPower.add(chckbxAntennaPower);
-		tab1.add(antPower, "growx");
-
-		JLabel lblLNAEnable = new JLabel("Antenna LNA +14dB");
-		chckbxAntennaLNA = new JCheckBox("");
-		chckbxAntennaLNA.setHorizontalTextPosition(SwingConstants.LEADING);
-		JPanel antLna = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
-		antLna.setOpaque(false);
-		antLna.add(lblLNAEnable, "growx");
-		antLna.add(chckbxAntennaLNA);
-		tab1.add(antLna, "growx");
-		tab1.add(checkBoxClkout, "growx");
-
-		JButton btnAbout = new JButton("Visit homepage");
-		btnAbout.addActionListener(e -> {
-			try {
-				DesktopBrowse.open(Version.url);
-			} catch (Exception ex) {
-				ex.printStackTrace();
-			}
-		});
-		JLabel labelVersion = new JLabel("Version: "+Version.version);
-		JPanel about = new JPanel(new MigLayout("insets 0", "[grow][]", "[]"));
-		about.setOpaque(false);
-		about.add(labelVersion, "growx");
-		about.add(btnAbout);
-		tab1.add(about, "growx");
-		
-		JLabel lblWaterfallEnabled = new JLabel("Waterfall enabled");
-		tab2.add(lblWaterfallEnabled, "flowx,cell 0 0,growx");
-
-		
-
-
-		JLabel lblWaterfallPaletteStart = new JLabel("Waterfall palette start [dB]");
-		tab2.add(lblWaterfallPaletteStart, "cell 0 2");
-
-		slider_waterfallPaletteStart = new JSlider();
-		slider_waterfallPaletteStart.setMinimum(-100);
-		slider_waterfallPaletteStart.setMaximum(0);
-		slider_waterfallPaletteStart.setValue(-30);
-		tab2.add(slider_waterfallPaletteStart, "cell 0 3,growx");
-
-
-		JLabel lblWaterfallPaletteLength = new JLabel("Waterfall palette length [dB]");
-		tab2.add(lblWaterfallPaletteLength, "cell 0 5");
-
-		slider_waterfallPaletteSize = new JSlider(HotIron.SPECTRUM_PALETTE_SIZE_MIN, 100);
-		tab2.add(slider_waterfallPaletteSize, "cell 0 6,growx");
-		
-		JLabel lblSpectrLineThickness = new JLabel("Spectr. Line Thickness");
-		tab2.add(lblSpectrLineThickness, "flowx,cell 0 8,growx");
-		
-		JLabel lblAutoScalePower = new JLabel("Auto-scale dB axis");
-		tab2.add(lblAutoScalePower, "flowx,cell 0 9,growx");
-
-		chckbxAutoScalePower = new JCheckBox("");
-		tab2.add(chckbxAutoScalePower, "cell 0 9,alignx right");
-
-		JLabel lblShowPeaks = new JLabel("Show peaks");
-		tab2.add(lblShowPeaks, "flowx,cell 0 10,growx");
-		
-		
-		chckbxShowPeaks = new JCheckBox("");
-		tab2.add(chckbxShowPeaks, "cell 0 10,alignx right");
-		
-		JLabel lblSpurFiltermay = new JLabel("Spur filter (may distort real signals)");
-		tab2.add(lblSpurFiltermay, "flowx,cell 0 13,growx");
-		
-		chckbxRemoveSpurs = new JCheckBox("");
-		tab2.add(chckbxRemoveSpurs, "cell 0 13,alignx right");
-		
-		lblPeakFall = new JLabel("  Peak half-life [s]");
-		tab2.add(lblPeakFall, "flowx,cell 0 11,growx");
-		
-		spinnerPeakFallSpeed = new JSpinner();
-		spinnerPeakFallSpeed.setModel(new SpinnerNumberModel(10, 0, 500, 1));
-		tab2.add(spinnerPeakFallSpeed, "cell 0 11,alignx right");
-		
-		lblPersistentDisplay = new JLabel("Persistent Display");
-		tab2.add(lblPersistentDisplay, "flowx,cell 0 15,growx");
-		
-		lblDecayRate = new JLabel("  Persistence half-life [s]");
-		tab2.add(lblDecayRate, "flowx,cell 0 16,growx");
-		
-		JLabel lblDisplayFrequencyAllocation = new JLabel("Frequency Allocation Bands");
-		tab2.add(lblDisplayFrequencyAllocation, "cell 0 19");
-		
-		
-		FrequencyAllocations frequencyAllocations	= new FrequencyAllocations();
-		Vector<FrequencyAllocationTable> freqAllocValues	= new Vector<>();
-		freqAllocValues.add(null);
-		freqAllocValues.addAll(frequencyAllocations.getTable().values());
-		DefaultComboBoxModel<FrequencyAllocationTable> freqAllocModel	= new  DefaultComboBoxModel<>(freqAllocValues);
-		comboBoxFrequencyAllocationBands = new JComboBox<FrequencyAllocationTable>(freqAllocModel);
-		tab2.add(comboBoxFrequencyAllocationBands, "cell 0 20,growx");
-		
-		comboBoxLineThickness = new JComboBox(new BigDecimal[] {
-				new BigDecimal("1"), new BigDecimal("1.5"), new BigDecimal("2"), new BigDecimal("3")
-				});
-		tab2.add(comboBoxLineThickness, "cell 0 8,alignx right");
-		
-		checkBoxPersistentDisplay = new JCheckBox("");
-		tab2.add(checkBoxPersistentDisplay, "cell 0 15,alignx right");
-		
-		checkBoxWaterfallEnabled = new JCheckBox("");
-		tab2.add(checkBoxWaterfallEnabled, "cell 0 0,alignx right");
-		
-		comboBoxDecayRate = new JComboBox(
-				new Vector<>(IntStream.rangeClosed(hRF.getPersistentDisplayDecayRate().getMin(),
-						hRF.getPersistentDisplayDecayRate().getMax()).
-						boxed().collect(Collectors.toList())));
-		tab2.add(comboBoxDecayRate, "cell 0 16,alignx right");
-		
-		lblDebugDisplay = new JLabel("Debug display");
-		tab2.add(lblDebugDisplay, "flowx,cell 0 22,growx");
-		
-		checkBoxDebugDisplay = new JCheckBox("");
-		tab2.add(checkBoxDebugDisplay, "cell 0 22,alignx right");
-		
-		
 		bindViewToModel();
 	}
 
@@ -348,12 +187,10 @@ public class HackRFSweepSettingsUI extends JPanel
 					else
 						return spinnerModelFFTBinHz.getList().get(0);
 				});
-		new MVCController(sliderGain, hRF.getGain());
 		new MVCController(chckbxAutoGain, hRF.isAutoGain());
 		new MVCController(chckbxAutoSweep, hRF.isAutoSweep());
 		Runnable syncGainEditors = () -> {
 			boolean manual = !hRF.isAutoGain().getValue();
-			sliderGain.setEnabled(manual);
 			sliderGainLNA.setEnabled(manual);
 			sliderGainVGA.setEnabled(manual);
 		};
@@ -369,8 +206,6 @@ public class HackRFSweepSettingsUI extends JPanel
 		new MVCController(spinner_numberOfSamples, hRF.getSamples(), val -> Integer.parseInt(val.toString()), val -> val.toString());
 		new MVCController(chckbxAntennaPower, hRF.getAntennaPowerEnable());
 		new MVCController(chckbxAntennaLNA, hRF.getAntennaLNA());
-		new MVCController(slider_waterfallPaletteStart, hRF.getSpectrumPaletteStart());
-		new MVCController(slider_waterfallPaletteSize, hRF.getSpectrumPaletteSize());
 		new MVCController(	(Consumer<FrequencyRange> valueChangedCall) ->  
 								frequencyRangeSelector.addPropertyChangeListener((PropertyChangeEvent evt) -> valueChangedCall.accept(frequencyRangeSelector.getFrequencyRange()) ) ,
 							(FrequencyRange newComponentValue) -> {
@@ -519,29 +354,15 @@ public class HackRFSweepSettingsUI extends JPanel
 		new MVCController(sliderGainLNA, hRF.getGainLNA());
 		new MVCController(sliderGainVGA, hRF.getGainVGA());
 
-		new MVCController(comboBoxLineThickness, hRF.getSpectrumLineThickness());
-		
 		new MVCController(checkBoxPersistentDisplay, hRF.isPersistentDisplayVisible());
-		
-		new MVCController(checkBoxWaterfallEnabled, hRF.isWaterfallVisible());
-		
 		new MVCController(checkBoxDebugDisplay, hRF.isDebugDisplay());
-		
 		hRF.isChartsPeaksVisible().addListener((enabled) -> {
-			SwingUtilities.invokeLater(()->{
-				spinnerPeakFallSpeed.setEnabled(enabled);
-				spinnerPeakFallSpeed.setVisible(enabled);
-				lblPeakFall.setVisible(enabled);
-			});
+			SwingUtilities.invokeLater(() -> spinnerPeakFallSpeed.setEnabled(enabled));
 		});
 		hRF.isChartsPeaksVisible().callObservers();
-		
 		new MVCController(comboBoxDecayRate, hRF.getPersistentDisplayDecayRate());
 		hRF.isPersistentDisplayVisible().addListener((visible) -> {
-			SwingUtilities.invokeLater(()->{
-				comboBoxDecayRate.setVisible(visible);
-				lblDecayRate.setVisible(visible);
-			});
+			SwingUtilities.invokeLater(() -> comboBoxDecayRate.setEnabled(visible));
 		});
 		hRF.isPersistentDisplayVisible().callObservers();
 		
@@ -717,7 +538,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		return chckbxAutoGain;
 	}
 
-	JCheckBox autoSweepCheckbox() {
+	public JCheckBox autoSweepCheckbox() {
 		return chckbxAutoSweep;
 	}
 
@@ -726,7 +547,15 @@ public class HackRFSweepSettingsUI extends JPanel
 	}
 
 	JSlider gainSlider() {
-		return sliderGain;
+		return sliderGainLNA;
+	}
+
+	public SpectrumGainRail gainRail() {
+		return gainRail;
+	}
+
+	public ChartToggleBar chartToggleBar() {
+		return chartToggles;
 	}
 
 	JSpinner peakFallSpinner() {

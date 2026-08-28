@@ -81,7 +81,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValue<FrequencyRange> frequency = new ModelValue<FrequencyRange>("Frequency range",
 			new FrequencyRange(WifiChannelPlan.WIFI_24_VIEW_START_MHZ, WifiChannelPlan.WIFI_24_VIEW_END_MHZ));
 	private final ModelValue<FrequencyAllocationTable> frequencyAllocationTable = new ModelValue<FrequencyAllocationTable>(
-			"Frequency allocation table", null);
+			"Frequency allocation table", FrequencyAllocations.defaultTable());
 	private final ModelValueInt gainLNA = new ModelValueInt("LNA Gain", 0, 8, 0, 40);
 	private final ModelValueInt gainTotal = new ModelValueInt("Gain [dB]", 40);
 	private final ModelValueInt gainVGA = new ModelValueInt("VGA Gain", 0, 2, 0, 60);
@@ -110,7 +110,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValueBoolean autoSweep = new ModelValueBoolean("Auto FFT/samples", true);
 	private final ModelValueBoolean debugDisplay = new ModelValueBoolean("Debug", false);
 	private final ModelValue<BigDecimal> spectrumLineThickness = new ModelValue<BigDecimal>("Spectrum line thickness",
-			new BigDecimal("1"));
+			new BigDecimal("1.5"));
 	private final ModelValueInt spectrumPaletteSize = new ModelValueInt("Spectrum palette size", 0);
 	private final ModelValueInt spectrumPaletteStart = new ModelValueInt("Spectrum palette start", 0);
 	private final ModelValueBoolean spurRemoval = new ModelValueBoolean("Spur removal", false);

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BLE sniff on this bench PCA10031: Nordic UART SLIP is `0xAB`/`0xBC` (not RFC 1055), host commands are protocol v1, device frames are v2, and `sniffer_pca10031_1c2a221.hex` talks at **460800** (not 1 Mbps). Engine tries 1M then 460800, enables RTS/CTS, and names ADV PDUs after stripping the radio AA + padding byte.
 
 ### Changed
+- Gain (Auto / LNA / VGA / +14) sits on a rail **left of the graphs**; Peaks / Persist / Spurs / Auto dB / Alloc sit on the chart bar; FFT Auto is a status pill. HackRF Settings and Chart options tabs are gone. Hardware leftovers (FFT bin, samples, bias tee, CLKOUT, About) live under **⋯**. Spectrum line width is 1.5 px.
 - README hero shot is the live survey banner + Wi‑Fi 2 sweep; copy covers Listen dual waterfalls, NFC/BLE sniff, and USB hot-load.
 - FM Listen keeps the ±2 MHz parked-IQ line chart on top and splits the strip into **RF · ±2 MHz** (same FFT) beside **AUDIO · 0–16 kHz**. Leave Listen to restore one RF waterfall.
 - Quick Select chips are 16 pt on a HackRF **1 MHz–7.25 GHz** chirp survey (no 0 Hz gutter): services above the wave, HF/VHF/UHF/All below (blue / teal / copper / cream), color-coded dividers, chip width follows the band. Range digits (`2402 – 2472 MHz`) sit above `◀ − + ▶` in the column immediately right of the wave; − / + expand or shrink the gold sweep window.

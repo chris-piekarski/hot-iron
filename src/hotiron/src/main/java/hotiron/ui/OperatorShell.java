@@ -29,6 +29,28 @@ public final class OperatorShell
 		return split;
 	}
 
+	public static JComponent spectrumStack(JComponent chips, JComponent chart)
+	{
+		javax.swing.JPanel stack = new javax.swing.JPanel(new BorderLayout());
+		stack.setOpaque(false);
+		if (chips != null)
+			stack.add(chips, BorderLayout.NORTH);
+		if (chart != null)
+			stack.add(chart, BorderLayout.CENTER);
+		return stack;
+	}
+
+	public static JComponent fieldOfPlay(JComponent plots, JComponent gainRail)
+	{
+		javax.swing.JPanel field = new javax.swing.JPanel(new BorderLayout());
+		field.setOpaque(false);
+		if (plots != null)
+			field.add(plots, BorderLayout.CENTER);
+		if (gainRail != null)
+			field.add(gainRail, BorderLayout.WEST);
+		return field;
+	}
+
 	/** Side-by-side parked RF + AUDIO waterfalls (Listen only). */
 	public static JSplitPane listenWaterfalls(JComponent rf, JComponent audio)
 	{
