@@ -64,6 +64,8 @@ public final class TvStationTracker
 			double dt = stepSec(t.lastUpdateMs, nowMs);
 			t.channel = hit.channel;
 			t.powerDbm = hit.powerDbm;
+			t.grade = hit.grade;
+			t.pilotExcessDb = hit.pilotExcessDb;
 			t.confidence = clamp01(t.confidence + (float) (dt * ATTACK_PER_SEC));
 			t.lastUpdateMs = nowMs;
 		}
@@ -85,7 +87,9 @@ public final class TvStationTracker
 		for (Track t : tracks.values())
 		{
 			if (t.confidence >= SHOW_AT)
-				out.add(new TvStationHit(t.channel, t.powerDbm, t.confidence));
+				out.add(new TvStationHit(t.channel, t.powerDbm, t.confidence,
+						t.grade == null ? TvChannelGrade.OCCUPIED : t.grade, "", 0, Float.NaN,
+						t.pilotExcessDb));
 		}
 		out.sort((a, b) -> Integer.compare(a.channel.fccChannel, b.channel.fccChannel));
 		return List.copyOf(out);
@@ -115,6 +119,8 @@ public final class TvStationTracker
 		TvChannel channel;
 		float powerDbm;
 		float confidence;
+		TvChannelGrade grade = TvChannelGrade.OCCUPIED;
+		float pilotExcessDb = Float.NaN;
 		long lastUpdateMs;
 	}
 }

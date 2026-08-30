@@ -24,10 +24,10 @@ One RF path. **Watching stops the sweep.** Pause still only freezes the plot. St
 - [x] HUD lock / no-lock
 - [x] Native 8VSB → MPEG-TS (`atsc_rx_*` in `libhackrf-sweep`)
 - [x] FFmpeg MPEG-2 video in the 16:9 TV-tuner preview + AC-3 on `AudioSink`
-- [x] Watch waterfall is a live IQ **VIDEO · ±8 MHz** raster (Listen-style), not a blank card
-- [x] Watch uses the same waterfall strip as Listen (VIDEO · ±8 MHz); split unchanged
+- [x] Watch waterfall is a live IQ **RF · ±8 MHz** raster (same `addListenRfFrame` path as Listen), not a blank card
+- [x] Watch dual strip matches Listen: **RF · ±8 MHz** waterfall beside **AUDIO · 0–16 kHz**; picture stays in the tuner 16:9
 - [x] Docs: usage, architecture, mcp, CHANGELOG
-- [x] 16:9 preview under the TV tuner Watch button (waterfall stays VIDEO · ±8 MHz)
+- [x] 16:9 preview under the TV tuner Watch button (waterfall stays RF · ±8 MHz | AUDIO)
 - [x] GNU Radio-compatible 16-phase RRC resampler (filter before decimation)
 - [x] GNU Radio-compatible 8-tap MMSE symbol interpolator + real-time recursive FPLL NCO
 - [x] GNU Radio long-form DC blocker + field-sync-only equalizer adaptation

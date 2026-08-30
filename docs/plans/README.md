@@ -16,6 +16,7 @@ Living implementation plans live here so later work (and agents) can pick them u
 | [nRF 2.4 GHz sniff](nrf-sniffer.md) | In progress 2026-08-24. Quick Select **BLE** 2400–2484, overlay, Nordic UART host + MCP `ble_sniff` / `ble_frames`. PCA10031 / nRF51822 identified; flash recipe in [nrf-sniffer.md](../nrf-sniffer.md#flash-recipe); HEX not written yet. |
 | [NFC park + nfc-laboratory](nfc-laboratory.md) | In progress 2026-08-23. `RadioMode.NFC`, parked 11.56 / 10 MS/s, nfc-lab frames, MCP `nfc_sniff` / `nfc_frames`. Hardware IT still open. |
 | [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; hardware IT still open. |
+| [TV channel roster](tv-channel-roster.md) | In progress 2026-08-29. Occupancy vs picture grades, Scan qualify pass, spectrum-tools list. |
 
 ## Done
 
@@ -28,4 +29,4 @@ Living implementation plans live here so later work (and agents) can pick them u
 | [Hardware integration tests](hardware-integration-tests.md) | Done; updated 2026-08-22. Gated `make test-hw` (8 ITs, including sweep queue/dataset and FM Listen→sweep resume). `make test` stays radio-free. |
 | [Java 21 + FlatLaf UI](java-21-ui.md) | Done 2026-08-18. Java 21 floor, FlatDarkLaf, library bumps. `make test` 119/119, `make test-hw` 7/7. |
 | [FM radio tuner](fm-radio-tuner.md) | Done 2026-08-22. Live mono WFM Listen plus parked-IQ→sweep resume hardware IT verified. |
-| [Operator layout](operator-layout.md) | Done 2026-08-28. Banner Quick Select + sweep range, 400 px tools column, in-view band slot. |
+| [Operator layout](operator-layout.md) | Done 2026-08-28. Spectrum tools 520 px, FM slide-rule, MCP log. |

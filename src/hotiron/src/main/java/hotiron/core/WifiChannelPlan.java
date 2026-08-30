@@ -5,19 +5,23 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * US / FCC 802.11 20 MHz channel centers for the 2.4 GHz ISM and 5 GHz U-NII
- * bands. 2.4 GHz is channels 1–11 (15.247). 5 GHz is U-NII-1 through U-NII-4
- * (15.407), including DFS channels; 12–14 and 6 GHz are not listed.
+ * US / FCC 802.11 20 MHz channel centers for 2.4 GHz ISM, 5 GHz U-NII,
+ * and 6 GHz U-NII-5…8. 2.4 GHz is channels 1–11 (15.247). 5 GHz is
+ * U-NII-1 through U-NII-4 (15.407), including DFS. 6 GHz is U-NII-5…8
+ * (15.407, 5925–7125). 12–14 are not listed.
  */
 public final class WifiChannelPlan
 {
 	public static final String BAND_24 = "2.4";
 	public static final String BAND_5 = "5";
+	public static final String BAND_6 = "6";
 
 	/** US 2.4 GHz: ch 1–11, 5 MHz spacing, 20 MHz OFDM. 1/6/11 are primary. */
 	public static final List<WifiChannel> WIFI_24;
 	/** US 5 GHz 20 MHz: UNII-1/2A/2C/3/4. */
 	public static final List<WifiChannel> WIFI_5;
+	/** US 6 GHz 20 MHz: U-NII-5…8, IEEE ch 1–233 step 4. */
+	public static final List<WifiChannel> WIFI_6;
 	public static final List<WifiChannel> ALL;
 
 	static
@@ -46,9 +50,21 @@ public final class WifiChannelPlan
 		}
 		WIFI_5 = Collections.unmodifiableList(fiveList);
 
-		List<WifiChannel> all = new ArrayList<>(two.size() + fiveList.size());
+		// 20 MHz 6 GHz: center = 5950 + 5*N, N = 1,5,…,233.
+		List<WifiChannel> sixList = new ArrayList<>();
+		for (int ch = 1; ch <= 233; ch += 4)
+		{
+			boolean primary = ch == 5 || ch == 21 || ch == 37 || ch == 53 || ch == 69 || ch == 85
+					|| ch == 101 || ch == 117 || ch == 133 || ch == 149 || ch == 165 || ch == 181
+					|| ch == 197 || ch == 213 || ch == 229;
+			sixList.add(new WifiChannel(BAND_6, ch, 5950 + 5 * ch, 20, primary));
+		}
+		WIFI_6 = Collections.unmodifiableList(sixList);
+
+		List<WifiChannel> all = new ArrayList<>(two.size() + fiveList.size() + sixList.size());
 		all.addAll(two);
 		all.addAll(fiveList);
+		all.addAll(sixList);
 		ALL = Collections.unmodifiableList(all);
 	}
 
@@ -70,6 +86,12 @@ public final class WifiChannelPlan
 	public static final double WIFI_5_OCCUPIED_END_MHZ = 5895;
 	public static final int WIFI_5_VIEW_START_MHZ = 5170;
 	public static final int WIFI_5_VIEW_END_MHZ = 5895;
+	/** Occupied 20 MHz envelope of US 6 GHz ch 1–233: 5945–7125 MHz. */
+	public static final double WIFI_6_OCCUPIED_START_MHZ = 5945;
+	public static final double WIFI_6_OCCUPIED_END_MHZ = 7125;
+	/** Legal U-NII-5…8 (5925–7125). First 20 MHz BSS is ch 1 at 5945. */
+	public static final int WIFI_6_VIEW_START_MHZ = 5925;
+	public static final int WIFI_6_VIEW_END_MHZ = 7125;
 
 	/** Channels whose 20 MHz occupancy overlaps {@code [startMHz, endMHz]}. */
 	public static List<WifiChannel> visibleOccupancy(double startMHz, double endMHz)
@@ -124,11 +146,12 @@ public final class WifiChannelPlan
 		return null;
 	}
 
-	/** True if {@code [start,end]} overlaps the US 2.4 or 5 GHz occupied envelope. */
+	/** True if {@code [start,end]} overlaps the US 2.4, 5, or 6 GHz occupied envelope. */
 	public static boolean viewIsWifi(double startMHz, double endMHz)
 	{
 		return rangesOverlap(startMHz, endMHz, WIFI_24_OCCUPIED_START_MHZ, WIFI_24_OCCUPIED_END_MHZ)
-				|| rangesOverlap(startMHz, endMHz, WIFI_5_OCCUPIED_START_MHZ, WIFI_5_OCCUPIED_END_MHZ);
+				|| rangesOverlap(startMHz, endMHz, WIFI_5_OCCUPIED_START_MHZ, WIFI_5_OCCUPIED_END_MHZ)
+				|| rangesOverlap(startMHz, endMHz, WIFI_6_OCCUPIED_START_MHZ, WIFI_6_OCCUPIED_END_MHZ);
 	}
 
 	/**

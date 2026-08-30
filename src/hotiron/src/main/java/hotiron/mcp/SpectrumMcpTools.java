@@ -142,6 +142,10 @@ public final class SpectrumMcpTools
 						"Live FM dial hits for an FM-scale view, or an empty list when zoomed out.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
+				+ tool("tv_stations",
+						"TV Seek list: occupancy vs ATSC-like vs picture/no-lock on this HackRF. picture is MPEG-2 frames; occupied is not a decoded station.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
 				+ tool("nfc_activity",
 						"Live 13.56 MHz NFC / HF-RFID classification (field, poll, HiFER/CW, A/B/F/V sidebands). Sweep classifier only. AirTags are not in this band.",
 						"{\"type\":\"object\",\"properties\":{}}")
@@ -235,6 +239,8 @@ public final class SpectrumMcpTools
 			return fmListenCall(args);
 		if ("fm_stations".equals(name))
 			return textResult(store.context().fmStationsJson(), false);
+		if ("tv_stations".equals(name))
+			return textResult(store.context().tvStationsJson(), false);
 		if ("nfc_activity".equals(name))
 			return textResult(store.nfcActivityJson(), false);
 		if ("nfc_frames".equals(name))

@@ -302,8 +302,8 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	/**
-	 * One row of parked-IQ RF (Listen ±2 MHz). Same raster as Watch VIDEO,
-	 * different banner so it is not mistaken for ATSC.
+	 * One row of parked-IQ RF as a waterfall (Listen ±2 MHz or Watch ±8 MHz).
+	 * Same scrolling raster as sweep RF; palette is the live dB window.
 	 */
 	public synchronized void addListenRfFrame(float[] db, float spanHz, double centerHz) {
 		if (db == null || db.length == 0)
@@ -336,8 +336,10 @@ public class WaterfallPlot extends JPanel {
 		float minimumValueDrawBuffer = -150;
 		Arrays.fill(drawMaxBuffer, minimumValueDrawBuffer);
 		double widthDivSize = (double) width / size;
+		double palStart = parkedRowPaletteStart(audioMode, listenRfMode, spectrumPaletteStart);
+		double palSize = parkedRowPaletteSize(audioMode, listenRfMode, spectrumPaletteSize);
 		for (int i = 0; i < size; i++) {
-			double percentagePower = normalizePower(db[i], AUDIO_PALETTE_START_DB, AUDIO_PALETTE_SIZE_DB);
+			double percentagePower = normalizePower(db[i], palStart, palSize);
 			int pixelX = clampPixelX((int) Math.round(widthDivSize * i), drawMaxBuffer.length);
 			if (percentagePower > drawMaxBuffer[pixelX])
 				drawMaxBuffer[pixelX] = (float) percentagePower;
@@ -514,6 +516,29 @@ public class WaterfallPlot extends JPanel {
 	/**
 	 * Maps a power sample onto the waterfall palette, 0 (at or below start) to 1 (at or above start+size).
 	 */
+	/**
+	 * AUDIO waterfall keeps the fixed dBFS window. Parked-IQ RF (Listen
+	 * and Watch) uses the same live power window as the RF line chart so
+	 * the brick is a waterfall, not a clipped audio-palette slab.
+	 */
+	public static double parkedRowPaletteStart(boolean audioMode, boolean listenRfMode, double spectrumStart)
+	{
+		if (listenRfMode)
+			return spectrumStart;
+		if (audioMode)
+			return AUDIO_PALETTE_START_DB;
+		return spectrumStart;
+	}
+
+	public static double parkedRowPaletteSize(boolean audioMode, boolean listenRfMode, double spectrumSize)
+	{
+		if (listenRfMode)
+			return Math.max(1, spectrumSize);
+		if (audioMode)
+			return AUDIO_PALETTE_SIZE_DB;
+		return Math.max(1, spectrumSize);
+	}
+
 	public static double normalizePower(double power, double paletteStart, double paletteSize) {
 		if (paletteSize <= 0)
 			return 0;
@@ -599,13 +624,21 @@ public class WaterfallPlot extends JPanel {
 		return "parked IQ  ·  RF  ·  ±2 MHz";
 	}
 
+	public static String modeBannerWatchRf() {
+		return "parked IQ  ·  RF  ·  ±8 MHz";
+	}
+
 	public static String modeBannerListenDual() {
 		return "parked IQ  ·  RF ±2 MHz + AUDIO 0–16 kHz";
 	}
 
+	public static String modeBannerWatchDual() {
+		return "parked IQ  ·  RF ±8 MHz + AUDIO 0–16 kHz";
+	}
+
 	private String instanceBanner() {
 		if (listenRfMode)
-			return modeBannerListenRf();
+			return videoSpanHz >= 10_000_000f ? modeBannerWatchRf() : modeBannerListenRf();
 		return modeBanner(audioMode, videoMode, nfcMode);
 	}
 

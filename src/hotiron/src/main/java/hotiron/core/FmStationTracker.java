@@ -45,12 +45,26 @@ public final class FmStationTracker
 
 	public synchronized List<FmStationHit> update(DatasetSpectrum ds, double startMHz, double endMHz)
 	{
-		return update(ds, startMHz, endMHz, clockMs.getAsLong());
+		return update(ds, startMHz, endMHz, FmChannelPlan.DETECT_MARGIN_DB, clockMs.getAsLong());
+	}
+
+	public synchronized List<FmStationHit> update(DatasetSpectrum ds, double startMHz, double endMHz,
+			float marginDb)
+	{
+		return update(ds, startMHz, endMHz, marginDb, clockMs.getAsLong());
 	}
 
 	public synchronized List<FmStationHit> update(DatasetSpectrum ds, double startMHz, double endMHz, long nowMs)
 	{
-		List<FmStationHit> raw = FmChannelPlan.detectStations(ds, startMHz, endMHz);
+		return update(ds, startMHz, endMHz, FmChannelPlan.DETECT_MARGIN_DB, nowMs);
+	}
+
+	public synchronized List<FmStationHit> update(DatasetSpectrum ds, double startMHz, double endMHz,
+			float marginDb, long nowMs)
+	{
+		float margin = marginDb > 0f ? marginDb : FmChannelPlan.DETECT_MARGIN_DB;
+		List<FmStationHit> raw = FmChannelPlan.detectStations(ds, startMHz, endMHz, margin,
+				FmChannelPlan.DETECT_HOLD_DB, List.of());
 		Set<Integer> seen = new HashSet<>();
 		for (FmStationHit hit : raw)
 		{

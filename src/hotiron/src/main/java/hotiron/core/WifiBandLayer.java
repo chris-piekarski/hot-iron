@@ -26,13 +26,19 @@ public final class WifiBandLayer
 		return axis != null && axis.usable() && 20 * axis.pxPerMHz() >= MIN_PX_PER_20MHZ_5;
 	}
 
+	public static boolean showBand6(FrequencyAxis axis)
+	{
+		return showBand5(axis);
+	}
+
 	public static List<BandMark> marks(FrequencyAxis axis)
 	{
 		if (axis == null || !axis.usable())
 			return List.of();
 		boolean show24 = showBand24(axis);
 		boolean show5 = showBand5(axis);
-		if (!show24 && !show5)
+		boolean show6 = showBand6(axis);
+		if (!show24 && !show5 && !show6)
 			return List.of();
 		List<WifiChannel> visible = new ArrayList<>();
 		for (WifiChannel ch : WifiChannelPlan.visibleOccupancy(axis.startMHz, axis.endMHz))
@@ -40,6 +46,8 @@ public final class WifiBandLayer
 			if (WifiChannelPlan.BAND_24.equals(ch.band) && show24)
 				visible.add(ch);
 			else if (WifiChannelPlan.BAND_5.equals(ch.band) && show5)
+				visible.add(ch);
+			else if (WifiChannelPlan.BAND_6.equals(ch.band) && show6)
 				visible.add(ch);
 		}
 		List<BandMark> out = new ArrayList<>();

@@ -75,6 +75,26 @@ class TvChannelPlanTest {
 		List<TvStationHit> hits = TvChannelPlan.detectStations(ds, 470, 608);
 		assertEquals(1, hits.size());
 		assertEquals(14, hits.get(0).channel.fccChannel);
+		assertEquals(TvChannelGrade.OCCUPIED, hits.get(0).grade);
+	}
+
+	@Test
+	void pilotBumpMarksAtscLikeNotPicture() {
+		DatasetSpectrum ds = new DatasetSpectrum(50_000f, 470, 608, -90f);
+		int n = ds.spectrumLength();
+		TvChannel ch14 = TvChannelPlan.findByFccChannel(14);
+		for (int i = 0; i < n; i++)
+		{
+			double mhz = ds.getFrequency(i) / 1_000_000d;
+			if (mhz >= 470 && mhz < 476)
+				ds.getSpectrumArray()[i] = -50f;
+			if (Math.abs(mhz - ch14.pilotMHz()) < 0.08)
+				ds.getSpectrumArray()[i] = -40f;
+		}
+		List<TvStationHit> hits = TvChannelPlan.detectStations(ds, 470, 608);
+		assertEquals(1, hits.size());
+		assertEquals(TvChannelGrade.ATSC_LIKE, hits.get(0).grade);
+		assertTrue(hits.get(0).pilotExcessDb >= TvChannelPlan.PILOT_EXCESS_DB);
 	}
 
 	@Test

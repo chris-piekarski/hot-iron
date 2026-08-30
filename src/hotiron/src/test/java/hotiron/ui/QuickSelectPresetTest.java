@@ -15,7 +15,7 @@ class QuickSelectPresetTest {
 
     @Test
     void everyPresetIsAValidHackrfSweepWindow() {
-        assertEquals(17, QuickSelectPreset.values().length);
+        assertEquals(23, QuickSelectPreset.values().length);
         for (QuickSelectPreset preset : QuickSelectPreset.values()) {
             assertTrue(preset.startMHz >= 1, preset.label + " below HackRF floor");
             assertTrue(preset.endMHz <= 7250, preset.label + " above selector max");
@@ -36,10 +36,16 @@ class QuickSelectPresetTest {
         assertRange(QuickSelectPreset.WIFI_2, 2402, 2472);
         assertRange(QuickSelectPreset.BLE, 2400, 2484);
         assertRange(QuickSelectPreset.WIFI_5, 5170, 5895);
+        assertRange(QuickSelectPreset.WIFI_6, 5925, 7125);
         assertRange(QuickSelectPreset.LTE_1, 1695, 2200);
         assertRange(QuickSelectPreset.LTE_2, 617, 960);
+        assertRange(QuickSelectPreset.N41, 2496, 2690);
+        assertRange(QuickSelectPreset.CBAND, 3700, 3980);
         assertRange(QuickSelectPreset.NFC, 12, 15);
         assertRange(QuickSelectPreset.FM, 88, 108);
+        assertRange(QuickSelectPreset.AIR, 118, 137);
+        assertRange(QuickSelectPreset.ADSB, 978, 1091);
+        assertRange(QuickSelectPreset.GNSS, 1559, 1610);
         assertRange(QuickSelectPreset.HF, 3, 30);
         assertRange(QuickSelectPreset.VHF, 30, 300);
         assertRange(QuickSelectPreset.UHF, 300, 3000);
@@ -54,8 +60,10 @@ class QuickSelectPresetTest {
     @Test
     void wifi5DoesNotStartInMlsAviation() {
         assertTrue(QuickSelectPreset.WIFI_5.startMHz >= 5150);
+        assertTrue(QuickSelectPreset.WIFI_6.startMHz >= 5925);
         assertTrue(QuickSelectPreset.WIFI_2.endMHz <= 2472);
         assertTrue(QuickSelectPreset.U_TV.endMHz <= 608);
+        assertTrue(QuickSelectPreset.CBAND.startMHz >= 3000);
     }
 
     @Test
@@ -67,6 +75,8 @@ class QuickSelectPresetTest {
         assertEquals(70, QuickSelectPreset.WIFI_2.endMHz - QuickSelectPreset.WIFI_2.startMHz);
         assertEquals(WifiChannelPlan.WIFI_5_VIEW_START_MHZ, QuickSelectPreset.WIFI_5.startMHz);
         assertEquals(WifiChannelPlan.WIFI_5_VIEW_END_MHZ, QuickSelectPreset.WIFI_5.endMHz);
+        assertEquals(WifiChannelPlan.WIFI_6_VIEW_START_MHZ, QuickSelectPreset.WIFI_6.startMHz);
+        assertEquals(WifiChannelPlan.WIFI_6_VIEW_END_MHZ, QuickSelectPreset.WIFI_6.endMHz);
         assertEquals(FmChannelPlan.VIEW_START_MHZ, QuickSelectPreset.FM.startMHz);
         assertEquals(FmChannelPlan.VIEW_END_MHZ, QuickSelectPreset.FM.endMHz);
     }
@@ -84,6 +94,12 @@ class QuickSelectPresetTest {
         assertEquals(30, QuickSelectPreset.HAM_70CM.endMHz - QuickSelectPreset.HAM_70CM.startMHz);
         assertEquals(26, QuickSelectPreset.HAM_33CM.endMHz - QuickSelectPreset.HAM_33CM.startMHz);
         assertEquals(138, QuickSelectPreset.U_TV.endMHz - QuickSelectPreset.U_TV.startMHz);
+        assertEquals(1200, QuickSelectPreset.WIFI_6.endMHz - QuickSelectPreset.WIFI_6.startMHz);
+        assertEquals(194, QuickSelectPreset.N41.endMHz - QuickSelectPreset.N41.startMHz);
+        assertEquals(280, QuickSelectPreset.CBAND.endMHz - QuickSelectPreset.CBAND.startMHz);
+        assertEquals(19, QuickSelectPreset.AIR.endMHz - QuickSelectPreset.AIR.startMHz);
+        assertEquals(113, QuickSelectPreset.ADSB.endMHz - QuickSelectPreset.ADSB.startMHz);
+        assertEquals(51, QuickSelectPreset.GNSS.endMHz - QuickSelectPreset.GNSS.startMHz);
     }
 
     @Test
@@ -106,6 +122,12 @@ class QuickSelectPresetTest {
         assertTrue(wide.contains(QuickSelectPreset.WIFI_2));
         assertTrue(wide.contains(QuickSelectPreset.BLE));
         assertTrue(wide.contains(QuickSelectPreset.WIFI_5));
+        assertTrue(wide.contains(QuickSelectPreset.WIFI_6));
+        assertTrue(wide.contains(QuickSelectPreset.N41));
+        assertTrue(wide.contains(QuickSelectPreset.CBAND));
+        assertTrue(wide.contains(QuickSelectPreset.AIR));
+        assertTrue(wide.contains(QuickSelectPreset.ADSB));
+        assertTrue(wide.contains(QuickSelectPreset.GNSS));
         assertTrue(wide.contains(QuickSelectPreset.LTE_1));
         assertTrue(wide.contains(QuickSelectPreset.UHF));
         assertFalse(wide.contains(QuickSelectPreset.ALL));
@@ -114,10 +136,16 @@ class QuickSelectPresetTest {
         assertTrue(uhf.contains(QuickSelectPreset.WIFI_2));
         assertTrue(uhf.contains(QuickSelectPreset.HAM_70CM));
         assertTrue(uhf.contains(QuickSelectPreset.U_TV));
+        assertTrue(uhf.contains(QuickSelectPreset.ADSB));
+        assertTrue(uhf.contains(QuickSelectPreset.GNSS));
+        assertTrue(uhf.contains(QuickSelectPreset.N41));
         assertFalse(uhf.contains(QuickSelectPreset.FM));
+        assertFalse(uhf.contains(QuickSelectPreset.CBAND));
+        assertFalse(uhf.contains(QuickSelectPreset.WIFI_6));
 
         java.util.List<QuickSelectPreset> vhf = QuickSelectPreset.visibleInView(30, 300);
         assertTrue(vhf.contains(QuickSelectPreset.FM));
+        assertTrue(vhf.contains(QuickSelectPreset.AIR));
         assertTrue(vhf.contains(QuickSelectPreset.HAM_6M));
         assertTrue(vhf.contains(QuickSelectPreset.HAM_2M));
         assertFalse(vhf.contains(QuickSelectPreset.VHF));
@@ -131,6 +159,13 @@ class QuickSelectPresetTest {
         assertEquals(QuickSelectPreset.UHF, ordered.get(ordered.size() - 1));
         assertTrue(QuickSelectPreset.HF.surveyEnvelope());
         assertFalse(QuickSelectPreset.FM.surveyEnvelope());
+        assertEquals(QuickSelectPreset.Group.AVIATION, QuickSelectPreset.AIR.group);
+        assertEquals(QuickSelectPreset.Group.AVIATION, QuickSelectPreset.ADSB.group);
+        assertEquals(QuickSelectPreset.Group.AVIATION, QuickSelectPreset.GNSS.group);
+        assertEquals(QuickSelectPreset.Group.CELLULAR, QuickSelectPreset.N41.group);
+        assertEquals(QuickSelectPreset.Group.CELLULAR, QuickSelectPreset.CBAND.group);
+        assertEquals(QuickSelectPreset.Group.ISM, QuickSelectPreset.WIFI_6.group);
+        assertEquals(3, QuickSelectPreset.inGroup(QuickSelectPreset.Group.AVIATION).size());
     }
 
     private static void assertRange(QuickSelectPreset preset, int start, int end) {

@@ -23,6 +23,8 @@ public final class FmChannelPlan
 	public static final int VIEW_END_MHZ = 108;
 	/** Peak must beat the 20th-percentile noise by this many dB. */
 	public static final float DETECT_MARGIN_DB = 8f;
+	/** Scan / Seek keep stations this far above noise (strong signals). */
+	public static final float SCAN_MARGIN_DB = 14f;
 	/** Already-seen stations stay if they remain this far above noise. */
 	public static final float DETECT_HOLD_DB = 3f;
 	public static final float NOISE_PERCENTILE = 0.20f;

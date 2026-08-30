@@ -61,6 +61,23 @@ public final class RadioIdentity
 		return serialHex.length() <= 8 ? serialHex : serialHex.substring(serialHex.length() - 8);
 	}
 
+	/** Single-line footer: {@code HackRF One  ·  SN ……  ·  FW ……}. */
+	public String statusLine()
+	{
+		if (!present)
+			return "No radio detected";
+		StringBuilder line = new StringBuilder(displayBoard());
+		String sn = shortSerial();
+		if (sn != null)
+			line.append("  ·  SN ").append(sn);
+		String fw = displayFirmware();
+		if (fw != null)
+			line.append("  ·  FW ").append(fw);
+		if (sn == null && fw == null)
+			line.append("  ·  Radio open");
+		return line.toString();
+	}
+
 	public String statusHtml()
 	{
 		if (!present)

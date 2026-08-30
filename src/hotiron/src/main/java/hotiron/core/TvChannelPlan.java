@@ -22,6 +22,10 @@ public final class TvChannelPlan
 	public static final int IQ_RATE_HZ = 16_000_000;
 	public static final float DETECT_MARGIN_DB = 8f;
 	public static final float NOISE_PERCENTILE = 0.20f;
+	/** Half-width around {@link TvChannel#pilotMHz()} for the ATSC 1.0 pilot. */
+	public static final float PILOT_HALF_MHZ = 0.10f;
+	/** Pilot minus brick-median to call a brick {@link TvChannelGrade#ATSC_LIKE}. */
+	public static final float PILOT_EXCESS_DB = 4f;
 
 	public static final List<TvChannel> CHANNELS;
 
@@ -136,14 +140,12 @@ public final class TvChannelPlan
 		float noise = FmChannelPlan.percentileInRange(ds, loHz, hiHz, NOISE_PERCENTILE);
 		if (!Float.isFinite(noise))
 			return List.of();
-		float thresh = noise + DETECT_MARGIN_DB;
 		List<TvStationHit> out = new ArrayList<>();
 		for (TvChannel ch : visibleOccupancy(startMHz, endMHz))
 		{
-			float mean = meanPowerInChannel(ds, ch);
-			if (!Float.isFinite(mean) || mean < thresh)
-				continue;
-			out.add(new TvStationHit(ch, mean));
+			TvStationHit hit = scoreBrick(ds, ch, noise);
+			if (hit != null)
+				out.add(hit);
 		}
 		return Collections.unmodifiableList(out);
 	}
@@ -161,18 +163,48 @@ public final class TvChannelPlan
 				Math.max(0, (int) Math.floor(NOISE_PERCENTILE * (sorted.length - 1))))];
 		if (!Float.isFinite(noise))
 			return List.of();
-		float thresh = noise + DETECT_MARGIN_DB;
 		double start = mhz[0];
 		double end = mhz[mhz.length - 1];
 		List<TvStationHit> out = new ArrayList<>();
 		for (TvChannel ch : visibleOccupancy(start, end))
 		{
-			float mean = meanPowerInChannel(mhz, dbfs, ch);
-			if (!Float.isFinite(mean) || mean < thresh)
-				continue;
-			out.add(new TvStationHit(ch, mean));
+			TvStationHit hit = scoreBrick(mhz, dbfs, ch, noise);
+			if (hit != null)
+				out.add(hit);
 		}
 		return Collections.unmodifiableList(out);
+	}
+
+	/**
+	 * Occupied 6 MHz brick; {@link TvChannelGrade#ATSC_LIKE} when the
+	 * ATSC 1.0 pilot sits above the brick floor. Not a picture proof.
+	 */
+	public static TvStationHit scoreBrick(DatasetSpectrum ds, TvChannel ch, float noise)
+	{
+		if (ds == null || ch == null)
+			return null;
+		float mean = meanPowerInChannel(ds, ch);
+		if (!Float.isFinite(mean) || !Float.isFinite(noise) || mean < noise + DETECT_MARGIN_DB)
+			return null;
+		float excess = pilotExcessDb(ds, ch);
+		TvChannelGrade grade = Float.isFinite(excess) && excess >= PILOT_EXCESS_DB
+				? TvChannelGrade.ATSC_LIKE
+				: TvChannelGrade.OCCUPIED;
+		return new TvStationHit(ch, mean, 1f, grade, "", 0, Float.NaN, excess);
+	}
+
+	public static TvStationHit scoreBrick(float[] mhz, float[] dbfs, TvChannel ch, float noise)
+	{
+		if (ch == null)
+			return null;
+		float mean = meanPowerInChannel(mhz, dbfs, ch);
+		if (!Float.isFinite(mean) || !Float.isFinite(noise) || mean < noise + DETECT_MARGIN_DB)
+			return null;
+		float excess = pilotExcessDb(mhz, dbfs, ch);
+		TvChannelGrade grade = Float.isFinite(excess) && excess >= PILOT_EXCESS_DB
+				? TvChannelGrade.ATSC_LIKE
+				: TvChannelGrade.OCCUPIED;
+		return new TvStationHit(ch, mean, 1f, grade, "", 0, Float.NaN, excess);
 	}
 
 	static float meanPowerInChannel(DatasetSpectrum ds, TvChannel ch)
@@ -218,6 +250,78 @@ public final class TvChannelPlan
 		if (c == 0)
 			return Float.NaN;
 		return (float) (sum / c);
+	}
+
+	static float pilotExcessDb(DatasetSpectrum ds, TvChannel ch)
+	{
+		if (ds == null || ch == null)
+			return Float.NaN;
+		long loHz = Math.round(ch.lowMHz * 1_000_000d);
+		long hiHz = Math.round(ch.highMHz() * 1_000_000d);
+		double pLo = (ch.pilotMHz() - PILOT_HALF_MHZ) * 1_000_000d;
+		double pHi = (ch.pilotMHz() + PILOT_HALF_MHZ) * 1_000_000d;
+		double pilotSum = 0;
+		int pilotN = 0;
+		int restN = 0;
+		int n = ds.spectrumLength();
+		float[] rest = new float[n];
+		for (int i = 0; i < n; i++)
+		{
+			double fHz = ds.getFrequency(i);
+			if (fHz < loHz || fHz >= hiHz)
+				continue;
+			float p = ds.getPower(i);
+			if (p <= SpectrumPowerScale.EMPTY_CEILING || !Float.isFinite(p))
+				continue;
+			if (fHz >= pLo && fHz < pHi)
+			{
+				pilotSum += p;
+				pilotN++;
+			}
+			else
+				rest[restN++] = p;
+		}
+		return excess(pilotSum, pilotN, rest, restN);
+	}
+
+	static float pilotExcessDb(float[] mhz, float[] dbfs, TvChannel ch)
+	{
+		if (mhz == null || dbfs == null || ch == null)
+			return Float.NaN;
+		double pLo = ch.pilotMHz() - PILOT_HALF_MHZ;
+		double pHi = ch.pilotMHz() + PILOT_HALF_MHZ;
+		double pilotSum = 0;
+		int pilotN = 0;
+		int restN = 0;
+		int n = Math.min(mhz.length, dbfs.length);
+		float[] rest = new float[n];
+		for (int i = 0; i < n; i++)
+		{
+			if (mhz[i] < ch.lowMHz || mhz[i] >= ch.highMHz())
+				continue;
+			float p = dbfs[i];
+			if (!Float.isFinite(p) || p <= SpectrumPowerScale.EMPTY_CEILING)
+				continue;
+			if (mhz[i] >= pLo && mhz[i] < pHi)
+			{
+				pilotSum += p;
+				pilotN++;
+			}
+			else
+				rest[restN++] = p;
+		}
+		return excess(pilotSum, pilotN, rest, restN);
+	}
+
+	private static float excess(double pilotSum, int pilotN, float[] rest, int restN)
+	{
+		if (pilotN == 0 || restN == 0)
+			return Float.NaN;
+		float[] copy = new float[restN];
+		System.arraycopy(rest, 0, copy, 0, restN);
+		java.util.Arrays.sort(copy);
+		float med = copy[restN / 2];
+		return (float) (pilotSum / pilotN) - med;
 	}
 
 	private static int indexOfFcc(int fccChannel)

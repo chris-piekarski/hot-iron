@@ -114,7 +114,10 @@ public interface HackRFSettings {
 	/** Sweep the FM band and pin those hits as the Seek list. */
 	public void startFmScan();
 
-	/** Sweep VHF then UHF TV and pin those hits as the Seek list. */
+	/**
+	 * Sweep VHF then UHF TV (occupancy), then qualify the strongest UHF
+	 * ATSC-like bricks by parking Watch. Pin those hits as the Seek list.
+	 */
 	public void startTvScan();
 
 	/** Dwell 12–15 MHz then 27.12 / 40.68 MHz NFC harmonics. */
@@ -140,6 +143,12 @@ public interface HackRFSettings {
 	public ModelValueInt getTvChannel();
 
 	public ModelValue<java.util.List<TvStationHit>> getDetectedTvStations();
+
+	/** True while Scan is parking Watch to prove MPEG-2 frames. */
+	public ModelValueBoolean isTvQualifying();
+
+	/** FCC channel currently being qualified, or 0. */
+	public ModelValueInt getTvQualifyChannel();
 
 	/** USB serials currently visible to libhackrf (may be empty). */
 	public java.util.List<String> listRadioSerials();

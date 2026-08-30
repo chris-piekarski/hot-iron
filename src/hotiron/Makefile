@@ -304,11 +304,10 @@ udev: ## Install persistent udev rules (sudo once)
 	@$(abspath $(CURDIR)/../../scripts/hackrf-udev-install.sh)
 
 ##@ Run & Dev
-start: build ## Build if needed, then start the Linux app
+start: build ## Build if needed, then start the Linux app (MCP on 127.0.0.1:8765)
 	./build/hotiron/hotiron.sh
 
-mcp: build ## Start the app and listen for MCP on 127.0.0.1:8765
-	./build/hotiron/hotiron.sh --mcp
+mcp: start ## Alias for start. MCP listens on 127.0.0.1:8765 unless --no-mcp
 
 build: all ## Alias for the default build target
 

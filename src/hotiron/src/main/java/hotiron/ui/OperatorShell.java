@@ -6,9 +6,8 @@ import java.awt.Dimension;
 
 import javax.swing.JComponent;
 import javax.swing.JFrame;
-import javax.swing.JScrollPane;
+import javax.swing.JPanel;
 import javax.swing.JSplitPane;
-import javax.swing.ScrollPaneConstants;
 
 /**
  * Frame chrome: banner north, plots center, fixed-width tools east,
@@ -51,7 +50,7 @@ public final class OperatorShell
 		return field;
 	}
 
-	/** Side-by-side parked RF + AUDIO waterfalls (Listen only). */
+	/** Side-by-side parked RF + AUDIO waterfalls (Listen and Watch). */
 	public static JSplitPane listenWaterfalls(JComponent rf, JComponent audio)
 	{
 		JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, rf, audio);
@@ -80,17 +79,21 @@ public final class OperatorShell
 			split.setDividerLocation(loc);
 	}
 
-	public static JScrollPane toolsColumn(JComponent tools)
+	/**
+	 * Fixed-width east column. The band slot inside {@code tools} scrolls
+	 * above the MCP log; this wrapper does not steal that scrollbar.
+	 */
+	public static JComponent toolsColumn(JComponent tools)
 	{
-		JScrollPane scroll = new JScrollPane(tools);
-		scroll.setBorder(null);
-		scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-		scroll.getVerticalScrollBar().setUnitIncrement(16);
-		Dimension col = OperatorLayout.toolsColumn(200);
-		scroll.setMinimumSize(col);
-		scroll.setPreferredSize(col);
-		return scroll;
+		JPanel col = new JPanel(new BorderLayout());
+		col.setOpaque(true);
+		if (tools != null)
+			col.add(tools, BorderLayout.CENTER);
+		Dimension size = OperatorLayout.toolsColumn(200);
+		col.setMinimumSize(size);
+		col.setPreferredSize(new Dimension(size.width, size.height));
+		col.setMaximumSize(new Dimension(size.width, Integer.MAX_VALUE));
+		return col;
 	}
 
 	public static void place(Container root, JComponent banner, JComponent plots, JComponent tools,

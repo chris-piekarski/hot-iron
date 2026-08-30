@@ -5,8 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * Tune is one FCC TV channel (skipping plan gaps). Seek is the next
- * occupied 6 MHz brick.
+ * Tune is one FCC TV channel (skipping plan gaps). Seek prefers
+ * {@link TvChannelGrade#PICTURE}, then ATSC-like occupancy.
  */
 public final class TvStationDial
 {
@@ -22,7 +22,7 @@ public final class TvStationDial
 	public static TvChannel seek(List<TvStationHit> hits, int fccChannel, int direction)
 	{
 		int dir = direction < 0 ? -1 : 1;
-		List<TvChannel> stations = uniqueSorted(hits);
+		List<TvChannel> stations = seekOrder(hits);
 		if (stations.isEmpty())
 			return tune(fccChannel, dir);
 		int idx = indexOf(stations, fccChannel);
@@ -47,7 +47,8 @@ public final class TvStationDial
 
 	/**
 	 * Keep remembered stations outside the live IQ window; replace the
-	 * in-window list with what the parked FFT just saw.
+	 * in-window occupancy with the parked FFT, without demoting
+	 * picture / no-lock memory.
 	 */
 	public static List<TvStationHit> mergeLive(List<TvStationHit> remembered, List<TvStationHit> live,
 			double liveStartMHz, double liveEndMHz)
@@ -59,7 +60,7 @@ public final class TvStationDial
 			{
 				if (hit == null || hit.channel == null)
 					continue;
-				if (!hit.channel.occupancyOverlaps(liveStartMHz, liveEndMHz))
+				if (!hit.channel.occupancyOverlaps(liveStartMHz, liveEndMHz) || hit.grade.watchMemory())
 					byFcc.put(hit.channel.fccChannel, hit);
 			}
 		}
@@ -69,7 +70,9 @@ public final class TvStationDial
 			{
 				if (hit == null || hit.channel == null)
 					continue;
-				byFcc.put(hit.channel.fccChannel, hit);
+				int id = hit.channel.fccChannel;
+				TvStationHit prev = byFcc.get(id);
+				byFcc.put(id, prev == null ? hit : TvStationHit.merge(prev, hit));
 			}
 		}
 		List<TvStationHit> out = new ArrayList<TvStationHit>(byFcc.values());
@@ -77,42 +80,123 @@ public final class TvStationDial
 		return List.copyOf(out);
 	}
 
+	public static List<TvStationHit> keepWatchMemory(List<TvStationHit> hits)
+	{
+		List<TvStationHit> out = new ArrayList<>();
+		if (hits == null)
+			return List.of();
+		for (TvStationHit hit : hits)
+		{
+			if (hit != null && hit.channel != null && hit.grade.watchMemory())
+				out.add(hit);
+		}
+		return List.copyOf(out);
+	}
+
+	public static List<TvStationHit> stamp(List<TvStationHit> hits, int fccChannel, TvChannelGrade grade,
+			String stage, int frames, float snrDb)
+	{
+		TvChannel ch = TvChannelPlan.findByFccChannel(fccChannel);
+		if (ch == null)
+			return hits == null ? List.of() : hits;
+		LinkedHashMap<Integer, TvStationHit> byFcc = new LinkedHashMap<Integer, TvStationHit>();
+		if (hits != null)
+		{
+			for (TvStationHit hit : hits)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				byFcc.put(hit.channel.fccChannel, hit);
+			}
+		}
+		TvStationHit prev = byFcc.get(fccChannel);
+		if (prev == null)
+			prev = new TvStationHit(ch, Float.NaN, 1f, TvChannelGrade.OCCUPIED, "", 0, Float.NaN,
+					Float.NaN);
+		byFcc.put(fccChannel, prev.stamp(grade, stage, frames, snrDb));
+		List<TvStationHit> out = new ArrayList<TvStationHit>(byFcc.values());
+		out.sort((a, b) -> Integer.compare(a.channel.fccChannel, b.channel.fccChannel));
+		return List.copyOf(out);
+	}
+
 	public static boolean sameChannels(List<TvStationHit> a, List<TvStationHit> b)
 	{
-		List<TvChannel> aa = uniqueSorted(a);
-		List<TvChannel> bb = uniqueSorted(b);
+		List<TvStationHit> aa = uniqueHits(a);
+		List<TvStationHit> bb = uniqueHits(b);
 		if (aa.size() != bb.size())
 			return false;
 		for (int i = 0; i < aa.size(); i++)
 		{
-			if (aa.get(i).fccChannel != bb.get(i).fccChannel)
+			TvStationHit x = aa.get(i);
+			TvStationHit y = bb.get(i);
+			if (x.channel.fccChannel != y.channel.fccChannel || x.grade != y.grade || x.frames != y.frames)
+				return false;
+			if (!x.stage.equals(y.stage))
 				return false;
 		}
 		return true;
 	}
 
+	public static int pictureCount(List<TvStationHit> hits)
+	{
+		int n = 0;
+		if (hits == null)
+			return 0;
+		for (TvStationHit hit : hits)
+		{
+			if (hit != null && hit.grade == TvChannelGrade.PICTURE)
+				n++;
+		}
+		return n;
+	}
+
 	static List<TvChannel> uniqueSorted(List<TvStationHit> hits)
 	{
 		List<TvChannel> out = new ArrayList<TvChannel>();
-		if (hits == null)
-			return out;
-		for (TvStationHit hit : hits)
+		for (TvStationHit hit : uniqueHits(hits))
+			out.add(hit.channel);
+		return out;
+	}
+
+	static List<TvChannel> seekOrder(List<TvStationHit> hits)
+	{
+		List<TvStationHit> usable = new ArrayList<>();
+		if (hits != null)
 		{
-			if (hit == null || hit.channel == null)
-				continue;
-			boolean seen = false;
-			for (TvChannel c : out)
+			for (TvStationHit hit : uniqueHits(hits))
 			{
-				if (c.fccChannel == hit.channel.fccChannel)
-				{
-					seen = true;
-					break;
-				}
+				if (hit.grade != TvChannelGrade.NO_LOCK)
+					usable.add(hit);
 			}
-			if (!seen)
-				out.add(hit.channel);
 		}
-		out.sort((a, b) -> Integer.compare(a.fccChannel, b.fccChannel));
+		if (usable.isEmpty())
+			usable.addAll(uniqueHits(hits));
+		usable.sort((a, b) -> {
+			int g = Integer.compare(a.grade.seekRank(), b.grade.seekRank());
+			if (g != 0)
+				return g;
+			return Integer.compare(a.channel.fccChannel, b.channel.fccChannel);
+		});
+		List<TvChannel> out = new ArrayList<TvChannel>(usable.size());
+		for (TvStationHit hit : usable)
+			out.add(hit.channel);
+		return out;
+	}
+
+	static List<TvStationHit> uniqueHits(List<TvStationHit> hits)
+	{
+		LinkedHashMap<Integer, TvStationHit> byFcc = new LinkedHashMap<>();
+		if (hits != null)
+		{
+			for (TvStationHit hit : hits)
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				byFcc.putIfAbsent(hit.channel.fccChannel, hit);
+			}
+		}
+		List<TvStationHit> out = new ArrayList<TvStationHit>(byFcc.values());
+		out.sort((a, b) -> Integer.compare(a.channel.fccChannel, b.channel.fccChannel));
 		return out;
 	}
 

@@ -1,6 +1,6 @@
 # Operator layout: banner + fixed tools column
 
-**Status:** done 2026-08-28. Banner Quick Select + sweep range, 400 px tools column, in-view band slot, ~55/45 plot split.
+**Status:** done 2026-08-28, width 520 px 2026-08-29. Banner Quick Select + sweep range, Spectrum tools column, in-view band slot, MCP log, ~55/45 plot split.
 
 ## Goal
 
@@ -9,8 +9,9 @@ Make the window operator-friendly: plots a bit smaller, tools wider, no flicker 
 ## Checklist
 
 - [x] `OperatorNavBanner`: grouped Quick Select + compact sweep range, frame NORTH
-- [x] Tools column fixed 400 px (`HackRFSweepSettingsUI.TOOLS_WIDTH`); do not pack on range change
-- [x] Locked-height band slot; FM/TV side-by-side when both apply (V-TV)
+- [x] Tools column fixed 520 px (`OperatorLayout.TOOLS_WIDTH`); do not pack on range change
+- [x] FM tuner digital readout + Simpson SIG needle (live audio while Listening) + 1970s slide-rule; MCP log under the slot
+- [x] One band face at a time (Quick Select / parked); slot fills the column and scrolls above the MCP log
 - [x] `BandContext` in `core`: in-view policy + parked/scan pin + hysteresis
 - [x] Auto gain / LNA / VGA always visible under the slot
 - [x] Spectrum/waterfall split ~0.55
@@ -21,6 +22,7 @@ Make the window operator-friendly: plots a bit smaller, tools wider, no flicker 
 - [x] Survey banner: larger QS chips on `SpectrumSurveyAxis` (HackRF 1–7250 MHz log) over a chirp wave (`SpectrumWavePainter` / `SurveyChipLayout`)
 - [x] Sweep-range digits above `◀ − + ▶` in the column immediately right of the wave; gold window grows/shrinks with − / +
 - [x] Listen: top RF line chart, bottom RF ±2 MHz waterfall | AUDIO 0–16 kHz (same parked IQ; no second USB)
+- [x] Watch: same dual-strip approach, RF ±8 MHz waterfall | AUDIO 0–16 kHz (MPEG-2 stays in the 16:9 tuner)
 
 ## How to add a band tool
 

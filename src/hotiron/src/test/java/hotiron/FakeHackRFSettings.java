@@ -292,6 +292,16 @@ public class FakeHackRFSettings implements HackRFSettings {
 	}
 
 	@Override
+	public ModelValueBoolean isTvQualifying() {
+		return inner.isTvQualifying();
+	}
+
+	@Override
+	public ModelValueInt getTvQualifyChannel() {
+		return inner.getTvQualifyChannel();
+	}
+
+	@Override
 	public List<String> listRadioSerials() {
 		return inner.listRadioSerials();
 	}

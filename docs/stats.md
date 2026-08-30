@@ -2,7 +2,7 @@
 
 # Repository stats
 
-Refreshed **2026-08-23 17:13 UTC** from `cdeab5b` on `master` (last commit 2026-08-23 01:53:05 -0600).
+Refreshed **2026-08-29 06:13 UTC** from `2e4067c` on `master` (last commit 2026-08-28 16:28:46 -0600).
 
 Regenerate:
 
@@ -22,47 +22,47 @@ Vendor trees (`src/hotiron/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{lib,fec,s
 | Java `--release` | 21 |
 | Host SDK pin | `v2026.01.3` |
 | Minimum firmware | `2024.02.1` |
-| Quick Select presets | 16 |
+| Quick Select presets | 29 |
 | USA allocation rows | 574 |
-| Git commits on this branch | 120 |
-| First-party lines (all counted trees) | 37019 |
+| Git commits on this branch | 124 |
+| First-party lines (all counted trees) | 43356 |
 
 ```mermaid
 pie showData
     title First-party physical lines
-    "Java main" : 21052
-    "Java test" : 9792
-    "Docs" : 2296
-    "Scripts + first-party C/C++" : 3879
+    "Java main" : 25303
+    "Java test" : 11495
+    "Docs" : 2676
+    "Scripts + first-party C/C++" : 3882
 ```
 
 ## Java by area
 
-Production (`src/main/java`): **129** files, **21052** lines.
+Production (`src/main/java`): **155** files, **25303** lines.
 
 | Package | Files | Lines |
 |---|---:|---:|
-| `hotiron/core` | 77 | 11240 |
-| `hotiron/ui` | 31 | 4482 |
-| `hotiron/mcp` | 7 | 2244 |
-| `hotiron` | 2 | 1939 |
-| `hotiron/nativebridge` | 5 | 525 |
+| `hotiron/core` | 88 | 13026 |
+| `hotiron/ui` | 46 | 6459 |
+| `hotiron/mcp` | 7 | 2478 |
+| `hotiron` | 2 | 2157 |
+| `hotiron/nativebridge` | 5 | 561 |
 | `hotiron/capture` | 2 | 251 |
 | `hotiron/mvc` | 2 | 249 |
 | `hotiron/core/jfc` | 2 | 61 |
 | `hotiron/jna` | 1 | 61 |
 
-Tests (`src/test/java`): **106** files, **9792** lines.
+Tests (`src/test/java`): **124** files, **11495** lines.
 
 | Package | Files | Lines |
 |---|---:|---:|
-| `hotiron/core` | 59 | 5883 |
-| `hotiron/ui` | 24 | 1711 |
-| `hotiron/mcp` | 6 | 790 |
-| `hotiron/hw` | 6 | 621 |
-| `hotiron` | 3 | 390 |
+| `hotiron/core` | 68 | 6753 |
+| `hotiron/ui` | 32 | 2376 |
+| `hotiron/mcp` | 6 | 856 |
+| `hotiron/hw` | 7 | 691 |
+| `hotiron` | 3 | 417 |
 | `hotiron/mvc` | 2 | 186 |
-| `hotiron/nativebridge` | 2 | 101 |
+| `hotiron/nativebridge` | 2 | 106 |
 | `hotiron/core/jfc` | 3 | 74 |
 | `hotiron/capture` | 1 | 36 |
 
@@ -70,10 +70,10 @@ Tests (`src/test/java`): **106** files, **9792** lines.
 
 | Kind | Count |
 |---|---:|
-| Unit test classes (`@Test`, not `*IT`) | 99 |
-| `@Test` methods (unit + hardware IT) | 526 |
-| Hardware IT classes (`*IT`) | 1 |
-| `@HardwareTest` methods | 8 |
+| Unit test classes (`@Test`, not `*IT`) | 116 |
+| `@Test` methods (unit + hardware IT) | 615 |
+| Hardware IT classes (`*IT`) | 2 |
+| `@HardwareTest` methods | 9 |
 | Support types (fakes, annotations, helpers) | 6 |
 
 `make test` runs the unit classes only. `make test-hw` runs the hardware IT and skips if no radio is enumerated.
@@ -82,8 +82,8 @@ Tests (`src/test/java`): **106** files, **9792** lines.
 
 | Tree | Files | Lines |
 |---|---:|---:|
-| Docs (`docs/`) | 21 | 2296 |
-| Scripts (`scripts/`) | 9 | 1341 |
+| Docs (`docs/`) | 24 | 2676 |
+| Scripts (`scripts/`) | 9 | 1344 |
 | First-party C/C++ / patch (`src-c/`) | 18 | 2538 |
 
 ## Build surface
@@ -95,7 +95,7 @@ Tests (`src/test/java`): **106** files, **9792** lines.
 
 ## Diagrams
 
-19 Mermaid fences in first-party Markdown. Check they still parse with `make mermaid`.
+20 Mermaid fences in first-party Markdown. Check they still parse with `make mermaid`.
 
 | File | Type |
 |---|---|
@@ -116,13 +116,14 @@ Tests (`src/test/java`): **106** files, **9792** lines.
 | `docs/hardware.md` | `flowchart` |
 | `docs/nfc.md` | `flowchart` |
 | `docs/nfc.md` | `flowchart` |
+| `docs/nrf-sniffer.md` | `flowchart` |
 | `docs/operator.md` | `flowchart` |
 | `docs/plans/nfc-laboratory.md` | `flowchart` |
 
 ```mermaid
 pie showData
     title Mermaid diagrams by type
-    "flowchart" : 15
+    "flowchart" : 16
     "classDiagram" : 2
     "sequenceDiagram" : 2
 ```
@@ -131,13 +132,13 @@ pie showData
 
 | File | Lines |
 |---|---:|
-| `src/hotiron/src/main/java/hotiron/HotIron.java` | 1932 |
+| `src/hotiron/src/main/java/hotiron/HotIron.java` | 2150 |
+| `src/hotiron/src/main/java/hotiron/ui/WaterfallPlot.java` | 819 |
 | `src/hotiron/src/main/java/hotiron/core/TvWatchEngine.java` | 761 |
-| `src/hotiron/src/main/java/hotiron/ui/HackRFSweepSettingsUI.java` | 737 |
-| `src/hotiron/src/main/java/hotiron/ui/WaterfallPlot.java` | 701 |
+| `src/hotiron/src/main/java/hotiron/mcp/SpectrumSnapshotStore.java` | 697 |
 | `src/hotiron/src/main/java/hotiron/core/MpegTsPlayer.java` | 620 |
-| `src/hotiron/src/main/java/hotiron/mcp/SpectrumSnapshotStore.java` | 589 |
-| `src/hotiron/src/main/java/hotiron/core/AnalyzerSettings.java` | 519 |
+| `src/hotiron/src/main/java/hotiron/ui/HackRFSweepSettingsUI.java` | 576 |
+| `src/hotiron/src/main/java/hotiron/core/AnalyzerSettings.java` | 557 |
 | `src/hotiron/src/main/java/hotiron/mcp/SpectrumSnapshot.java` | 488 |
 
 `HotIron.java` is the Swing shell. Prefer growing `core/` and tests rather than this class.
@@ -146,7 +147,7 @@ pie showData
 
 | Author | Commits |
 |---|---:|
-| Chris Piekarski | 40 |
+| Chris Piekarski | 44 |
 | Pavol Sakac | 27 |
 | selabnayr | 24 |
 | _sekki | 12 |

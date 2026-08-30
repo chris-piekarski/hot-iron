@@ -129,6 +129,9 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValue<List<TvStationHit>> detectedTvStations = new ModelValue<List<TvStationHit>>(
 			"Detected TV", List.of());
 	private final ModelValue<BandScan> bandScan = new ModelValue<BandScan>("Band scan", BandScan.OFF);
+	private final ModelValueBoolean tvQualifying = new ModelValueBoolean("TV qualify", false);
+	private final ModelValueInt tvQualifyChannel = new ModelValueInt("TV qualify ch", 0, 1, 0,
+			TvChannelPlan.LAST_FCC_CHANNEL);
 
 	public void setHardware(Hardware hardware)
 	{
@@ -428,9 +431,23 @@ public final class AnalyzerSettings implements HackRFSettings
 		return bandScan;
 	}
 
+	@Override
+	public ModelValueBoolean isTvQualifying()
+	{
+		return tvQualifying;
+	}
+
+	@Override
+	public ModelValueInt getTvQualifyChannel()
+	{
+		return tvQualifyChannel;
+	}
+
 	private void beginScan(BandScan scan, FrequencyRange window)
 	{
 		stopScan();
+		tvQualifying.setValue(false);
+		tvQualifyChannel.setValue(0);
 		boolean parked = Boolean.TRUE.equals(listening.getValue());
 		boolean released = Boolean.TRUE.equals(radioReleased.getValue());
 		listening.setValue(false);
@@ -438,7 +455,7 @@ public final class AnalyzerSettings implements HackRFSettings
 		if (scan == BandScan.FM)
 			detectedFmStations.setValue(List.of());
 		else if (scan == BandScan.TV)
-			detectedTvStations.setValue(List.of());
+			detectedTvStations.setValue(TvStationDial.keepWatchMemory(detectedTvStations.getValue()));
 		if (!window.equals(frequency.getValue()))
 			frequency.setValue(window);
 		bandScan.setValue(scan);

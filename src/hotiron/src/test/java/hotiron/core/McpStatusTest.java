@@ -11,9 +11,9 @@ class McpStatusTest {
 	@Test
 	void offTellsTheOperatorHowToStart() {
 		assertTrue(McpStatus.OFF.statusHtml().contains("MCP  off"));
-		assertTrue(McpStatus.OFF.statusHtml().contains("make mcp"));
+		assertTrue(McpStatus.OFF.statusHtml().contains("--no-mcp"));
 		assertEquals("MCP  off", McpStatus.OFF.barText());
-		assertTrue(McpStatus.OFF.tooltip(0L).contains("--mcp"));
+		assertTrue(McpStatus.OFF.tooltip(0L).contains("--no-mcp"));
 	}
 
 	@Test

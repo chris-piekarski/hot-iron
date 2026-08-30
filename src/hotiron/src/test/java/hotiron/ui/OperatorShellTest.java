@@ -8,7 +8,6 @@ import java.awt.Component;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 
 import org.junit.jupiter.api.Test;
@@ -26,11 +25,11 @@ class OperatorShellTest
 		OperatorShell.place(root, banner, plots, tools, status);
 		assertSame(banner, borderChild(root, BorderLayout.NORTH));
 		assertSame(plots, borderChild(root, BorderLayout.CENTER));
-		assertTrue(borderChild(root, BorderLayout.EAST) instanceof JScrollPane);
+		Component east = borderChild(root, BorderLayout.EAST);
+		assertTrue(east instanceof JPanel);
 		assertSame(status, borderChild(root, BorderLayout.SOUTH));
 		assertEquals(OperatorLayout.MIN_FRAME_WIDTH, root.getMinimumSize().width);
-		assertEquals(OperatorLayout.TOOLS_WIDTH,
-				((JScrollPane) borderChild(root, BorderLayout.EAST)).getPreferredSize().width);
+		assertEquals(OperatorLayout.TOOLS_WIDTH, east.getPreferredSize().width);
 	}
 
 	@Test

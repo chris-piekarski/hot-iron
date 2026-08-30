@@ -158,29 +158,20 @@ public class HotIron {
 
 	public static void main(String[] args) throws IOException {
 		//		System.out.println(new File("").getAbsolutePath());
-		boolean mcpTcp = false;
-		boolean mcpStdio = false;
-		int mcpPort = hotiron.mcp.SpectrumMcpServer.DEFAULT_PORT;
 		if (args != null) {
 			for (int i = 0; i < args.length; i++) {
-				String a = args[i];
-				if ("capturegif".equals(a))
+				if ("capturegif".equals(args[i]))
 					captureGIF = true;
-				else if ("--mcp".equals(a) || "mcp".equals(a))
-					mcpTcp = true;
-				else if ("--mcp-stdio".equals(a))
-					mcpStdio = true;
-				else if (a != null && a.startsWith("--mcp-port="))
-					mcpPort = Integer.parseInt(a.substring("--mcp-port=".length()));
 			}
 		}
+		hotiron.mcp.McpFlags mcp = hotiron.mcp.McpFlags.parse(args);
 		//		try { Thread.sleep(20000); System.out.println("Started..."); } catch (InterruptedException e) {}
 
 		hotiron.ui.AnalyzerLookAndFeel.install();
 		HotIron app = new HotIron();
-		if (mcpTcp)
-			app.startMcpTcp(mcpPort);
-		if (mcpStdio)
+		if (mcp.tcp)
+			app.startMcpTcp(mcp.port);
+		if (mcp.stdio)
 			app.startMcpStdio();
 	}
 
@@ -219,6 +210,9 @@ public class HotIron {
 	private volatile NfcActivity					nfcActivity							= NfcActivity.quiet();
 	private volatile List<hotiron.core.TvStationHit> tvStations = List.of();
 	private final StationDetectSink stationDetect = new StationDetectSink();
+	private hotiron.core.TvQualifySession tvQualify;
+	private long tvWatchEnteredMs;
+	private boolean advancingTvQualify;
 	private final hotiron.core.BandScanSession scanSession = new hotiron.core.BandScanSession();
 	private SweepLiveLoop sweepLive;
 	private final hotiron.core.TvWatchEngine tvEngine = new hotiron.core.TvWatchEngine();
@@ -423,8 +417,7 @@ public class HotIron {
 		uiFrame.setTitle("HotIron");
 		((javax.swing.JComponent) uiFrame.getContentPane()).setBorder(BorderFactory.createEmptyBorder(8, 8, 16, 8));
 		uiFrame.setResizable(true);
-		sweepStatusBar = new SweepStatusBar();
-		sweepStatusBar.installAutoSweep(settingsPanel.autoSweepCheckbox());
+		sweepStatusBar = settingsPanel.footer();
 		settings.getMcpStatus().addListener(s -> javax.swing.SwingUtilities.invokeLater(() -> sweepStatusBar.setMcp(s)));
 		sweepStatusBar.setMcp(settings.getMcpStatus().getValue());
 		OperatorShell.place(uiFrame, settingsPanel.navBanner(), splitPanePanel, settingsPanel, sweepStatusBar);
@@ -756,7 +749,10 @@ public class HotIron {
 
 				@Override
 				public void finishScan() {
+					hotiron.core.BandScan kind = settings.getBandScan().getValue();
 					settings.stopScan();
+					if (kind == hotiron.core.BandScan.TV)
+						maybeStartTvQualify();
 				}
 			});
 		}
@@ -1386,6 +1382,10 @@ public class HotIron {
 	private void setupParameterObservers() {
 		radio.bind();
 		settings.getFrequency().addListener(this::cancelScanIfRangeLeft);
+		settings.isTvQualifying().addListener(on -> {
+			if (!Boolean.TRUE.equals(on) && tvQualify != null)
+				tvQualify.cancel();
+		});
 		settings.getBandScan().addListener(scan -> {
 			if (scan == hotiron.core.BandScan.OFF)
 			{
@@ -1421,6 +1421,9 @@ public class HotIron {
 			snapshotStore.publishContext(settings, fmStations, 0);
 			if (chartPanel != null)
 				SwingUtilities.invokeLater(chartPanel::repaint);
+			if (!advancingTvQualify && tvQualify != null && tvQualify.active()
+					&& tvQualify.currentFcc() != settings.getTvChannel().getValue())
+				abortTvQualifyKeepWatch();
 		});
 		settings.getListenVolume().addListener(v -> {
 			fmEngine.setVolume(v);
@@ -1550,41 +1553,44 @@ public class HotIron {
 		hotiron.core.TvChannel ch = hotiron.core.TvChannelPlan
 				.clamp(settings.getTvChannel().getValue());
 		long loHz = ch.centerHz();
-		waterfallPlot.setVideoMode(true, loHz);
+		enterWatchWaterfalls(loHz);
 		tvEngine.setVolume(settings.getListenVolume().getValue());
-		final long[] lastRowMs = { 0L };
+		final long[] lastRfMs = { 0L };
 		final long[] lastSnapshotMs = { 0L };
-		final long[] lastChartMs = { 0L };
 		final long[] lastStationMs = { 0L };
 		tvEngine.setSpectrumListener(row -> {
 			long now = System.currentTimeMillis();
-			if (now - lastRowMs[0] < 33)
+			if (now - lastRfMs[0] < 50)
 				return;
-			lastRowMs[0] = now;
+			lastRfMs[0] = now;
+			TvWatchSpectrum snap = TvWatchSpectrum.fromRow(now, ch.fccChannel, loHz,
+					tvEngine.iqSpectrum().sampleRate(), tvEngine.iqSpectrum().binHz(), row);
 			if (now - lastSnapshotMs[0] >= 100)
 			{
 				lastSnapshotMs[0] = now;
-				TvWatchSpectrum snap = TvWatchSpectrum.fromRow(now, ch.fccChannel, loHz,
-						tvEngine.iqSpectrum().sampleRate(), tvEngine.iqSpectrum().binHz(), row);
 				snapshotStore.publishTvWatchSpectrum(snap);
-				if (now - lastChartMs[0] >= 200)
-				{
-					lastChartMs[0] = now;
-					showTvRfSpectrum(snap);
-				}
-				if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
-				{
-					lastStationMs[0] = now;
-					java.util.List<hotiron.core.TvStationHit> live =
-							hotiron.core.TvChannelPlan.detectStations(snap.mhz, snap.dbfs);
-					java.util.List<hotiron.core.TvStationHit> merged = hotiron.core.TvStationDial.mergeLive(
-							settings.getDetectedTvStations().getValue(), live,
-							snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
-					tvStations = merged;
-					StationDetectSink.publishTv(settings, merged);
-				}
 			}
-			waterfallPlot.addVideoFrame(row, hotiron.core.IqSpectrum.DISPLAY_HZ, loHz);
+			showTvRfSpectrum(snap);
+			pushParkedRfWaterfall(row, tvEngine.iqSpectrum().sampleRate(), loHz);
+			if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
+			{
+				lastStationMs[0] = now;
+				java.util.List<hotiron.core.TvStationHit> live =
+						hotiron.core.TvChannelPlan.detectStations(snap.mhz, snap.dbfs);
+				java.util.List<hotiron.core.TvStationHit> merged = hotiron.core.TvStationDial.mergeLive(
+						settings.getDetectedTvStations().getValue(), live,
+						snap.mhz[0], snap.mhz[snap.mhz.length - 1]);
+				tvStations = merged;
+				StationDetectSink.publishTv(settings, merged);
+			}
+		});
+		final long[] lastAudioMs = { 0L };
+		tvEngine.setAudioSpectrumListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastAudioMs[0] < 33)
+				return;
+			lastAudioMs[0] = now;
+			waterfallPlot.addAudioFrame(row, AudioSpectrum.DISPLAY_HZ);
 			waterfallPlot.repaint();
 			float peak = -150f;
 			for (int i = 0; i < row.length; i++)
@@ -1596,8 +1602,8 @@ public class HotIron {
 			final int bins = row.length;
 			SwingUtilities.invokeLater(() -> {
 				if (sweepStatusBar != null && settings.isListening().getValue())
-					sweepStatusBar.setSweepInfo(hotiron.core.IqSpectrum.BIN_HZ, bins,
-							waterfallPlot.getFps(), Double.valueOf(peakDb), false, true);
+					sweepStatusBar.setWatchDualInfo(AudioSpectrum.BIN_HZ, bins, waterfallPlot.getFps(),
+							Double.valueOf(peakDb));
 			});
 		});
 		AudioSink sink = AudioSinks.openPlayback();
@@ -1614,15 +1620,20 @@ public class HotIron {
 		final boolean amp = TvWatchGainPolicy.antennaLna(settings.isAutoGain().getValue(),
 				settings.getAntennaLNA().getValue());
 		final long watchArmedMs = System.currentTimeMillis();
+		tvWatchEnteredMs = watchArmedMs;
 		tvEngine.start(this::queueTvPreviewFrame, sink);
 		javax.swing.Timer hud = new javax.swing.Timer(200, e -> {
 			boolean locked = tvEngine.locked();
 			float snr = tvEngine.snrDb();
+			int frames = tvEngine.frames();
 			snapshotStore.publishWatchStats(locked, snr, tvEngine.packets());
 			snapshotStore.publishWatchDebug(tvEngine.debug());
+			if (frames > 0)
+				stampTv(ch.fccChannel, hotiron.core.TvChannelGrade.PICTURE, "picture", frames, snr);
+			advanceTvQualify(ch.fccChannel, frames, snr);
 			if (settingsPanel != null)
 				settingsPanel.tvTunerPanel().setPreviewStatus(WatchHud.text(ch.fccChannel, locked, snr,
-						tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames()));
+						tvEngine.packets(), frames, tvEngine.previewFrames()));
 			if (chartPanel != null)
 				chartPanel.repaint();
 			if (settings.isAutoGain().getValue())
@@ -1659,17 +1670,114 @@ public class HotIron {
 					settings.getAntennaPowerEnable().getValue(), amp);
 		} finally {
 			hud.stop();
+			if (tvQualify == null || !tvQualify.active())
+			{
+				int frames = tvEngine.frames();
+				if (frames == 0 && System.currentTimeMillis()
+						- tvWatchEnteredMs >= hotiron.core.TvQualifySession.MIN_WATCH_MS_FOR_NO_LOCK)
+					stampTv(ch.fccChannel, hotiron.core.TvChannelGrade.NO_LOCK, tvEngine.debug().stage(),
+							0, tvEngine.snrDb());
+			}
 			tvEngine.setSpectrumListener(null);
+			tvEngine.setAudioSpectrumListener(null);
 			tvEngine.stop();
 			pendingTvFrame.set(null);
 			snapshotStore.publishTvWatchSpectrum(TvWatchSpectrum.empty());
-			waterfallPlot.setVideoMode(false, 0);
+			leaveWatchWaterfalls();
 			if (chart != null)
 				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
 						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
 			if (settingsPanel != null)
 				SwingUtilities.invokeLater(() -> settingsPanel.tvTunerPanel().setWatching(false));
 		}
+	}
+
+	private void stampTv(int fcc, hotiron.core.TvChannelGrade grade, String stage, int frames, float snrDb)
+	{
+		java.util.List<hotiron.core.TvStationHit> cur = settings.getDetectedTvStations().getValue();
+		java.util.List<hotiron.core.TvStationHit> next = hotiron.core.TvStationDial.stamp(cur, fcc, grade,
+				stage, frames, snrDb);
+		tvStations = next;
+		StationDetectSink.publishTv(settings, next);
+	}
+
+	private void maybeStartTvQualify()
+	{
+		java.util.List<Integer> queue = hotiron.core.TvQualifySession.queue(settings.getDetectedTvStations()
+				.getValue());
+		if (queue.isEmpty())
+			return;
+		SwingUtilities.invokeLater(() -> {
+			if (Boolean.TRUE.equals(settings.isListening().getValue()))
+				return;
+			tvQualify = new hotiron.core.TvQualifySession(queue);
+			tvQualify.start(System.currentTimeMillis());
+			int fcc = tvQualify.currentFcc();
+			settings.isTvQualifying().setValue(true);
+			settings.getTvQualifyChannel().setValue(fcc);
+			advancingTvQualify = true;
+			try
+			{
+				if (settings.getTvChannel().getValue() != fcc)
+					settings.getTvChannel().setValue(fcc);
+			}
+			finally
+			{
+				advancingTvQualify = false;
+			}
+			settings.startWatch();
+		});
+	}
+
+	private void advanceTvQualify(int fcc, int frames, float snrDb)
+	{
+		hotiron.core.TvQualifySession q = tvQualify;
+		if (q == null || !q.active() || q.currentFcc() != fcc)
+			return;
+		if (!q.shouldAdvance(System.currentTimeMillis(), frames))
+			return;
+		if (frames == 0)
+			stampTv(fcc, hotiron.core.TvChannelGrade.NO_LOCK, tvEngine.debug().stage(), 0, snrDb);
+		long now = System.currentTimeMillis();
+		if (q.advance(now))
+		{
+			int next = q.currentFcc();
+			settings.getTvQualifyChannel().setValue(next);
+			advancingTvQualify = true;
+			try
+			{
+				settings.getTvChannel().setValue(next);
+			}
+			finally
+			{
+				advancingTvQualify = false;
+			}
+		}
+		else
+			finishTvQualify();
+	}
+
+	private void abortTvQualifyKeepWatch()
+	{
+		if (tvQualify != null)
+			tvQualify.cancel();
+		tvQualify = null;
+		if (Boolean.TRUE.equals(settings.isTvQualifying().getValue()))
+			settings.isTvQualifying().setValue(false);
+		settings.getTvQualifyChannel().setValue(0);
+	}
+
+	private void finishTvQualify()
+	{
+		if (tvQualify != null)
+			tvQualify.cancel();
+		tvQualify = null;
+		if (Boolean.TRUE.equals(settings.isTvQualifying().getValue()))
+			settings.isTvQualifying().setValue(false);
+		settings.getTvQualifyChannel().setValue(0);
+		if (Boolean.TRUE.equals(settings.isListening().getValue())
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.TV)
+			settings.stopListen();
 	}
 
 	private void showFmRfSpectrum(FmListenSpectrum snap) {
@@ -1696,9 +1804,31 @@ public class HotIron {
 	}
 
 	/**
+	 * Same scrolling RF waterfall for Listen ±2 MHz and Watch ±8 MHz.
+	 * Always map through the live (or default −100…+20) dB window — never
+	 * the audio palette, and never the leftover sweep −90…−25 scale that
+	 * clips an ATSC brick into a slab.
+	 */
+	private void pushParkedRfWaterfall(float[] row, float sampleRateHz, long centerHz)
+	{
+		if (listenRfWaterfall == null || row == null || row.length == 0)
+			return;
+		double lo = SpectrumPowerScale.DEFAULT_LOW;
+		double hi = SpectrumPowerScale.DEFAULT_HIGH;
+		if (powerScale != null)
+		{
+			lo = powerScale.lowDb;
+			hi = powerScale.highDb;
+		}
+		listenRfWaterfall.applyPowerWindow(lo, hi);
+		listenRfWaterfall.addListenRfFrame(row, sampleRateHz, centerHz);
+		listenRfWaterfall.repaint();
+	}
+
+	/**
 	 * Parked-IQ FFT uses the same peak half-life, persistence overlay, and
-	 * snapshot-history ring as the wideband sweep. Listen also paints that
-	 * FFT into a side-by-side RF waterfall next to AUDIO.
+	 * snapshot-history ring as the wideband sweep. Listen and Watch also
+	 * paint that FFT into a side-by-side RF waterfall next to AUDIO.
 	 */
 	private void paintParkedRf(float[] mhz, float[] dbfs, float binHz, java.util.function.BooleanSupplier stillLive) {
 		if (mhz == null || dbfs == null || mhz.length == 0 || mhz.length != dbfs.length)
@@ -1766,15 +1896,33 @@ public class HotIron {
 
 	private void enterListenWaterfalls(long captureCenterHz)
 	{
+		enterDualWaterfalls(captureCenterHz, WfmDemodulator.IQ_RATE_HZ, true);
+	}
+
+	private void enterWatchWaterfalls(long loHz)
+	{
+		enterDualWaterfalls(loHz, hotiron.core.TvChannelPlan.IQ_RATE_HZ, true);
+	}
+
+	private void enterDualWaterfalls(long centerHz, float spanHz, boolean audioRight)
+	{
 		runOnEdt(() -> {
 			listenDualWaterfalls = true;
+			powerScale = null;
 			if (waterfallPlot != null)
 			{
 				waterfallPlot.setAlignToChart(false);
-				waterfallPlot.setAudioMode(true);
+				if (audioRight)
+					waterfallPlot.setAudioMode(true);
+				else
+					waterfallPlot.setVideoMode(true, centerHz);
 			}
 			if (listenRfWaterfall != null)
-				listenRfWaterfall.setListenRfMode(true, captureCenterHz, WfmDemodulator.IQ_RATE_HZ);
+			{
+				listenRfWaterfall.setListenRfMode(true, centerHz, spanHz);
+				listenRfWaterfall.applyPowerWindow(SpectrumPowerScale.DEFAULT_LOW,
+						SpectrumPowerScale.DEFAULT_HIGH);
+			}
 			listenWaterfalls = OperatorShell.listenWaterfalls(listenRfWaterfall, waterfallPlot);
 			OperatorShell.showBottom(splitPane, listenWaterfalls);
 			int w = listenWaterfalls.getWidth();
@@ -1789,11 +1937,22 @@ public class HotIron {
 
 	private void leaveListenWaterfalls()
 	{
+		leaveDualWaterfalls();
+	}
+
+	private void leaveWatchWaterfalls()
+	{
+		leaveDualWaterfalls();
+	}
+
+	private void leaveDualWaterfalls()
+	{
 		runOnEdt(() -> {
 			listenDualWaterfalls = false;
 			if (waterfallPlot != null)
 			{
 				waterfallPlot.setAudioMode(false);
+				waterfallPlot.setVideoMode(false, 0);
 				waterfallPlot.setAlignToChart(true);
 			}
 			if (listenRfWaterfall != null)
@@ -1826,12 +1985,7 @@ public class HotIron {
 					fmEngine.rfSpectrum().sampleRate(), fmEngine.rfSpectrum().binHz(), row);
 			snapshotStore.publishFmListenSpectrum(snap);
 			showFmRfSpectrum(snap);
-			if (listenRfWaterfall != null)
-			{
-				listenRfWaterfall.addListenRfFrame(row, fmEngine.rfSpectrum().sampleRate(),
-						captureCenterHz);
-				listenRfWaterfall.repaint();
-			}
+			pushParkedRfWaterfall(row, fmEngine.rfSpectrum().sampleRate(), captureCenterHz);
 			if (!snap.isEmpty() && now - lastStationMs[0] >= 200)
 			{
 				lastStationMs[0] = now;
@@ -1843,6 +1997,10 @@ public class HotIron {
 				StationDetectSink.publishFm(settings, merged);
 			}
 		});
+		fmEngine.setLevelListener(level -> SwingUtilities.invokeLater(() -> {
+			if (settingsPanel != null)
+				settingsPanel.setFmSignalLevel((float) level);
+		}));
 		fmEngine.setSpectrumListener(row -> {
 			long now = System.currentTimeMillis();
 			if (now - lastRowMs[0] < 33)
@@ -1889,6 +2047,7 @@ public class HotIron {
 		} finally {
 			fmEngine.setRfSpectrumListener(null);
 			fmEngine.setSpectrumListener(null);
+			fmEngine.setLevelListener(null);
 			fmEngine.stop();
 			snapshotStore.publishFmListenSpectrum(FmListenSpectrum.empty());
 			leaveListenWaterfalls();

@@ -47,6 +47,18 @@ class FmStationDialTest {
 	}
 
 	@Test
+	void strongestKeepsStationsNearThePeak() {
+		List<FmStationHit> hits = List.of(
+				new FmStationHit(FmChannelPlan.nearest(88.1), -70f),
+				new FmStationHit(FmChannelPlan.nearest(97.3), -30f),
+				new FmStationHit(FmChannelPlan.nearest(101.1), -35f));
+		List<FmStationHit> strong = FmStationDial.strongest(hits);
+		assertEquals(2, strong.size());
+		assertEquals(101100, FmStationDial.seek(hits, 97300, +1).centerKHz);
+		assertEquals(97300, FmStationDial.seek(hits, 101100, -1).centerKHz);
+	}
+
+	@Test
 	void emptyDetectionsStepTheUsRaster() {
 		assertEquals(97500, FmStationDial.seek(List.of(), 97300, +1).centerKHz);
 		assertEquals(97100, FmStationDial.seek(List.of(), 97300, -1).centerKHz);

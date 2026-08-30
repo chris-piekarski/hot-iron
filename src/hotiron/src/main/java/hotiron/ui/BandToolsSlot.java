@@ -1,30 +1,34 @@
 package hotiron.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.GridLayout;
-import java.util.ArrayList;
-import java.util.List;
+import java.awt.Rectangle;
 
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 
 import hotiron.core.BandContext;
-import net.miginfocom.swing.MigLayout;
+import hotiron.core.BandToolKind;
 
 /**
- * Fixed-size host for band faces. Applies a {@link BandContext} by
- * showing every registered tool that qualifies. One visible tool fills
- * the slot; several sit in a row. Column width and slot height never
- * follow the spectrum.
+ * Host for one band face at a time. Fills the column between the
+ * Spectrum tools title and the MCP log; the selected tool stacks
+ * vertically and scrolls if it is taller than that space.
  */
 public final class BandToolsSlot extends JPanel
 {
 	private static final long serialVersionUID = 1L;
 
-	private final List<BandTool> tools;
+	private final java.util.List<BandTool> tools;
 	private final JComponent idle;
+	private final FillHost host;
+	private final JScrollPane scroll;
 	private BandContext shown = BandContext.none();
 
 	public BandToolsSlot(BandTool... tools)
@@ -36,7 +40,7 @@ public final class BandToolsSlot extends JPanel
 	{
 		AnalyzerLookAndFeel.install();
 		this.idle = idle == null ? defaultIdle() : idle;
-		this.tools = new ArrayList<BandTool>();
+		this.tools = new java.util.ArrayList<BandTool>();
 		if (tools != null)
 		{
 			for (BandTool tool : tools)
@@ -45,6 +49,14 @@ public final class BandToolsSlot extends JPanel
 					this.tools.add(tool);
 			}
 		}
+		host = new FillHost();
+		scroll = new JScrollPane(host);
+		scroll.setBorder(null);
+		scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+		scroll.getVerticalScrollBar().setUnitIncrement(16);
+		setLayout(new BorderLayout());
+		add(scroll, BorderLayout.CENTER);
 		lockSize();
 		apply(BandContext.none());
 	}
@@ -52,32 +64,25 @@ public final class BandToolsSlot extends JPanel
 	public void apply(BandContext next)
 	{
 		BandContext ctx = next == null ? BandContext.none() : next;
-		if (ctx.equals(shown) && getComponentCount() > 0)
+		BandToolKind face = ctx.face();
+		if (ctx.equals(shown) && host.getComponentCount() > 0)
 			return;
 		shown = ctx;
-		List<JComponent> visible = new ArrayList<JComponent>();
-		for (BandTool tool : tools)
+		JComponent view = null;
+		if (face != null)
 		{
-			if (ctx.shows(tool.kind))
-				visible.add(tool.view);
+			for (BandTool tool : tools)
+			{
+				if (tool.kind == face)
+				{
+					view = tool.view;
+					break;
+				}
+			}
 		}
-		removeAll();
-		if (visible.isEmpty())
-		{
-			setLayout(new MigLayout("insets 0, fill", "[grow,fill]", "[grow]"));
-			add(idle, "grow");
-		}
-		else if (visible.size() == 1)
-		{
-			setLayout(new MigLayout("insets 0, fill", "[grow,fill]", "[grow]"));
-			add(visible.get(0), "grow");
-		}
-		else
-		{
-			setLayout(new GridLayout(1, visible.size(), 4, 0));
-			for (JComponent view : visible)
-				add(view);
-		}
+		host.removeAll();
+		host.setLayout(new BorderLayout());
+		host.add(view == null ? idle : view, BorderLayout.CENTER);
 		lockSize();
 		revalidate();
 		repaint();
@@ -90,23 +95,70 @@ public final class BandToolsSlot extends JPanel
 
 	public boolean hosts(JComponent view)
 	{
-		return view != null && view.getParent() == this;
+		return view != null && view.getParent() == host;
 	}
 
 	private void lockSize()
 	{
-		Dimension size = OperatorLayout.bandSlot();
-		setPreferredSize(size);
-		setMinimumSize(size);
-		setMaximumSize(new Dimension(Integer.MAX_VALUE, OperatorLayout.BAND_SLOT_HEIGHT));
+		Dimension pref = OperatorLayout.bandSlot();
+		setPreferredSize(pref);
+		setMinimumSize(new Dimension(120, 120));
+		setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 	}
 
 	static JLabel defaultIdle()
 	{
 		JLabel idle = new JLabel(
-				"<html><center>No band tools for this view.<br>Zoom to FM, V-TV, U-TV, NFC, or BLE.</center></html>",
+				"<html><center>Spectrum tools<br>Pick FM, V-TV, U-TV, NFC, or BLE.</center></html>",
 				SwingConstants.CENTER);
 		idle.setEnabled(false);
 		return idle;
+	}
+
+	/**
+	 * Track viewport width (and height when the face is shorter) so the
+	 * selected tool uses the whole slot; scroll only when it overflows.
+	 */
+	static final class FillHost extends JPanel implements Scrollable
+	{
+		private static final long serialVersionUID = 1L;
+
+		FillHost()
+		{
+			setLayout(new BorderLayout());
+			setOpaque(false);
+		}
+
+		@Override
+		public Dimension getPreferredScrollableViewportSize()
+		{
+			return getPreferredSize();
+		}
+
+		@Override
+		public int getScrollableUnitIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return 16;
+		}
+
+		@Override
+		public int getScrollableBlockIncrement(Rectangle visible, int orientation, int direction)
+		{
+			return Math.max(80, visible.height - 16);
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportWidth()
+		{
+			return true;
+		}
+
+		@Override
+		public boolean getScrollableTracksViewportHeight()
+		{
+			if (getParent() instanceof JViewport viewport)
+				return getPreferredSize().height <= viewport.getExtentSize().height;
+			return true;
+		}
 	}
 }

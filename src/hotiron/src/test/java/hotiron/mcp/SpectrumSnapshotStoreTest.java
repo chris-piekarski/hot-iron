@@ -14,6 +14,9 @@ import hotiron.core.FmChannelPlan;
 import hotiron.core.FmStationHit;
 import hotiron.core.FrequencyRange;
 import hotiron.core.RadioIdentity;
+import hotiron.core.TvChannelGrade;
+import hotiron.core.TvChannelPlan;
+import hotiron.core.TvStationHit;
 
 class SpectrumSnapshotStoreTest {
 
@@ -96,6 +99,13 @@ class SpectrumSnapshotStoreTest {
 		settings.getFrequency().setValue(new FrequencyRange(88, 108));
 		store.publishContext(settings, List.of(hit), 12.5);
 		assertTrue(store.context().fmStationsJson().contains("97.3"));
+
+		settings.getDetectedTvStations().setValue(List.of(new TvStationHit(
+				TvChannelPlan.findByFccChannel(33), -35f, 1f, TvChannelGrade.PICTURE, "picture", 9, 12f,
+				6f)));
+		store.publishContext(settings, List.of(hit), 12.5);
+		assertTrue(store.context().tvStationsJson().contains("\"channel\":33"));
+		assertTrue(store.context().tvStationsJson().contains("picture"));
 	}
 
 	@Test

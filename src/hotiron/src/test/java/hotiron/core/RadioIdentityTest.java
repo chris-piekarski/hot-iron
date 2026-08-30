@@ -10,6 +10,7 @@ class RadioIdentityTest {
 	void absentCopyIsOperatorFriendly() {
 		assertFalse(RadioIdentity.ABSENT.present);
 		assertEquals("No radio detected", RadioIdentity.ABSENT.displayBoard());
+		assertEquals("No radio detected", RadioIdentity.ABSENT.statusLine());
 		assertTrue(RadioIdentity.ABSENT.statusHtml().contains("No radio detected"));
 		assertTrue(RadioIdentity.ABSENT.statusHtml().contains("USB"));
 		assertTrue(RadioIdentity.ABSENT.tooltip(false).toLowerCase().contains("usb"));
@@ -25,6 +26,7 @@ class RadioIdentityTest {
 		assertTrue(id.statusHtml().contains("HackRF One"));
 		assertTrue(id.statusHtml().contains("SN e5f60708"));
 		assertTrue(id.statusHtml().contains("FW 2026.01.3"));
+		assertEquals("HackRF One  ·  SN e5f60708  ·  FW 2026.01.3", id.statusLine());
 		assertTrue(id.tooltip(true).contains("Sweep running"));
 		assertTrue(id.tooltip(true).contains("0000000000000000a1b2c3d4e5f60708"));
 		assertTrue(id.tooltip(true).contains("1.16"));
@@ -43,6 +45,7 @@ class RadioIdentityTest {
 		RadioIdentity id = RadioIdentity.of("  ", null, null, null);
 		assertEquals("HackRF", id.displayBoard());
 		assertTrue(id.statusHtml().contains("Radio open"));
+		assertTrue(id.statusLine().contains("Radio open"));
 	}
 
 	@Test

@@ -333,6 +333,7 @@ public final class SpectrumSnapshot
 		public final boolean autoGain;
 		public final boolean autoSweep;
 		public final List<FmHit> fmStations;
+		public final List<TvHit> tvStations;
 		public final String radioMode;
 		public final int listenKHz;
 		public final int tvChannel;
@@ -341,7 +342,7 @@ public final class SpectrumSnapshot
 				String firmware, String usbApi, boolean present, int radioStartMHz, int radioEndMHz, int radioFftBinHz,
 				int samples, int lnaGain, int vgaGain, boolean antennaPower, boolean antennaLna, boolean clkout,
 				String selectedSerial, boolean peaks, boolean autoScale, boolean autoGain, boolean autoSweep,
-				List<FmHit> fmStations, String radioMode, int listenKHz, int tvChannel)
+				List<FmHit> fmStations, List<TvHit> tvStations, String radioMode, int listenKHz, int tvChannel)
 		{
 			this.paused = paused;
 			this.released = released;
@@ -366,6 +367,7 @@ public final class SpectrumSnapshot
 			this.autoGain = autoGain;
 			this.autoSweep = autoSweep;
 			this.fmStations = fmStations == null ? List.of() : List.copyOf(fmStations);
+			this.tvStations = tvStations == null ? List.of() : List.copyOf(tvStations);
 			this.radioMode = radioMode == null || radioMode.isEmpty() ? "sweep" : radioMode;
 			this.listenKHz = listenKHz;
 			this.tvChannel = tvChannel;
@@ -430,6 +432,31 @@ public final class SpectrumSnapshot
 			sb.append(']');
 			return sb.toString();
 		}
+
+		public String tvStationsJson()
+		{
+			StringBuilder sb = new StringBuilder(64 + tvStations.size() * 80);
+			sb.append('[');
+			for (int i = 0; i < tvStations.size(); i++)
+			{
+				if (i > 0)
+					sb.append(',');
+				TvHit h = tvStations.get(i);
+				sb.append('{');
+				Json.appendKey(sb, "channel").append(h.channel).append(',');
+				Json.appendKey(sb, "mhz").append(Json.num(h.mhz)).append(',');
+				Json.appendKey(sb, "grade").append(Json.quote(h.grade)).append(',');
+				Json.appendKey(sb, "dbm").append(Json.num(h.dbm)).append(',');
+				Json.appendKey(sb, "confidence").append(Json.num(h.confidence)).append(',');
+				Json.appendKey(sb, "stage").append(Json.quote(h.stage)).append(',');
+				Json.appendKey(sb, "frames").append(h.frames).append(',');
+				Json.appendKey(sb, "snrDb").append(Json.num(h.snrDb)).append(',');
+				Json.appendKey(sb, "pilotExcessDb").append(Json.num(h.pilotExcessDb));
+				sb.append('}');
+			}
+			sb.append(']');
+			return sb.toString();
+		}
 	}
 
 	public static final class FmHit
@@ -445,6 +472,33 @@ public final class SpectrumSnapshot
 			this.mhz = mhz;
 			this.dbm = dbm;
 			this.confidence = confidence;
+		}
+	}
+
+	public static final class TvHit
+	{
+		public final int channel;
+		public final float mhz;
+		public final String grade;
+		public final float dbm;
+		public final float confidence;
+		public final String stage;
+		public final int frames;
+		public final float snrDb;
+		public final float pilotExcessDb;
+
+		public TvHit(int channel, float mhz, String grade, float dbm, float confidence, String stage,
+				int frames, float snrDb, float pilotExcessDb)
+		{
+			this.channel = channel;
+			this.mhz = mhz;
+			this.grade = grade == null ? "occupied" : grade;
+			this.dbm = dbm;
+			this.confidence = confidence;
+			this.stage = stage == null ? "" : stage;
+			this.frames = frames;
+			this.snrDb = snrDb;
+			this.pilotExcessDb = pilotExcessDb;
 		}
 	}
 

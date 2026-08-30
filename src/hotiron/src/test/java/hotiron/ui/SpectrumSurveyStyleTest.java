@@ -21,6 +21,12 @@ class SpectrumSurveyStyleTest
 		assertTrue(chroma(hf) > 40, "HF must be blue, not gray");
 		assertTrue(chroma(vhf) > 40, "VHF must be teal, not gray");
 		assertTrue(chroma(uhf) > 40, "UHF must be copper, not gray");
+		Color air = SpectrumSurveyStyle.color(QuickSelectPreset.AIR);
+		Color ism = SpectrumSurveyStyle.color(QuickSelectPreset.WIFI_2);
+		Color cell = SpectrumSurveyStyle.color(QuickSelectPreset.N41);
+		assertNotEquals(air, ism);
+		assertNotEquals(air, cell);
+		assertTrue(chroma(air) > 40, "Air must not be survey gray");
 	}
 
 	@Test

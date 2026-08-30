@@ -11,7 +11,7 @@ make help          # Explore all targets
 make deps          # Install all required packages (Ubuntu/Debian)
 make build         # Full build (natives + JAR + release zip)
 make start         # Build (if needed) + run the Linux app
-make mcp           # GUI + MCP for AI agents (127.0.0.1:8765) — see docs/agents.md
+make start         # GUI + MCP on 127.0.0.1:8765 — see docs/agents.md. --no-mcp to disable.
 ```
 
 This is the easiest path on Ubuntu/Debian.

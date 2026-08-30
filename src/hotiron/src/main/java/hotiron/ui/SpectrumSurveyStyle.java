@@ -13,6 +13,7 @@ public final class SpectrumSurveyStyle
 	static final Color BROADCAST = new Color(255, 186, 64);
 	static final Color ISM = new Color(80, 196, 230);
 	static final Color CELLULAR = new Color(188, 132, 255);
+	static final Color AVIATION = new Color(150, 176, 255);
 	static final Color HAM = new Color(96, 210, 130);
 	static final Color SURVEY = new Color(186, 186, 190);
 	static final Color HF = new Color(72, 148, 255);
@@ -76,6 +77,8 @@ public final class SpectrumSurveyStyle
 			return ISM;
 		case CELLULAR:
 			return CELLULAR;
+		case AVIATION:
+			return AVIATION;
 		case HAM:
 			return HAM;
 		case SURVEY:

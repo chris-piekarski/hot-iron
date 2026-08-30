@@ -5,9 +5,10 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /**
- * Which band tools belong on the operator column for the current view.
- * Policy per tool is {@link BandToolKind}; this type is only the set of
- * kinds that currently qualify. Parked Listen/Watch/Sniff and an
+ * Which band face belongs on the operator column. Policy per tool is
+ * {@link BandToolKind}. The live {@link #of(HackRFSettings)} path keeps
+ * <strong>one</strong> kind: a parked/scan pin, else the best in-view
+ * fit (so V-TV is TV, FM is FM). Parked Listen/Watch/Sniff and an
  * in-progress Scan pin their tool even when the sweep window would not.
  */
 public final class BandContext
@@ -50,18 +51,45 @@ public final class BandContext
 	public static BandContext of(FrequencyRange view, boolean parked, ListenService service,
 			boolean bleSniffing, BandScan scan)
 	{
-		EnumSet<BandToolKind> set = EnumSet.noneOf(BandToolKind.class);
 		for (BandToolKind kind : BandToolKind.values())
 		{
-			if (kind.qualifies(view, parked, service, bleSniffing, scan))
-				set.add(kind);
+			if (kind.pinned(parked, service, bleSniffing, scan))
+				return of(kind);
 		}
-		return new BandContext(set);
+		BandToolKind best = null;
+		double bestFit = 0;
+		for (BandToolKind kind : BandToolKind.values())
+		{
+			if (!kind.inView(view))
+				continue;
+			double fit = kind.viewFit(view);
+			if (fit > bestFit)
+			{
+				bestFit = fit;
+				best = kind;
+			}
+		}
+		return best == null ? none() : of(best);
 	}
 
 	public boolean shows(BandToolKind kind)
 	{
 		return kind != null && kinds.contains(kind);
+	}
+
+	/** The single face to put in the slot, or {@code null} when idle. */
+	public BandToolKind face()
+	{
+		if (kinds.isEmpty())
+			return null;
+		if (kinds.contains(BandToolKind.TV) && kinds.contains(BandToolKind.FM))
+			return BandToolKind.TV;
+		for (BandToolKind kind : BandToolKind.values())
+		{
+			if (kinds.contains(kind))
+				return kind;
+		}
+		return null;
 	}
 
 	public boolean any()
@@ -75,21 +103,19 @@ public final class BandContext
 	}
 
 	/**
-	 * Keep a tool on screen across a small pan/zoom that would otherwise
-	 * flicker at the span threshold. Hidden as soon as {@link BandToolKind#hold}
+	 * Keep the previous face across a small pan/zoom that would otherwise
+	 * flicker at the span threshold. A Quick Select that fits a different
+	 * kind still switches. Hidden as soon as {@link BandToolKind#hold}
 	 * is false.
 	 */
 	public BandContext stabilize(BandContext previous, FrequencyRange view)
 	{
 		if (previous == null || view == null)
 			return this;
-		EnumSet<BandToolKind> set = EnumSet.copyOf(kinds);
-		for (BandToolKind kind : BandToolKind.values())
-		{
-			if (previous.shows(kind) && !shows(kind) && kind.hold(view))
-				set.add(kind);
-		}
-		return new BandContext(set);
+		BandToolKind was = previous.face();
+		if (was != null && !shows(was) && was.hold(view) && !was.inView(view))
+			return of(was);
+		return this;
 	}
 
 	public static double overlapMHz(double a0, double a1, double b0, double b1)

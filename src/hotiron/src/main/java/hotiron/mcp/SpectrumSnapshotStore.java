@@ -16,9 +16,11 @@ import hotiron.core.MpegTsProbe;
 import hotiron.core.RadioIdentity;
 import hotiron.core.RadioMode;
 import hotiron.core.SweepConfig;
+import hotiron.core.TvStationHit;
 import hotiron.core.TvWatchDebug;
 import hotiron.mcp.SpectrumSnapshot.FmHit;
 import hotiron.mcp.SpectrumSnapshot.RadioContext;
+import hotiron.mcp.SpectrumSnapshot.TvHit;
 
 /**
  * Latest sweep plus a short summary ring. Writers are the processing
@@ -66,7 +68,7 @@ public final class SpectrumSnapshotStore
 		this.ringCap = Math.max(1, ringCap);
 		this.ring = new ArrayDeque<RingEntry>(this.ringCap);
 		this.context = new RadioContext(false, false, 0, null, null, null, null, false, 0, 0, 0, 0, 0, 0, false, false,
-				false, "", false, false, false, false, List.of(), "sweep", 0, 0);
+				false, "", false, false, false, false, List.of(), List.of(), "sweep", 0, 0);
 	}
 
 	public boolean shouldPublish(long nowMs)
@@ -123,11 +125,22 @@ public final class SpectrumSnapshotStore
 		boolean autoSweep = settings.isAutoSweep() != null && Boolean.TRUE.equals(settings.isAutoSweep().getValue());
 		int listenKHz = settings.getListenKHz() != null ? settings.getListenKHz().getValue() : 0;
 		int tvChannel = settings.getTvChannel() != null ? settings.getTvChannel().getValue() : 0;
+		List<TvHit> tv = new ArrayList<TvHit>();
+		if (settings.getDetectedTvStations() != null && settings.getDetectedTvStations().getValue() != null)
+		{
+			for (TvStationHit hit : settings.getDetectedTvStations().getValue())
+			{
+				if (hit == null || hit.channel == null)
+					continue;
+				tv.add(new TvHit(hit.channel.fccChannel, (float) hit.channel.centerMHz(), hit.grade.jsonName(),
+						hit.powerDbm, hit.confidence, hit.stage, hit.frames, hit.snrDb, hit.pilotExcessDb));
+			}
+		}
 		String mode = RadioMode.of(settings).jsonName();
 		RadioContext next = new RadioContext(paused, released, sweepsPerSec, id.displayBoard(), id.shortSerial(),
 				id.displayFirmware(), id.usbApi, id.present, radio.startMHz, radio.endMHz, radio.fftBinHz, radio.samples,
 				radio.lnaGain, radio.vgaGain, radio.antennaPower, radio.antennaLna, radio.clkout, radio.serial, peaks,
-				auto, autoGain, autoSweep, fm, mode, listenKHz, tvChannel);
+				auto, autoGain, autoSweep, fm, tv, mode, listenKHz, tvChannel);
 		synchronized (lock)
 		{
 			if (context == null || next.listenKHz != context.listenKHz

@@ -52,8 +52,10 @@ public final class TvWatchEngine
 	private final MpegTsPlayer player = new MpegTsPlayer();
 	private final MpegTsProbe tsProbe = new MpegTsProbe();
 	private final IqSpectrum iqSpectrum = new IqSpectrum();
+	private final AudioSpectrum audioSpectrum = new AudioSpectrum();
 	private final WatchPreview preview = new WatchPreview();
 	private volatile AudioSpectrum.FrameListener spectrumListener;
+	private volatile AudioSpectrum.FrameListener audioSpectrumListener;
 	private volatile boolean run;
 	private volatile Pointer rx;
 	private volatile boolean locked;
@@ -106,6 +108,7 @@ public final class TvWatchEngine
 		tsProbe.reset();
 		lastLogMs = 0;
 		iqSpectrum.reset();
+		audioSpectrum.reset();
 		preview.reset();
 		lastPreviewMs = 0;
 		startMs = System.currentTimeMillis();
@@ -239,6 +242,17 @@ public final class TvWatchEngine
 		this.spectrumListener = listener;
 	}
 
+	/** AC-3 PCM FFT for the Watch AUDIO waterfall (same as Listen). */
+	public void setAudioSpectrumListener(AudioSpectrum.FrameListener listener)
+	{
+		this.audioSpectrumListener = listener;
+	}
+
+	public AudioSpectrum audioSpectrum()
+	{
+		return audioSpectrum;
+	}
+
 	public IqSpectrum iqSpectrum()
 	{
 		return iqSpectrum;
@@ -337,18 +351,35 @@ public final class TvWatchEngine
 			Consumer<BufferedImage> cb = this.onFrame;
 			if (cb != null)
 				cb.accept(img);
-		}, pcm -> {
-			AudioSink s = this.sink;
-			if (s == null || pcm == null || pcm.length == 0)
-				return;
-			int vol = volume.get();
-			if (vol < 100)
+		}, this::offerDecodedPcm, ts.videoPid, ts.audioPid);
+	}
+
+	void offerDecodedPcm(short[] pcm)
+	{
+		if (pcm == null || pcm.length == 0)
+			return;
+		float[] audioRow = audioSpectrum.accept(pcm, pcm.length);
+		AudioSpectrum.FrameListener al = audioSpectrumListener;
+		if (al != null && audioRow != null)
+		{
+			try
 			{
-				for (int i = 0; i < pcm.length; i++)
-					pcm[i] = (short) (pcm[i] * vol / 100);
+				al.onFrame(audioRow);
 			}
-			s.write(pcm, 0, pcm.length);
-		}, ts.videoPid, ts.audioPid);
+			catch (RuntimeException ignored)
+			{
+			}
+		}
+		AudioSink s = this.sink;
+		if (s == null)
+			return;
+		int vol = volume.get();
+		if (vol < 100)
+		{
+			for (int i = 0; i < pcm.length; i++)
+				pcm[i] = (short) (pcm[i] * vol / 100);
+		}
+		s.write(pcm, 0, pcm.length);
 	}
 
 	private void abandonDecode(PatDetector patDetector)

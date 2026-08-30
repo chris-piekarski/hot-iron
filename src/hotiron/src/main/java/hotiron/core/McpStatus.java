@@ -80,7 +80,7 @@ public final class McpStatus
 			return "<html><b>MCP  failed</b><br><span style='color:#9a9a9a'>" + escape(errorLine())
 					+ "</span></html>";
 		if (!enabled)
-			return "<html>MCP  off<br><span style='color:#9a9a9a'>Start with make mcp</span></html>";
+			return "<html>MCP  off<br><span style='color:#9a9a9a'>Started with --no-mcp</span></html>";
 		String title = endpoint() == null ? "MCP" : "MCP  " + endpoint();
 		String secondary = secondaryLine();
 		if (lastTool == null)
@@ -93,7 +93,7 @@ public final class McpStatus
 	public String tooltip(long nowMs)
 	{
 		if (!enabled)
-			return "MCP is off. Launch with make mcp or the launcher --mcp (127.0.0.1:8765).";
+			return "MCP is off. This process was started with --no-mcp. Default is 127.0.0.1:8765.";
 		StringBuilder tip = new StringBuilder();
 		if (error != null)
 		{

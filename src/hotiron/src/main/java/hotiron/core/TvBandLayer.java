@@ -46,9 +46,12 @@ public final class TvBandLayer
 					continue;
 				boolean tuned = selectedFcc != null && ch.fccChannel == selectedFcc.intValue();
 				haveTuned |= tuned;
-				out.add(new BandMark(ch.lowMHz, ch.highMHz(), ch.centerMHz(), ch.label(),
-						tuned ? BandMark.Style.TUNED : BandMark.Style.PRIMARY, false, false,
-						true, BandMark.LabelFit.DROP_IF_OVERLAP, tuned ? 1f : hit.confidence));
+				BandMark.Style style = tuned ? BandMark.Style.TUNED : styleOf(hit.grade);
+				float intensity = tuned ? 1f
+						: hit.grade == TvChannelGrade.PICTURE ? 1f
+								: hit.grade == TvChannelGrade.NO_LOCK ? 0.35f : hit.confidence;
+				out.add(new BandMark(ch.lowMHz, ch.highMHz(), ch.centerMHz(), ch.label(), style, false,
+						false, true, BandMark.LabelFit.DROP_IF_OVERLAP, intensity));
 			}
 		}
 		if (!haveTuned && selectedFcc != null)
@@ -59,5 +62,12 @@ public final class TvBandLayer
 						false, false, true, BandMark.LabelFit.DROP_IF_OVERLAP, 1f));
 		}
 		return out;
+	}
+
+	static BandMark.Style styleOf(TvChannelGrade grade)
+	{
+		if (grade == TvChannelGrade.PICTURE || grade == TvChannelGrade.ATSC_LIKE)
+			return BandMark.Style.PRIMARY;
+		return BandMark.Style.SECONDARY;
 	}
 }

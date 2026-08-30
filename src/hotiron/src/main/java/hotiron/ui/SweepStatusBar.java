@@ -1,5 +1,6 @@
 package hotiron.ui;
 
+import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.Font;
 
@@ -9,12 +10,16 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 
+import hotiron.core.McpStatus;
+
 /**
- * Full-width strip under the plots. Replaces the old waterfall HUD overlay.
+ * Full-width footer: radio session on the left, plot telemetry + MCP on the
+ * right. Lives under the waterfall.
  */
 public class SweepStatusBar extends JPanel {
 	private static final long serialVersionUID = 1L;
 
+	private final JPanel telemetry = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 2));
 	private final JLabel mode = field("Panel  RF waterfall");
 	private final JLabel resolution = field("Resolution  —");
 	private final JLabel bins = field("FFT bins  —");
@@ -24,32 +29,45 @@ public class SweepStatusBar extends JPanel {
 
 	public SweepStatusBar() {
 		AnalyzerLookAndFeel.install();
-		setLayout(new FlowLayout(FlowLayout.LEFT, 16, 2));
-		setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+		setLayout(new BorderLayout(12, 0));
+		setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
 		mode.setFont(mode.getFont().deriveFont(Font.BOLD, 12f));
-		add(mode);
-		add(sep());
-		add(resolution);
-		add(sep());
-		add(bins);
-		add(sep());
-		add(rate);
-		add(sep());
-		add(peak);
-		add(sep());
-		add(mcp);
+		telemetry.setOpaque(false);
+		telemetry.add(mode);
+		telemetry.add(sep());
+		telemetry.add(resolution);
+		telemetry.add(sep());
+		telemetry.add(bins);
+		telemetry.add(sep());
+		telemetry.add(rate);
+		telemetry.add(sep());
+		telemetry.add(peak);
+		telemetry.add(sep());
+		telemetry.add(mcp);
+		ExclusiveToolTip.setText(mcp, McpStatus.OFF.tooltip(System.currentTimeMillis()));
+		ExclusiveToolTip.install(mcp);
+		add(telemetry, BorderLayout.CENTER);
+	}
+
+	public void installSession(RadioSessionStrip session)
+	{
+		if (session == null)
+			return;
+		add(session, BorderLayout.WEST);
 	}
 
 	public void installAutoSweep(JCheckBox auto)
 	{
 		if (auto == null)
 			return;
-		add(auto, 2);
-		add(sep(), 3);
+		telemetry.add(auto, 2);
+		telemetry.add(sep(), 3);
 	}
 
-	public void setMcp(hotiron.core.McpStatus status) {
-		mcp.setText(status == null ? hotiron.core.McpStatus.OFF.barText() : status.barText());
+	public void setMcp(McpStatus status) {
+		McpStatus s = status == null ? McpStatus.OFF : status;
+		mcp.setText(s.barText());
+		ExclusiveToolTip.setText(mcp, s.tooltip(System.currentTimeMillis()));
 	}
 
 	public void setSweepInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbm) {
@@ -80,6 +98,14 @@ public class SweepStatusBar extends JPanel {
 		resolution.setText("Resolution  " + formatHz(rbwHz));
 		bins.setText("FFT bins  " + formatBins(fftBins));
 		rate.setText("Listen  " + formatFps(waterfallFps));
+		peak.setText("Peak  " + formatPeakDbfs(peakDbfs));
+	}
+
+	public void setWatchDualInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbfs) {
+		mode.setText("Panel  " + WaterfallPlot.modeBannerWatchDual());
+		resolution.setText("Resolution  " + formatHz(rbwHz));
+		bins.setText("FFT bins  " + formatBins(fftBins));
+		rate.setText("Watch  " + formatFps(waterfallFps));
 		peak.setText("Peak  " + formatPeakDbfs(peakDbfs));
 	}
 
@@ -127,6 +153,10 @@ public class SweepStatusBar extends JPanel {
 
 	String getMcpText() {
 		return mcp.getText();
+	}
+
+	JLabel mcpLabel() {
+		return mcp;
 	}
 
 	private static JLabel field(String text) {

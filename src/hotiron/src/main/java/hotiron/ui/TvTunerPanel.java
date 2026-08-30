@@ -1,9 +1,10 @@
 package hotiron.ui;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import java.util.function.IntConsumer;
 
 import javax.swing.BorderFactory;
@@ -15,11 +16,12 @@ import javax.swing.SwingConstants;
 
 import hotiron.core.TvChannel;
 import hotiron.core.TvChannelPlan;
+import hotiron.core.TvStationHit;
 import net.miginfocom.swing.MigLayout;
 
 /**
- * ATSC channel face: Tune (one FCC channel), Scan (fill Seek), Seek
- * (occupied 6 MHz), Watch.
+ * ATSC channel face: Tune, Seek (picture first), Scan (occupancy then
+ * UHF qualify), Watch, roster of picture vs RF-only.
  */
 public final class TvTunerPanel extends JPanel
 {
@@ -35,18 +37,25 @@ public final class TvTunerPanel extends JPanel
 	private final JButton seekUp = new JButton("▶▶");
 	private final JButton scan = new JButton("Scan");
 	private final JButton watch = new JButton("Watch");
+	private final TvChannelRoster roster = new TvChannelRoster();
 	private final TvVideoPanel preview = new TvVideoPanel();
 	private final JSlider volume = new JSlider(0, 100, 80);
 	private IntConsumer onTune;
 	private IntConsumer onSeek;
+	private IntConsumer onSelect;
 	private Runnable onScan;
 	private int fcc = 33;
+	private boolean scanning;
+	private boolean qualifying;
+	private int qualifyFcc;
 
 	public TvTunerPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][][grow][]"));
+		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createTitledBorder("TV tuner"));
+		JPanel stack = new JPanel(new MigLayout("insets 4 6 6 6, wrap 1, fillx", "[grow,fill]"));
+		stack.setOpaque(false);
 		ch.setFont(new Font(Font.MONOSPACED, Font.BOLD, 32));
 		ch.setForeground(LCD_DIM);
 		unit.setForeground(LCD_DIM);
@@ -54,36 +63,41 @@ public final class TvTunerPanel extends JPanel
 		ExclusiveToolTip.setText(tuneUp, "Next US TV channel (skips the FM/aviation gaps)");
 		ExclusiveToolTip.setText(seekDown, "Seek previous channel from the last Scan");
 		ExclusiveToolTip.setText(seekUp, "Seek next channel from the last Scan");
-		ExclusiveToolTip.setText(scan, "Sweep VHF then UHF TV and set the channels Seek jumps between");
+		ExclusiveToolTip.setText(scan,
+				"Sweep VHF then UHF, then park the strongest UHF ATSC-like bricks to see which render MPEG-2. Click again to cancel.");
 		ExclusiveToolTip.setText(watch, "Park the radio on this ATSC channel. Stops the sweep.");
 		ExclusiveToolTip.setText(volume, "Volume");
-		add(ch);
-		add(unit);
+		stack.add(ch, "growx");
+		stack.add(unit, "growx");
 		JPanel tuneRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
 		tuneRow.setOpaque(false);
 		tuneRow.add(tuneDown, "growx");
 		tuneRow.add(tuneUp, "growx");
-		add(tuneRow, "growx");
+		stack.add(tuneRow, "growx");
 		JLabel tuneLabel = new JLabel("Tune", SwingConstants.CENTER);
-		add(tuneLabel);
+		stack.add(tuneLabel, "growx");
 		JPanel seekRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
 		seekRow.setOpaque(false);
 		seekRow.add(seekDown, "growx");
 		seekRow.add(seekUp, "growx");
-		add(seekRow, "growx");
+		stack.add(seekRow, "growx");
 		JLabel seekLabel = new JLabel("Seek", SwingConstants.CENTER);
-		add(seekLabel);
+		stack.add(seekLabel, "growx");
 		JPanel actionRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
 		actionRow.setOpaque(false);
 		actionRow.add(scan, "growx");
 		actionRow.add(watch, "growx");
-		add(actionRow, "growx");
-		preview.setPreferredSize(new Dimension(360, 180));
-		preview.setMinimumSize(new Dimension(160, 90));
+		stack.add(actionRow, "growx");
+		roster.setOnSelect(ch -> {
+			if (onSelect != null)
+				onSelect.accept(ch);
+		});
+		stack.add(roster, "growx");
 		preview.setStatus("no picture");
 		ExclusiveToolTip.setText(preview, "Decoded ATSC video. IQ spectrogram until MPEG-2 locks.");
-		add(preview, "grow, hmin 90");
-		add(volume, "growx");
+		stack.add(preview, "growx, w 100%, grow 0");
+		stack.add(volume, "growx");
+		add(stack, BorderLayout.NORTH);
 		tuneDown.addActionListener(e -> tune(-1));
 		tuneUp.addActionListener(e -> tune(+1));
 		seekDown.addActionListener(e -> seek(-1));
@@ -134,9 +148,38 @@ public final class TvTunerPanel extends JPanel
 		this.onScan = onScan;
 	}
 
+	public void setOnSelect(IntConsumer onSelect)
+	{
+		this.onSelect = onSelect;
+	}
+
 	public void setScanning(boolean on)
 	{
-		scan.setText(on ? "Scanning…" : "Scan");
+		scanning = on;
+		refreshScanButton();
+	}
+
+	public void setQualifying(boolean on, int fccChannel)
+	{
+		qualifying = on;
+		qualifyFcc = fccChannel;
+		refreshScanButton();
+	}
+
+	private void refreshScanButton()
+	{
+		if (qualifying)
+			scan.setText(qualifyFcc > 0 ? "Qualifying ch " + qualifyFcc + "…" : "Qualifying…");
+		else if (scanning)
+			scan.setText("Scanning…");
+		else
+			scan.setText("Scan");
+	}
+
+	public void setStations(List<TvStationHit> hits)
+	{
+		roster.setHits(hits);
+		roster.setSelectedFcc(fcc);
 	}
 
 	public void setChannel(int fccChannel)
@@ -145,6 +188,7 @@ public final class TvTunerPanel extends JPanel
 		fcc = c.fccChannel;
 		ch.setText(c.label());
 		unit.setText((c.vhf() ? "VHF" : "UHF") + "  ·  ATSC 1.0");
+		roster.setSelectedFcc(fcc);
 	}
 
 	public int getChannel()
@@ -177,6 +221,11 @@ public final class TvTunerPanel extends JPanel
 	TvVideoPanel previewPanel()
 	{
 		return preview;
+	}
+
+	TvChannelRoster roster()
+	{
+		return roster;
 	}
 
 	private void tune(int direction)

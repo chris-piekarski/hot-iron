@@ -33,7 +33,8 @@ public final class JavaSoundAudioSink implements AudioSink
 				return null;
 			}
 			SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info);
-			line.open(fmt, WfmDemodulator.AUDIO_RATE_HZ / 10 * 2);
+			/* 200 ms. 100 ms underran when the UI briefly stalled the mixer. */
+			line.open(fmt, WfmDemodulator.AUDIO_RATE_HZ / 5 * 2);
 			line.start();
 			return line;
 		}

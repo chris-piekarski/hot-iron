@@ -87,10 +87,9 @@ udev: ## Install persistent udev rules (sudo once). Keeps usbfs writable after u
 	@$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/hackrf-udev-install.sh
 
 ##@ Run
-start: build ## Build if needed, then launch the Linux app.
+start: build ## Build if needed, then launch the Linux app (MCP on 127.0.0.1:8765).
 	./src/hotiron/build/hotiron/hotiron.sh
 
-mcp: build ## Launch the app with a localhost MCP server (127.0.0.1:8765)
-	./src/hotiron/build/hotiron/hotiron.sh --mcp
+mcp: start ## Alias for start. MCP listens on 127.0.0.1:8765 unless --no-mcp.
 
 .PHONY: build clean test native-test test-hw lint stats mermaid info firmware-update udev start mcp help deps runtime-deps

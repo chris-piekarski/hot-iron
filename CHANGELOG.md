@@ -8,18 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Quick Select **Air** 118–137, **ADS-B** 978–1091 (1090 ES + UAT), **GNSS** 1559–1610 L1, **WiFi 6** 5925–7125 (U-NII-5…8), **n41** 2496–2690, and **C-band** 3700–3980. Aviation chips share a color group; Wi-Fi 6 overlay ticks 20 MHz ch 1–233.
 - USB hot-load: if a HackRF appears after launch (WSL `usbipd attach`), the sweep starts without restarting the window. **Stop** still owns USB until **Restart**.
 - BLE Quick Select **2400–2484 MHz** (includes adv 39 at 2480; Wi-Fi 2 stays 2402–2472), `BleBandPlan` / `BleBandLayer` ticks, occupancy labels, and parallel nRF BLE sniff on the J-Link ACM (does not park the HackRF). MCP write `ble_sniff`, read `ble_frames` / `ble_activity`. Flash recipe (PCA10031 / nRF51822, not 4.1.1 nRF52 HEX): [docs/nrf-sniffer.md](docs/nrf-sniffer.md#flash-recipe).
 - MCP `auto_gain` writes the existing Auto gain checkbox; `sweep` leaves a park and restarts the wideband sweep.
 - NFC **Sniff**: parks the HackRF at 11.56 MHz / 10 MS/s (same exclusive IQ path as Listen/Watch) and decodes Type A/B frames with nfc-laboratory. Sidebar frame list + HUD show field on/off, REQA/ATQA/UID/SELECT, raw hex. MCP write `nfc_sniff`, read `nfc_frames`. Sweep classifier `nfc_activity` is unchanged. Loop antenna, receive only. Notes: [docs/nfc.md](docs/nfc.md).
 - NFC spectrum overlay + live classifier: Quick Select is **12–15 MHz**, `NfcBandPlan` ticks carrier / A/B / F / V / 27.12 / 40.68, HUD + MCP `nfc_activity` report quiet / field on / polling / HiFER CW / card sidebands. Click a header tick to Scan PHY then harmonics. AirTags are not in this band.
 - MCP `spectrum_history_bins`: same snapshot ring as `spectrum_history`, but each tick includes filled `points` (capped `maxSamples` / `maxPoints`). Not the waterfall image.
+- TV tuner roster grades occupancy vs MPEG-2 **picture**. Scan sweeps VHF then UHF, then qualifies the strongest UHF ATSC-like bricks by parking Watch. Seek prefers picture. MCP `tv_stations`.
 
 ### Fixed
+- FM analog **SIG** meter is a short Simpson window packed under the digital readout. While Listening it follows demodulated audio (pre-volume) with VU ballistics; otherwise it is the Scan S-meter. Frequency is the slide-rule only.
+- Spectrum tools show one Quick Select face at a time (V-TV is TV, not FM beside it) and scroll in the space above the MCP log.
+- FM Listen waterfalls no longer freeze after a few seconds: spectrum frames still publish when the IQ queue is busy. PCM stays on `fm-wfm-demod`; chart/waterfall listeners are latest-wins on `fm-wfm-display`. Java Sound buffer is 200 ms.
 - BLE sniff on this bench PCA10031: Nordic UART SLIP is `0xAB`/`0xBC` (not RFC 1055), host commands are protocol v1, device frames are v2, and `sniffer_pca10031_1c2a221.hex` talks at **460800** (not 1 Mbps). Engine tries 1M then 460800, enables RTS/CTS, and names ADV PDUs after stripping the radio AA + padding byte.
 
 ### Changed
-- Gain (Auto / LNA / VGA / +14) sits on a rail **left of the graphs**; Peaks / Persist / Spurs / Auto dB / Alloc sit on the chart bar; FFT Auto is a status pill. HackRF Settings and Chart options tabs are gone. Hardware leftovers (FFT bin, samples, bias tee, CLKOUT, About) live under **⋯**. Spectrum line width is 1.5 px.
+- Watch splits the bottom strip like Listen: **RF · ±8 MHz** (same `addListenRfFrame` + live dB window as FM Listen) beside **AUDIO · 0–16 kHz** (AC-3 PCM). Decoded MPEG-2 stays in the 16:9 TV-tuner preview; that preview is not the RF waterfall.
+- Spectrum tools column is **520 px**. One Quick Select face at a time (FM, V-TV/U-TV, NFC, or BLE) fills the slot and scrolls above the MCP log. FM tuner: digital station on top, one Simpson **GAIN** S-meter, plus a 1970s horizontal slide-rule (frequency). Seek/Scan keep strong stations.
+- Quick Select chips stay over their MHz span (FM with V-TV, not slid next to BLE). Nested bands stack extra rows instead of packing left-to-right.
+- MCP TCP on `127.0.0.1:8765` is on by default (`make start`). `--mcp` is still accepted. `--no-mcp` turns it off.
+- Footer under the waterfall: HackRF One (SN/FW; click to pick a radio), Restart / Stop / Pause / ⋯, plot telemetry, MCP. Tools column is tuners only.
+- Gain (Auto / LNA / VGA / +14) sits on a rail **left of the graphs**; Peaks / Persist / Spurs / Auto dB / Alloc sit on the chart bar; FFT Auto is a footer pill. HackRF Settings and Chart options tabs are gone. Hardware leftovers (FFT bin, samples, bias tee, CLKOUT, About) live under **⋯**. Spectrum line width is 1.5 px.
 - README hero shot is the live survey banner + Wi‑Fi 2 sweep; copy covers Listen dual waterfalls, NFC/BLE sniff, and USB hot-load.
 - FM Listen keeps the ±2 MHz parked-IQ line chart on top and splits the strip into **RF · ±2 MHz** (same FFT) beside **AUDIO · 0–16 kHz**. Leave Listen to restore one RF waterfall.
 - Quick Select chips are 16 pt on a HackRF **1 MHz–7.25 GHz** chirp survey (no 0 Hz gutter): services above the wave, HF/VHF/UHF/All below (blue / teal / copper / cream), color-coded dividers, chip width follows the band. Range digits (`2402 – 2472 MHz`) sit above `◀ − + ▶` in the column immediately right of the wave; − / + expand or shrink the gold sweep window.

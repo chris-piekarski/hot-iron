@@ -60,6 +60,31 @@ class TvWatchEngineTest {
 	}
 
 	@Test
+	void decodedPcmPublishesAnAudioSpectrumRow() throws Exception
+	{
+		TvWatchEngine engine = new TvWatchEngine();
+		AtomicInteger rows = new AtomicInteger();
+		engine.setAudioSpectrumListener(row -> {
+			if (row != null && row.length > 0)
+				rows.incrementAndGet();
+		});
+		engine.start(img -> {
+		}, new RecordingAudioSink());
+		try
+		{
+			short[] pcm = new short[AudioSpectrum.FFT_N];
+			for (int i = 0; i < pcm.length; i++)
+				pcm[i] = (short) (8000 * Math.sin(2 * Math.PI * i / 32.0));
+			engine.offerDecodedPcm(pcm);
+			assertTrue(rows.get() >= 1, "Watch AUDIO waterfall should FFT AC-3 PCM");
+		}
+		finally
+		{
+			engine.stop();
+		}
+	}
+
+	@Test
 	void settleWindowIsArmedOnStart() throws Exception {
 		TvWatchEngine engine = new TvWatchEngine();
 		engine.setSettleMs(80);

@@ -10,8 +10,9 @@ import hotiron.core.SpectrumSurveyAxis;
 /**
  * Quick Select on a full-span survey: services above the wave, ITU
  * envelopes + All below. Button width follows the band’s pixel span
- * (padded to a readable minimum); {@link Chip#spanX0}/{@link Chip#spanX1}
- * are the true dividers on the wave.
+ * (padded to a readable minimum); extra top rows are added when chips
+ * would overlap. {@link Chip#spanX0}/{@link Chip#spanX1} are the true
+ * dividers on the wave.
  */
 public final class SurveyChipLayout
 {
@@ -25,7 +26,6 @@ public final class SurveyChipLayout
 	public static final int MIN_BUTTON_W = 72;
 	public static final int ROW_GAP = 4;
 	public static final int WAVE_H = 64;
-	public static final int MAX_TOP_ROWS = 3;
 	public static final int GAP = 4;
 
 	public static final class Chip
@@ -114,25 +114,22 @@ public final class SurveyChipLayout
 				continue;
 			protos.add(proto(preset, w, minWidths));
 		}
+		/* Widest first so envelopes (V-TV) take the row on the wave and
+		 * nested chips (FM, Air, 2 m) stack above the same MHz, not slide
+		 * into 2.4 GHz. Never move x off the band. */
 		protos.sort(Comparator.comparingInt((Proto p) -> p.spanX1 - p.spanX0).reversed());
 		List<List<int[]>> occupied = new ArrayList<>();
-		for (int i = 0; i < MAX_TOP_ROWS; i++)
-			occupied.add(new ArrayList<>());
+		occupied.add(new ArrayList<>());
 		List<Chip> out = new ArrayList<>();
 		for (Proto p : protos)
 		{
 			int row = 0;
-			while (row < MAX_TOP_ROWS - 1 && overlaps(occupied.get(row), p.x, p.x + p.w))
+			while (row < occupied.size() && overlaps(occupied.get(row), p.x, p.x + p.w))
 				row++;
-			int x = p.x;
-			if (overlaps(occupied.get(row), x, x + p.w))
-			{
-				x = rightEdge(occupied.get(row)) + GAP;
-				if (x + p.w > w)
-					x = Math.max(0, w - p.w);
-			}
-			occupied.get(row).add(new int[] { x, x + p.w });
-			out.add(new Chip(p.preset, Side.TOP, x, 0, p.w, BUTTON_H, row, p.spanX0, p.spanX1));
+			if (row >= occupied.size())
+				occupied.add(new ArrayList<>());
+			occupied.get(row).add(new int[] { p.x, p.x + p.w });
+			out.add(new Chip(p.preset, Side.TOP, p.x, 0, p.w, BUTTON_H, row, p.spanX0, p.spanX1));
 		}
 		return out;
 	}
@@ -187,17 +184,6 @@ public final class SurveyChipLayout
 				return true;
 		}
 		return false;
-	}
-
-	private static int rightEdge(List<int[]> intervals)
-	{
-		int r = -GAP;
-		for (int[] iv : intervals)
-		{
-			if (iv[1] > r)
-				r = iv[1];
-		}
-		return r;
 	}
 
 	private static int countRows(List<Chip> chips, Side side)

@@ -50,6 +50,7 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("radio_identity"));
 		assertTrue(list.contains("sweep_config"));
 		assertTrue(list.contains("fm_stations"));
+		assertTrue(list.contains("tv_stations"));
 		assertTrue(list.contains("nfc_activity"));
 		assertTrue(list.contains("nfc_frames"));
 		assertTrue(list.contains("nfc_sniff"));

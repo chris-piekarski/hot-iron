@@ -82,7 +82,11 @@ public final class StationDetectSink
 		double end = view.getEndMHz();
 		if (FmChannelPlan.overlapsBroadcast(start, end))
 		{
-			fmHits = fmTracker.update(ds, start, end);
+			boolean scan = settings.getBandScan() != null && settings.getBandScan().getValue() == BandScan.FM;
+			float margin = scan ? FmChannelPlan.SCAN_MARGIN_DB : FmChannelPlan.DETECT_MARGIN_DB;
+			fmHits = fmTracker.update(ds, start, end, margin);
+			if (scan)
+				fmHits = FmStationDial.strongest(fmHits);
 			publishFm(settings, fmHits);
 		}
 		if (TvChannelPlan.overlapsBroadcast(start, end))

@@ -19,8 +19,8 @@ import hotiron.core.FmStationHit;
 import net.miginfocom.swing.MigLayout;
 
 /**
- * Car-radio face: big frequency, Tune (one 200 kHz click), Scan (fill
- * Seek), Seek (next scanned station), rotary knob, listen, volume.
+ * 1970s FM face: digital station on top, SIG needle (live audio while
+ * Listening), horizontal slide-rule selector, Tune / Seek / Scan.
  */
 public final class TunerPanel extends JPanel
 {
@@ -37,49 +37,58 @@ public final class TunerPanel extends JPanel
 	private final JButton scan = new JButton("Scan");
 	private final JLabel tuneLabel = new JLabel("Tune", SwingConstants.CENTER);
 	private final JLabel seekLabel = new JLabel("Seek", SwingConstants.CENTER);
-	private final StationKnob knob = new StationKnob();
+	private final AnalogGauge gainGauge = new AnalogGauge("SIG",
+			new String[] { "0", "2", "4", "6", "8", "10" });
+	private final FmTunerScale scale = new FmTunerScale();
 	private final JButton listen = new JButton("Listen");
 	private final JSlider volume = new JSlider(0, 100, 80);
 	private IntConsumer onTune;
 	private IntConsumer onSeek;
+	private IntConsumer onSelect;
 	private Runnable onScan;
+	private List<FmStationHit> stations = List.of();
+	private boolean listening;
 
 	public TunerPanel()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 4 6 6 6", "[grow,fill][96!]", "[][][][][][][][]"));
+		setLayout(new MigLayout("insets 6 8 8 8, fillx, wrap 1, aligny top", "[grow,fill]", "[]"));
 		setBorder(BorderFactory.createTitledBorder("FM tuner"));
-		freq.setFont(new Font(Font.MONOSPACED, Font.BOLD, 32));
+		freq.setFont(new Font(Font.MONOSPACED, Font.BOLD, 44));
 		freq.setForeground(LCD_DIM);
+		unit.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
 		unit.setForeground(LCD_DIM);
-		ExclusiveToolTip.setText(tuneDown, "Tune down one channel (200 kHz)");
-		ExclusiveToolTip.setText(tuneUp, "Tune up one channel (200 kHz)");
-		ExclusiveToolTip.setText(seekDown, "Seek previous station from the last Scan");
-		ExclusiveToolTip.setText(seekUp, "Seek next station from the last Scan");
-		ExclusiveToolTip.setText(scan, "Sweep 88–108 MHz and set the stations Seek jumps between");
+		ExclusiveToolTip.setText(tuneDown, "Fine tune down one channel (200 kHz)");
+		ExclusiveToolTip.setText(tuneUp, "Fine tune up one channel (200 kHz)");
+		ExclusiveToolTip.setText(seekDown, "Seek previous strong station from the last Scan");
+		ExclusiveToolTip.setText(seekUp, "Seek next strong station from the last Scan");
+		ExclusiveToolTip.setText(scan, "Sweep 88–108 MHz and pin strong stations for Seek");
 		ExclusiveToolTip.setText(listen, "Park the radio on this station. Stops the sweep.");
 		ExclusiveToolTip.setText(volume, "Volume");
-		add(freq, "cell 0 0, growx");
-		add(unit, "cell 0 1");
-		add(knob, "cell 1 0 1 3, w 96!, h 96!, center");
-		JPanel tuneRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
+		add(freq, "growx");
+		add(unit, "growx");
+		ExclusiveToolTip.setText(gainGauge,
+				"Incoming signal. While Listening the needle follows demodulated audio.");
+		ExclusiveToolTip.install(gainGauge);
+		add(gainGauge, "growx, h " + AnalogGauge.PREF_H + "!");
+		add(scale, "growx, h " + FmTunerScale.PREF_H + "!");
+		JPanel tuneRow = new JPanel(new MigLayout("insets 0, gap 4", "[grow][grow][grow][grow][grow][grow]", "[]"));
 		tuneRow.setOpaque(false);
 		tuneRow.add(tuneDown, "growx");
 		tuneRow.add(tuneUp, "growx");
-		add(tuneRow, "cell 0 2, growx");
-		add(tuneLabel, "cell 0 3");
-		JPanel seekRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
-		seekRow.setOpaque(false);
-		seekRow.add(seekDown, "growx");
-		seekRow.add(seekUp, "growx");
-		add(seekRow, "cell 0 4 2 1, growx");
-		add(seekLabel, "cell 0 5 2 1");
-		JPanel actionRow = new JPanel(new MigLayout("insets 0", "[grow][grow]", "[]"));
-		actionRow.setOpaque(false);
-		actionRow.add(scan, "growx");
-		actionRow.add(listen, "growx");
-		add(actionRow, "cell 0 6 2 1, growx");
-		add(volume, "cell 0 7 2 1, growx");
+		tuneRow.add(seekDown, "growx");
+		tuneRow.add(seekUp, "growx");
+		tuneRow.add(scan, "growx");
+		tuneRow.add(listen, "growx");
+		add(tuneRow, "growx");
+		JPanel capRow = new JPanel(new MigLayout("insets 0", "[grow][grow][grow][grow][grow][grow]", "[]"));
+		capRow.setOpaque(false);
+		capRow.add(tuneLabel, "span 2, growx");
+		capRow.add(seekLabel, "span 2, growx");
+		capRow.add(new JLabel(" "), "growx");
+		capRow.add(new JLabel(" "), "growx");
+		add(capRow, "growx");
+		add(volume, "growx");
 		tuneDown.addActionListener(e -> tune(-1));
 		tuneUp.addActionListener(e -> tune(+1));
 		seekDown.addActionListener(e -> seek(-1));
@@ -88,12 +97,33 @@ public final class TunerPanel extends JPanel
 			if (onScan != null)
 				onScan.run();
 		});
-		knob.setOnStep(this::seek);
+		scale.setOnTune(this::tune);
+		scale.setOnSelectKHz(this::selectKHz);
 	}
 
-	public StationKnob knob()
+	public FmTunerScale scale()
 	{
-		return knob;
+		return scale;
+	}
+
+	public AnalogGauge gainGauge()
+	{
+		return gainGauge;
+	}
+
+	public void setLiveLevel(float level01)
+	{
+		if (!listening)
+			return;
+		gainGauge.setValue01(level01);
+	}
+
+	private void selectKHz(int kHz)
+	{
+		if (onSelect != null)
+			onSelect.accept(kHz);
+		else
+			setKHz(kHz);
 	}
 
 	public JButton listenButton()
@@ -116,6 +146,11 @@ public final class TunerPanel extends JPanel
 		return seekUp;
 	}
 
+	public JButton seekDownButton()
+	{
+		return seekDown;
+	}
+
 	public JButton scanButton()
 	{
 		return scan;
@@ -129,6 +164,11 @@ public final class TunerPanel extends JPanel
 	public void setOnSeek(IntConsumer onSeek)
 	{
 		this.onSeek = onSeek;
+	}
+
+	public void setOnSelect(IntConsumer onSelect)
+	{
+		this.onSelect = onSelect;
 	}
 
 	public void setOnScan(Runnable onScan)
@@ -157,20 +197,25 @@ public final class TunerPanel extends JPanel
 	{
 		FmChannel ch = FmChannelPlan.clamp(kHz / 1000.0);
 		freq.setText(ch.label());
-		knob.setKHz(ch.centerKHz);
+		scale.setKHz(ch.centerKHz);
+		refreshGainNeedle();
 	}
 
 	public void setListening(boolean on)
 	{
+		listening = on;
 		Color c = on ? LCD : LCD_DIM;
 		freq.setForeground(c);
 		unit.setForeground(c);
 		listen.setText(on ? "Listening " + freq.getText() : "Listen");
+		if (!on)
+			refreshGainNeedle();
 	}
 
 	public void setStations(List<FmStationHit> hits)
 	{
 		List<Integer> kHz = new ArrayList<Integer>();
+		stations = hits == null ? List.of() : hits;
 		if (hits != null)
 		{
 			for (FmStationHit hit : hits)
@@ -179,6 +224,34 @@ public final class TunerPanel extends JPanel
 					kHz.add(hit.channel.centerKHz);
 			}
 		}
-		knob.setDetents(kHz);
+		scale.setDetents(kHz);
+		refreshGainNeedle();
+	}
+
+	private void refreshGainNeedle()
+	{
+		if (listening)
+			return;
+		int want = scale.getKHz();
+		float db = -90f;
+		boolean hit = false;
+		for (int i = 0; i < stations.size(); i++)
+		{
+			FmStationHit s = stations.get(i);
+			if (s == null || s.channel == null)
+				continue;
+			if (s.channel.centerKHz != want)
+				continue;
+			db = s.powerDbm;
+			hit = true;
+			break;
+		}
+		if (!hit)
+		{
+			gainGauge.setValue01(0f);
+			return;
+		}
+		float t = (db + 90f) / 70f;
+		gainGauge.setValue01(t);
 	}
 }

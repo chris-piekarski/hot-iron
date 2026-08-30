@@ -37,9 +37,21 @@ class SurveyChipLayoutTest
 		Chip fm = chip(chips, QuickSelectPreset.FM);
 		Chip wifi2 = chip(chips, QuickSelectPreset.WIFI_2);
 		Chip wifi5 = chip(chips, QuickSelectPreset.WIFI_5);
+		Chip wifi6 = chip(chips, QuickSelectPreset.WIFI_6);
+		Chip air = chip(chips, QuickSelectPreset.AIR);
+		Chip adsb = chip(chips, QuickSelectPreset.ADSB);
+		Chip gnss = chip(chips, QuickSelectPreset.GNSS);
 		assertTrue(nfc.anchorX() < fm.anchorX());
-		assertTrue(fm.anchorX() < wifi2.anchorX());
+		assertTrue(fm.anchorX() < air.anchorX());
+		assertTrue(air.anchorX() < adsb.anchorX());
+		assertTrue(adsb.anchorX() < gnss.anchorX());
+		assertTrue(gnss.anchorX() < wifi2.anchorX());
 		assertTrue(wifi2.anchorX() < wifi5.anchorX());
+		assertTrue(wifi5.anchorX() < wifi6.anchorX());
+		assertEquals(Side.TOP, air.side);
+		assertEquals(Side.TOP, adsb.side);
+		assertEquals(Side.TOP, gnss.side);
+		assertEquals(Side.TOP, wifi6.side);
 	}
 
 	@Test
@@ -52,6 +64,45 @@ class SurveyChipLayoutTest
 		assertEquals(vhf.spanX1 - vhf.spanX0, vhf.w);
 		Chip hf = chip(SurveyChipLayout.place(w, p -> 72), QuickSelectPreset.HF);
 		assertEquals(hf.spanX1, chip(SurveyChipLayout.place(w, p -> 72), QuickSelectPreset.VHF).spanX0);
+	}
+
+	@Test
+	void buttonsStayOverTheirMhzSpan()
+	{
+		for (int w : new int[] { 1100, 1600, 2400, 3200 })
+		{
+			for (Chip c : SurveyChipLayout.place(w, p -> 72))
+			{
+				if (c.preset == QuickSelectPreset.ALL)
+					continue;
+				assertTrue(c.x < c.spanX1 && c.x + c.w > c.spanX0,
+						c.preset.label + " button left its " + w + "px span");
+				int spanMid = (c.spanX0 + c.spanX1) / 2;
+				int btnMid = c.x + c.w / 2;
+				assertTrue(Math.abs(btnMid - spanMid) <= Math.max(2, c.w / 2),
+						c.preset.label + " slid off-center at " + w);
+			}
+		}
+	}
+
+	@Test
+	void fmSitsInVtvNotBesideBle()
+	{
+		for (int w : new int[] { 1100, 1600, 2400, 3200, 3600 })
+		{
+			List<Chip> chips = SurveyChipLayout.place(w, p -> 72);
+			Chip fm = chip(chips, QuickSelectPreset.FM);
+			Chip vtv = chip(chips, QuickSelectPreset.V_TV);
+			Chip ble = chip(chips, QuickSelectPreset.BLE);
+			assertTrue(fm.anchorX() >= vtv.spanX0 && fm.anchorX() <= vtv.spanX1,
+					"FM 88–108 is inside V-TV 54–216 at " + w);
+			assertTrue(fm.x + fm.w <= ble.x || ble.x + ble.w <= fm.x,
+					"FM must not sit on BLE at " + w + " (fm " + fm.x + "–" + (fm.x + fm.w)
+							+ " ble " + ble.x + "–" + (ble.x + ble.w) + ")");
+			int fmToVtv = Math.abs(fm.anchorX() - vtv.anchorX());
+			int fmToBle = Math.abs(fm.anchorX() - ble.anchorX());
+			assertTrue(fmToVtv < fmToBle, "FM is nearer V-TV than BLE at " + w);
+		}
 	}
 
 	@Test

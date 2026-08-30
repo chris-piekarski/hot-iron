@@ -4,10 +4,14 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.DoubleConsumer;
 
 /**
  * Demod thread: IQ chunks from the JNA callback → {@link WfmDemodulator}
  * → {@link AudioSink}. The libusb callback must only {@link #offerIq}.
+ * Spectrum listeners run latest-wins on {@code fm-wfm-display} so chart
+ * and waterfall work cannot stall PCM.
  */
 public final class FmListenEngine
 {
@@ -24,16 +28,23 @@ public final class FmListenEngine
 	private final AtomicLong dropped = new AtomicLong();
 	private final AtomicLong offered = new AtomicLong();
 	private final short[] pcm = new short[WfmDemodulator.IQ_RATE_HZ / 50];
+	private final AtomicReference<float[]> pendingRf = new AtomicReference<>();
+	private final AtomicReference<float[]> pendingAudio = new AtomicReference<>();
+	private final Object displayWake = new Object();
 	private volatile AudioSink sink;
 	private volatile AudioSpectrum.FrameListener spectrumListener;
 	private volatile AudioSpectrum.FrameListener rfSpectrumListener;
 	private final AudioSpectrum audioSpectrum = new AudioSpectrum();
 	private final IqSpectrum rfSpectrum = new IqSpectrum(WfmDemodulator.IQ_RATE_HZ);
+	private final VuMeter vu = new VuMeter();
+	private final AtomicReference<Float> pendingLevel = new AtomicReference<>();
+	private volatile DoubleConsumer levelListener;
 	private volatile boolean run;
 	private volatile int settleMs = SETTLE_MS;
 	private volatile long settleUntilMs;
 	private volatile boolean armed;
 	private Thread worker;
+	private Thread display;
 
 	public void setSettleMs(int ms)
 	{
@@ -50,9 +61,16 @@ public final class FmListenEngine
 		queue.clear();
 		dropped.set(0);
 		offered.set(0);
+		pendingRf.set(null);
+		pendingAudio.set(null);
+		pendingLevel.set(null);
+		vu.reset();
 		armed = false;
 		settleUntilMs = System.currentTimeMillis() + settleMs;
 		run = true;
+		display = new Thread(this::displayLoop, "fm-wfm-display");
+		display.setDaemon(true);
+		display.start();
 		worker = new Thread(this::loop, "fm-wfm-demod");
 		worker.setDaemon(true);
 		worker.start();
@@ -61,24 +79,37 @@ public final class FmListenEngine
 	public synchronized void stop()
 	{
 		run = false;
-		if (worker != null)
+		synchronized (displayWake)
 		{
-			worker.interrupt();
-			try
-			{
-				worker.join(500);
-			}
-			catch (InterruptedException e)
-			{
-				Thread.currentThread().interrupt();
-			}
-			worker = null;
+			displayWake.notifyAll();
 		}
+		joinQuiet(worker);
+		joinQuiet(display);
+		worker = null;
+		display = null;
 		queue.clear();
+		pendingRf.set(null);
+		pendingAudio.set(null);
+		pendingLevel.set(null);
 		AudioSink s = sink;
 		sink = null;
 		if (s != null)
 			s.close();
+	}
+
+	private static void joinQuiet(Thread t)
+	{
+		if (t == null)
+			return;
+		t.interrupt();
+		try
+		{
+			t.join(500);
+		}
+		catch (InterruptedException e)
+		{
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	public void setSpectrumListener(AudioSpectrum.FrameListener listener)
@@ -94,6 +125,12 @@ public final class FmListenEngine
 	public void setRfSpectrumListener(AudioSpectrum.FrameListener listener)
 	{
 		this.rfSpectrumListener = listener;
+	}
+
+	/** Latest-wins 0–1 signal for the tuner SIG needle. Not volume. */
+	public void setLevelListener(DoubleConsumer listener)
+	{
+		this.levelListener = listener;
 	}
 
 	public IqSpectrum rfSpectrum()
@@ -152,34 +189,110 @@ public final class FmListenEngine
 			}
 			if (chunk == null)
 				continue;
-			float[] rfRow = rfSpectrum.accept(chunk, chunk.length);
-			AudioSpectrum.FrameListener rfSpec = rfSpectrumListener;
-			if (rfRow != null && rfSpec != null)
-				rfSpec.onFrame(rfRow);
-			if (System.currentTimeMillis() < settleUntilMs)
-				continue;
-			if (!armed)
+			/*
+			 * PCM first. Dual waterfalls / parked-RF chart used to run on
+			 * this thread before write() and starved the mixer.
+			 */
+			if (System.currentTimeMillis() >= settleUntilMs)
 			{
-				demod.reset();
-				audioSpectrum.reset();
-				armed = true;
+				if (!armed)
+				{
+					demod.reset();
+					audioSpectrum.reset();
+					armed = true;
+				}
+				int n = demod.processIq(chunk, chunk.length, 100, pcm);
+				if (n > 0)
+				{
+					publishLevel(vu.accept(pcm, n, System.currentTimeMillis()));
+					float[] audioRow = audioSpectrum.accept(pcm, n);
+					int vol = volume.get();
+					if (vol < 100)
+					{
+						for (int i = 0; i < n; i++)
+							pcm[i] = (short) (pcm[i] * vol / 100);
+					}
+					AudioSink s = sink;
+					if (s != null)
+						s.write(pcm, 0, n);
+					publishDisplay(pendingAudio, audioRow);
+				}
 			}
-			int n = demod.processIq(chunk, chunk.length, 100, pcm);
-			if (n <= 0)
-				continue;
-			float[] row = audioSpectrum.accept(pcm, n);
-			AudioSpectrum.FrameListener spec = spectrumListener;
-			if (row != null && spec != null)
-				spec.onFrame(row);
-			int vol = volume.get();
-			if (vol < 100)
+			publishDisplay(pendingRf, rfSpectrum.accept(chunk, chunk.length));
+		}
+	}
+
+	private void publishDisplay(AtomicReference<float[]> slot, float[] row)
+	{
+		if (row == null)
+			return;
+		slot.set(row);
+		synchronized (displayWake)
+		{
+			displayWake.notify();
+		}
+	}
+
+	private void displayLoop()
+	{
+		while (run)
+		{
+			float[] rf;
+			float[] audio;
+			Float level;
+			synchronized (displayWake)
 			{
-				for (int i = 0; i < n; i++)
-					pcm[i] = (short) (pcm[i] * vol / 100);
+				while (run && pendingRf.get() == null && pendingAudio.get() == null
+						&& pendingLevel.get() == null)
+				{
+					try
+					{
+						displayWake.wait(50);
+					}
+					catch (InterruptedException e)
+					{
+						return;
+					}
+				}
+				rf = pendingRf.getAndSet(null);
+				audio = pendingAudio.getAndSet(null);
+				level = pendingLevel.getAndSet(null);
 			}
-			AudioSink s = sink;
-			if (s != null)
-				s.write(pcm, 0, n);
+			dispatch(rfSpectrumListener, rf);
+			dispatch(spectrumListener, audio);
+			DoubleConsumer levels = levelListener;
+			if (levels != null && level != null)
+			{
+				try
+				{
+					levels.accept(level.floatValue());
+				}
+				catch (RuntimeException ignored)
+				{
+				}
+			}
+		}
+	}
+
+	private void publishLevel(float level01)
+	{
+		pendingLevel.set(Float.valueOf(level01));
+		synchronized (displayWake)
+		{
+			displayWake.notify();
+		}
+	}
+
+	private static void dispatch(AudioSpectrum.FrameListener listener, float[] row)
+	{
+		if (listener == null || row == null)
+			return;
+		try
+		{
+			listener.onFrame(row);
+		}
+		catch (RuntimeException ignored)
+		{
 		}
 	}
 }

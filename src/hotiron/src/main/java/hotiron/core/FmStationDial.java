@@ -15,14 +15,43 @@ public final class FmStationDial
 	{
 	}
 
+	/** Hits within 12 dB of the loudest — Seek jumps these, not the noise floor. */
+	public static final float STRONG_WINDOW_DB = 12f;
+
+	public static List<FmStationHit> strongest(List<FmStationHit> hits)
+	{
+		if (hits == null || hits.isEmpty())
+			return List.of();
+		float peak = Float.NEGATIVE_INFINITY;
+		for (FmStationHit hit : hits)
+		{
+			if (hit == null)
+				continue;
+			if (hit.powerDbm > peak)
+				peak = hit.powerDbm;
+		}
+		if (!Float.isFinite(peak))
+			return List.of();
+		float floor = peak - STRONG_WINDOW_DB;
+		List<FmStationHit> out = new ArrayList<FmStationHit>();
+		for (FmStationHit hit : hits)
+		{
+			if (hit == null || hit.channel == null)
+				continue;
+			if (hit.powerDbm >= floor)
+				out.add(hit);
+		}
+		return out;
+	}
+
 	/**
-	 * Seek: next <em>detected</em> station. {@code direction} &gt; 0 is higher
-	 * MHz. Empty detections fall back to one raster step.
+	 * Seek: next strong station. {@code direction} &gt; 0 is higher MHz.
+	 * Empty detections fall back to one raster step.
 	 */
 	public static FmChannel seek(List<FmStationHit> hits, int currentKHz, int direction)
 	{
 		int dir = direction < 0 ? -1 : 1;
-		List<FmChannel> stations = uniqueSorted(hits);
+		List<FmChannel> stations = uniqueSorted(strongest(hits));
 		if (stations.isEmpty())
 			return tune(currentKHz, dir);
 		int idx = indexOf(stations, currentKHz);

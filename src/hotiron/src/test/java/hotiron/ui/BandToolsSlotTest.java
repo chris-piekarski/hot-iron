@@ -2,10 +2,9 @@ package hotiron.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.awt.GridLayout;
-
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 
 import org.junit.jupiter.api.Test;
 
@@ -38,11 +37,11 @@ class BandToolsSlotTest
 		slot.apply(BandContext.of(BandToolKind.BLE));
 		assertTrue(slot.hosts(ble));
 		assertFalse(slot.hosts(fm));
-		assertFalse(slot.getLayout() instanceof GridLayout);
+		assertTrue(slot.getComponent(0) instanceof JScrollPane);
 	}
 
 	@Test
-	void severalToolsShareARowWithoutChangingSlotSize()
+	void severalKindsStillShowOneFullWidthFace()
 	{
 		JLabel fm = new JLabel("fm");
 		JLabel tv = new JLabel("tv");
@@ -51,9 +50,9 @@ class BandToolsSlotTest
 		int w = slot.getPreferredSize().width;
 		int h = slot.getPreferredSize().height;
 		slot.apply(BandContext.of(BandToolKind.FM, BandToolKind.TV));
-		assertTrue(slot.hosts(fm));
+		assertFalse(slot.hosts(fm), "V-TV / dual context shows TV, not FM beside it");
 		assertTrue(slot.hosts(tv));
-		assertTrue(slot.getLayout() instanceof GridLayout);
+		assertTrue(slot.getComponent(0) instanceof JScrollPane);
 		assertEquals(w, slot.getPreferredSize().width);
 		assertEquals(h, slot.getPreferredSize().height);
 	}

@@ -1,20 +1,21 @@
 package hotiron.ui;
 
+import java.awt.Cursor;
 import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.SwingConstants;
+import javax.swing.JPopupMenu;
 
-import hotiron.core.McpStatus;
 import hotiron.core.RadioIdentity;
-import net.miginfocom.swing.MigLayout;
 
 /**
- * Always-on radio chrome: identity, MCP, picker, Restart / Stop / Pause / ⋯.
- * Band tuners stay in the tools column; gain lives on the plot rail.
+ * Footer session chrome: identity, Restart / Stop / Pause / ⋯.
+ * Click the identity to pick a radio. MCP lives on the plot telemetry.
  */
 public final class RadioSessionStrip extends JPanel
 {
@@ -22,7 +23,6 @@ public final class RadioSessionStrip extends JPanel
 	static final String FIRST_RADIO = "First radio";
 
 	private final JLabel connected = new JLabel();
-	private final JLabel mcp = new JLabel();
 	private final JComboBox<String> radio = new JComboBox<>(new String[] { FIRST_RADIO });
 	private final JButton restart = new JButton("Restart");
 	private final JButton stop = new JButton("Stop");
@@ -33,48 +33,44 @@ public final class RadioSessionStrip extends JPanel
 	public RadioSessionStrip()
 	{
 		AnalyzerLookAndFeel.install();
-		setLayout(new MigLayout("insets 0, wrap 1, gapy 4", "[grow,fill]", ""));
+		setLayout(new net.miginfocom.swing.MigLayout("insets 0, fillx, gapx 8", "[][][][][]", "[]"));
 		setOpaque(false);
-		connected.setText(RadioIdentity.ABSENT.statusHtml());
+		connected.setText(RadioIdentity.ABSENT.statusLine());
+		connected.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		ExclusiveToolTip.setText(connected, RadioIdentity.ABSENT.tooltip(false));
-		connected.setVerticalAlignment(SwingConstants.TOP);
-		connected.setBorder(null);
-		mcp.setText(McpStatus.OFF.statusHtml());
-		ExclusiveToolTip.setText(mcp, McpStatus.OFF.tooltip(System.currentTimeMillis()));
-		mcp.setVerticalAlignment(SwingConstants.TOP);
-		mcp.setBorder(null);
 		ExclusiveToolTip.setText(radio, "Which HackRF to open. First radio = libhackrf default.");
 		ExclusiveToolTip.setText(restart, "Stop and start the sweep again. Use this if the plot freezes after a setting change.");
 		ExclusiveToolTip.setText(stop, "Halt the native sweep and release USB so other tools can open the radio.");
 		ExclusiveToolTip.setText(pause, "Freeze the display. The radio keeps sweeping; click Resume to show live data again.");
 		ExclusiveToolTip.setText(more, "Hardware: FFT bin, samples, bias tee, CLKOUT, About.");
 		ExclusiveToolTip.install(connected);
-		ExclusiveToolTip.install(mcp);
 		ExclusiveToolTip.install(radio);
 		ExclusiveToolTip.install(restart);
 		ExclusiveToolTip.install(stop);
 		ExclusiveToolTip.install(pause);
 		ExclusiveToolTip.install(more);
+		connected.addMouseListener(new MouseAdapter()
+		{
+			@Override
+			public void mouseClicked(MouseEvent e)
+			{
+				showPicker();
+			}
+		});
 		more.addActionListener(e -> showOverflow());
 		JPanel buttons = new JPanel(new GridLayout(1, 4, 4, 0));
+		buttons.setOpaque(false);
 		buttons.add(restart);
 		buttons.add(stop);
 		buttons.add(pause);
 		buttons.add(more);
 		add(connected);
-		add(mcp);
-		add(radio);
 		add(buttons);
 	}
 
 	JLabel connectedLabel()
 	{
 		return connected;
-	}
-
-	JLabel mcpStatusLabel()
-	{
-		return mcp;
 	}
 
 	JComboBox<String> radioCombo()
@@ -107,11 +103,20 @@ public final class RadioSessionStrip extends JPanel
 		return more;
 	}
 
+	private void showPicker()
+	{
+		JPopupMenu pop = new JPopupMenu();
+		if (radio.getParent() != null)
+			radio.getParent().remove(radio);
+		pop.add(radio);
+		pop.show(connected, 0, connected.getHeight());
+	}
+
 	private void showOverflow()
 	{
 		if (overflow == null)
 			return;
-		javax.swing.JPopupMenu pop = new javax.swing.JPopupMenu();
+		JPopupMenu pop = new JPopupMenu();
 		if (overflow.getParent() != null)
 			overflow.getParent().remove(overflow);
 		pop.add(overflow);

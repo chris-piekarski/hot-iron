@@ -23,7 +23,7 @@
 A Java 21 desktop for the [HackRF One](https://greatscottgadgets.com/hackrf/) (and Pro). One rig. The whole **1 MHz–7.25 GHz** window on a chirp. Sweep. Listen. Watch. Sniff. Local agents **copy** the same bins over MCP — they never open USB.
 
 ```bash
-make mcp    # GUI + MCP on 127.0.0.1:8765
+make start    # GUI + MCP on 127.0.0.1:8765
 ```
 
 Operator UI: **[docs/operator.md](docs/operator.md)**. Agent setup: **[docs/agents.md](docs/agents.md)**.
@@ -53,7 +53,7 @@ The top of the window is the HackRF’s whole playground, log-scaled so NFC and 
 - **Services above** the chirp, **HF / VHF / UHF / All** below (blue / teal / copper / cream)
 - Chip width follows the band; gold window is the live sweep
 - Digits + `◀ − + ▶` sit beside the wave — **− / +** grow or shrink that gold slice
-- Band tuners appear in the **400 px** tools column only when that service is in view
+- Band tuners appear in the **520 px** Spectrum tools column only when that service is in view; MCP log is under the slot
 
 Click **FM**. The gold window jumps to 88–108. Click **Listen**. The hop-sweep **QRT**s and you are parked on the dial.
 
@@ -83,7 +83,7 @@ git clone --recurse-submodules https://github.com/chris-piekarski/hot-iron.git
 cd hot-iron
 make help          # all commands
 make deps          # Ubuntu/Debian build packages
-make mcp           # build if needed, launch GUI + MCP
+make start         # build if needed, launch GUI + MCP on 127.0.0.1:8765
 ```
 
 Plug in the radio first. On Linux, run `make udev` once so the USB device stays writable. Walkthrough: [docs/getting-started.md](docs/getting-started.md). Agents: [docs/agents.md](docs/agents.md).
@@ -133,8 +133,8 @@ make test      # unit tests (no radio required)
 make lint      # compile check
 make stats     # refresh docs/stats.md
 make mermaid   # parse-check diagrams
-make start     # launch
-make mcp       # launch with local MCP (127.0.0.1:8765)
+make start     # launch (MCP on 127.0.0.1:8765)
+make mcp       # alias for start
 make info      # what is plugged in
 ```
 

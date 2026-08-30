@@ -23,4 +23,12 @@ class TvBandLayerTest {
 		BandMark tuned = marks.stream().filter(m -> m.style == BandMark.Style.TUNED).findFirst().orElseThrow();
 		assertEquals("14", tuned.label);
 	}
+
+	@Test
+	void occupiedIsSecondaryPictureIsPrimary() {
+		assertEquals(BandMark.Style.PRIMARY, TvBandLayer.styleOf(TvChannelGrade.PICTURE));
+		assertEquals(BandMark.Style.PRIMARY, TvBandLayer.styleOf(TvChannelGrade.ATSC_LIKE));
+		assertEquals(BandMark.Style.SECONDARY, TvBandLayer.styleOf(TvChannelGrade.OCCUPIED));
+		assertEquals(BandMark.Style.SECONDARY, TvBandLayer.styleOf(TvChannelGrade.NO_LOCK));
+	}
 }

@@ -134,7 +134,30 @@ class WifiChannelPlanTest {
 		assertEquals("ch 6", WifiChannelPlan.labelForPeak(2437, 2402, 2472));
 		assertEquals("ch 1", WifiChannelPlan.labelForPeak(2412, 2402, 2472));
 		assertEquals("ch 36", WifiChannelPlan.labelForPeak(5180, 5170, 5895));
+		assertEquals("ch 1", WifiChannelPlan.labelForPeak(5955, 5925, 7125));
+		assertEquals("ch 233", WifiChannelPlan.labelForPeak(7115, 5925, 7125));
 		assertNull(WifiChannelPlan.labelForPeak(97.3, 88, 108));
 		assertNull(WifiChannelPlan.labelForPeak(2437, 88, 108));
+	}
+
+	@Test
+	void wifi6UsesIeee20MhzCentersAndUsUnii58View() {
+		assertEquals(59, WifiChannelPlan.WIFI_6.size());
+		assertEquals(5955, WifiChannelPlan.find(WifiChannelPlan.BAND_6, 1).centerMHz, 0.001);
+		assertEquals(5945, WifiChannelPlan.find(WifiChannelPlan.BAND_6, 1).lowMHz(), 0.001);
+		assertEquals(7115, WifiChannelPlan.find(WifiChannelPlan.BAND_6, 233).centerMHz, 0.001);
+		assertEquals(7125, WifiChannelPlan.find(WifiChannelPlan.BAND_6, 233).highMHz(), 0.001);
+		assertEquals(5950 + 5, WifiChannelPlan.find(WifiChannelPlan.BAND_6, 1).centerMHz, 0.001);
+		assertNull(WifiChannelPlan.find(WifiChannelPlan.BAND_6, 3));
+		assertEquals(5925, WifiChannelPlan.WIFI_6_VIEW_START_MHZ);
+		assertEquals(7125, WifiChannelPlan.WIFI_6_VIEW_END_MHZ);
+		assertEquals(WifiChannelPlan.WIFI_6_OCCUPIED_START_MHZ,
+				WifiChannelPlan.find(WifiChannelPlan.BAND_6, 1).lowMHz(), 0.001);
+		assertEquals(WifiChannelPlan.WIFI_6_OCCUPIED_END_MHZ,
+				WifiChannelPlan.find(WifiChannelPlan.BAND_6, 233).highMHz(), 0.001);
+		assertTrue(WifiChannelPlan.viewIsWifi(5925, 7125));
+		List<WifiChannel> six = WifiChannelPlan.visibleCenters(5925, 7125);
+		assertEquals(59, six.size());
+		assertTrue(six.stream().allMatch(ch -> WifiChannelPlan.BAND_6.equals(ch.band)));
 	}
 }

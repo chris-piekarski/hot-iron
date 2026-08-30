@@ -8,14 +8,17 @@ import java.awt.Dimension;
  */
 public final class OperatorLayout
 {
-	public static final int TOOLS_WIDTH = 400;
-	public static final int BAND_SLOT_HEIGHT = 340;
+	public static final int TOOLS_WIDTH = 520;
+	/** Preferred band-slot height; the slot grows with the column and scrolls. */
+	public static final int BAND_SLOT_HEIGHT = 500;
+	/** MCP activity log under the band slot. */
+	public static final int MCP_LOG_HEIGHT = 148;
+	public static final int MIN_FRAME_WIDTH = 1220;
 	/** Sweep-range column beside the survey wave (digits + ◀ − + ▶). */
 	public static final int RANGE_WIDTH = 248;
 	public static final double PLOT_SPLIT = 0.55;
 	/** Listen dual strip: parked RF waterfall | AUDIO waterfall. */
 	public static final double LISTEN_WATERFALL_SPLIT = 0.5;
-	public static final int MIN_FRAME_WIDTH = 1100;
 	public static final int MIN_FRAME_HEIGHT = 640;
 	/** Vertical LNA/VGA rail on the plot dB axis. */
 	public static final int GAIN_RAIL_WIDTH = 84;

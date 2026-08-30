@@ -44,6 +44,8 @@ class HackRFSweepSettingsUITest {
         assertTrue(ui.decayRateCombo().isEnabled());
         assertNotNull(ui.gainRail());
         assertNotNull(ui.chartToggleBar());
+        assertNotNull(ui.footer());
+        assertTrue(ui.footer().isAncestorOf(ui.pauseButton()));
         assertTrue(ui.connectedLabel().getText().contains("No radio detected"));
 
         SwingUtilities.invokeAndWait(() -> ui.pauseButton().doClick());
@@ -97,9 +99,10 @@ class HackRFSweepSettingsUITest {
         settings.getMcpStatus().setValue(hotiron.core.McpStatus.listening(
                 "127.0.0.1", 8765, false, java.util.List.of(c), "spectrum_summary", 2L));
         flushEdt();
-        assertTrue(ui.mcpStatusLabel().getText().contains("127.0.0.1:8765"));
-        assertTrue(ui.mcpStatusLabel().getText().contains("claude-code"));
-        assertTrue(ui.mcpStatusLabel().getText().contains("spectrum_summary"));
+        assertTrue(ui.mcpStatusLabel().getText().contains(":8765"));
+        assertTrue(ui.mcpStatusLabel().getText().contains("1 client"));
+        assertTrue(ExclusiveToolTip.hintOf(ui.mcpStatusLabel()).contains("claude-code"));
+        assertTrue(ExclusiveToolTip.hintOf(ui.mcpStatusLabel()).contains("spectrum_summary"));
     }
 
     @Test
@@ -210,7 +213,7 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
-    void stationKnobJumpsBetweenDetectedStations() throws Exception {
+    void seekButtonsJumpStrongStationsAndScaleStaysOnTheDial() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         settings.getDetectedFmStations().setValue(java.util.List.of(
                 new hotiron.core.FmStationHit(hotiron.core.FmChannelPlan.nearest(88.1), -40f),
@@ -220,12 +223,15 @@ class HackRFSweepSettingsUITest {
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
         flushEdt();
         assertEquals(97300, ui.stationKnob().getKHz());
-        SwingUtilities.invokeAndWait(() -> ui.stationKnob().nudge(+1));
+        SwingUtilities.invokeAndWait(() -> ui.tunerPanel().seekUpButton().doClick());
         flushEdt();
         assertEquals(101100, settings.getListenKHz().getValue());
-        SwingUtilities.invokeAndWait(() -> ui.stationKnob().nudge(-1));
+        SwingUtilities.invokeAndWait(() -> ui.tunerPanel().seekDownButton().doClick());
         flushEdt();
         assertEquals(97300, settings.getListenKHz().getValue());
+        SwingUtilities.invokeAndWait(() -> ui.stationKnob().nudge(+1));
+        flushEdt();
+        assertEquals(97500, settings.getListenKHz().getValue(), "dial wheel is fine tune, not seek");
     }
 
     @Test
@@ -357,16 +363,16 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
-    void wifi2ShowsBleToolsNotBroadcast() throws Exception {
+    void wifi2ShowsNoBandTool() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
         flushEdt();
         assertEquals(OperatorLayout.TOOLS_WIDTH, ui.getPreferredSize().width);
-        assertTrue(ui.bandSlot().hosts(ui.bleSniffPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.bleSniffPanel()), "BLE tool is the BLE chip, not Wi-Fi 2");
         assertFalse(ui.bandSlot().hosts(ui.tunerPanel()));
         assertFalse(ui.bandSlot().hosts(ui.tvTunerPanel()));
         assertFalse(ui.bandSlot().hosts(ui.nfcSniffPanel()));
-        assertTrue(ui.bandContext().shows(hotiron.core.BandToolKind.BLE));
+        assertFalse(ui.bandContext().shows(hotiron.core.BandToolKind.BLE));
         assertEquals(OperatorLayout.BAND_SLOT_HEIGHT, ui.bandSlot().getPreferredSize().height);
     }
 
@@ -376,6 +382,12 @@ class HackRFSweepSettingsUITest {
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
         flushEdt();
         Dimension before = ui.getPreferredSize();
+
+        SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
+                .findButton(QuickSelectPreset.BLE.label).doClick());
+        flushEdt();
+        assertTrue(ui.bandSlot().hosts(ui.bleSniffPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.tunerPanel()));
 
         SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
                 .findButton(QuickSelectPreset.FM.label).doClick());
@@ -388,7 +400,7 @@ class HackRFSweepSettingsUITest {
         SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
                 .findButton(QuickSelectPreset.V_TV.label).doClick());
         flushEdt();
-        assertTrue(ui.bandSlot().hosts(ui.tunerPanel()));
+        assertFalse(ui.bandSlot().hosts(ui.tunerPanel()), "V-TV is the TV tool, not FM beside it");
         assertTrue(ui.bandSlot().hosts(ui.tvTunerPanel()));
 
         SwingUtilities.invokeAndWait(() -> ui.quickFrequencySelector()
@@ -412,6 +424,17 @@ class HackRFSweepSettingsUITest {
         assertNotNull(ui.navBanner());
         assertSame(ui.quickFrequencySelector(), ui.navBanner().quickSelector());
         assertSame(ui.frequencyRangePanel(), ui.navBanner().rangePanel());
+    }
+
+    @Test
+    void spectrumToolsColumnHostsTheMcpLog() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals(OperatorLayout.TOOLS_WIDTH, ui.getPreferredSize().width);
+        assertNotNull(ui.mcpLog());
+        ui.mcpLog().apply(hotiron.core.McpStatus.listening("127.0.0.1", 8765));
+        assertTrue(ui.mcpLog().text().contains("listening"));
     }
 
 }

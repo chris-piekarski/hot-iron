@@ -43,6 +43,32 @@ class WaterfallPlotMathTest {
     }
 
     @Test
+    void parkedIqRfWaterfallUsesTheRfPowerWindow() {
+        assertEquals(-80, WaterfallPlot.parkedRowPaletteStart(true, false, -50), 0);
+        assertEquals(80, WaterfallPlot.parkedRowPaletteSize(true, false, 40), 0);
+        assertEquals(-52, WaterfallPlot.parkedRowPaletteStart(false, true, -52), 0);
+        assertEquals(28, WaterfallPlot.parkedRowPaletteSize(false, true, 28), 0);
+        assertEquals(-52, WaterfallPlot.parkedRowPaletteStart(true, true, -52), 0,
+                "Listen/Watch RF pane is RF even if the sibling is audio");
+    }
+
+    @Test
+    void atscBrickIsAWaterfallOnTheLiveRfWindowNotAClippedSlab() {
+        // Default sweep palette −90…−25 clips a 0 dBFS 8VSB brick.
+        assertEquals(1.0, WaterfallPlot.normalizePower(0, -90, 65), 1e-9);
+        assertEquals(1.0, WaterfallPlot.normalizePower(-20, -90, 65), 1e-9);
+        // Live parked window (−40…+10) keeps noise and the brick distinct.
+        double start = WaterfallPlot.parkedRowPaletteStart(false, true, -40);
+        double size = WaterfallPlot.parkedRowPaletteSize(false, true, 50);
+        assertTrue(WaterfallPlot.normalizePower(-38, start, size) < 0.15);
+        double brick = WaterfallPlot.normalizePower(0, start, size);
+        assertTrue(brick > 0.70 && brick < 1.0);
+        // Default −100…+20 also leaves headroom so Watch RF scrolls.
+        assertTrue(WaterfallPlot.normalizePower(0, -100, 120) < 0.90);
+        assertTrue(WaterfallPlot.normalizePower(0, -100, 120) > 0.70);
+    }
+
+    @Test
     void audioDbfsWindowDoesNotUseTheRfPalette() {
         assertEquals(-80, WaterfallPlot.AUDIO_PALETTE_START_DB, 0);
         assertEquals(80, WaterfallPlot.AUDIO_PALETTE_SIZE_DB, 0);
@@ -59,7 +85,9 @@ class WaterfallPlotMathTest {
         assertEquals("parked IQ  ·  VIDEO  ·  ±8 MHz", WaterfallPlot.modeBanner(false, true));
         assertEquals("parked IQ  ·  NFC  ·  12–15 MHz", WaterfallPlot.modeBanner(false, false, true));
         assertEquals("parked IQ  ·  RF  ·  ±2 MHz", WaterfallPlot.modeBannerListenRf());
+        assertEquals("parked IQ  ·  RF  ·  ±8 MHz", WaterfallPlot.modeBannerWatchRf());
         assertEquals("parked IQ  ·  RF ±2 MHz + AUDIO 0–16 kHz", WaterfallPlot.modeBannerListenDual());
+        assertEquals("parked IQ  ·  RF ±8 MHz + AUDIO 0–16 kHz", WaterfallPlot.modeBannerWatchDual());
     }
 
     @Test

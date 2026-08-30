@@ -52,4 +52,14 @@ class WifiBandLayerTest {
 		assertFalse(marks.isEmpty());
 		assertEquals(BandMark.LabelFit.FIT_OCCUPANCY, marks.get(0).labelFit);
 	}
+
+	@Test
+	void sixGigViewEmitsUniiChannels() {
+		FrequencyAxis axis = FrequencyAxis.of(WifiChannelPlan.WIFI_6_VIEW_START_MHZ,
+				WifiChannelPlan.WIFI_6_VIEW_END_MHZ, 1200);
+		assertTrue(WifiBandLayer.showBand6(axis));
+		List<BandMark> marks = WifiBandLayer.marks(axis);
+		assertEquals(59, marks.size());
+		assertEquals(BandMark.LabelFit.FIT_OCCUPANCY, marks.get(0).labelFit);
+	}
 }

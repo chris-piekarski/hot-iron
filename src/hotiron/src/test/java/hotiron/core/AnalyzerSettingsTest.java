@@ -282,6 +282,19 @@ class AnalyzerSettingsTest {
 	}
 
 	@Test
+	void tvScanKeepsPictureMemory() {
+		AnalyzerSettings s = new AnalyzerSettings();
+		s.getDetectedTvStations().setValue(List.of(
+				new TvStationHit(TvChannelPlan.findByFccChannel(14), -40f),
+				new TvStationHit(TvChannelPlan.findByFccChannel(33), -35f, 1f, TvChannelGrade.PICTURE,
+						"picture", 8, 12f, 6f)));
+		s.startTvScan();
+		assertEquals(1, s.getDetectedTvStations().getValue().size());
+		assertEquals(33, s.getDetectedTvStations().getValue().get(0).channel.fccChannel);
+		assertEquals(TvChannelGrade.PICTURE, s.getDetectedTvStations().getValue().get(0).grade);
+	}
+
+	@Test
 	void nfcScanStartsOnPhyWindowAndTogglesOff()
 	{
 		AnalyzerSettings s = new AnalyzerSettings();

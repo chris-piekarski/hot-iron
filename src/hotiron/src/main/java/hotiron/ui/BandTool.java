@@ -5,9 +5,9 @@ import javax.swing.JComponent;
 import hotiron.core.BandToolKind;
 
 /**
- * One registered band face. The slot lays out whatever {@link BandToolKind}
- * the current {@link hotiron.core.BandContext} shows — adding a tool is
- * register-here, not another if/else in the settings column.
+ * One registered band face. The slot shows {@link hotiron.core.BandContext#face()}
+ * only — adding a tool is register-here, not another if/else in the settings
+ * column.
  */
 public final class BandTool
 {

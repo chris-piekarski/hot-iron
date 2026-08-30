@@ -7,15 +7,25 @@ import org.junit.jupiter.api.Test;
 class BandContextTest
 {
 	@Test
-	void wifi2ShowsBleNotBroadcast()
+	void wifi2ShowsNoBandTool()
 	{
 		BandContext c = BandContext.of(new FrequencyRange(2402, 2472), false, ListenService.FM, false,
 				BandScan.OFF);
 		assertFalse(c.shows(BandToolKind.FM));
 		assertFalse(c.shows(BandToolKind.TV));
 		assertFalse(c.shows(BandToolKind.NFC));
+		assertFalse(c.shows(BandToolKind.BLE), "Wi-Fi 2 is not the BLE Quick Select");
+		assertFalse(c.any());
+		assertNull(c.face());
+	}
+
+	@Test
+	void blePresetShowsBle()
+	{
+		BandContext c = BandContext.of(new FrequencyRange(2400, 2484), false, null, false, BandScan.OFF);
 		assertTrue(c.shows(BandToolKind.BLE));
-		assertTrue(c.any());
+		assertEquals(BandToolKind.BLE, c.face());
+		assertFalse(c.shows(BandToolKind.FM));
 	}
 
 	@Test
@@ -29,11 +39,13 @@ class BandContextTest
 	}
 
 	@Test
-	void vtvShowsFmAndTv()
+	void vtvShowsTvNotFm()
 	{
 		BandContext c = BandContext.of(new FrequencyRange(54, 216), false, null, false, BandScan.OFF);
-		assertTrue(c.shows(BandToolKind.FM), "FM occupies ~12% of V-TV");
+		assertFalse(c.shows(BandToolKind.FM), "V-TV Quick Select is the TV tool, not FM beside it");
 		assertTrue(c.shows(BandToolKind.TV));
+		assertEquals(BandToolKind.TV, c.face());
+		assertEquals(1, c.kinds().size());
 		assertFalse(c.shows(BandToolKind.NFC));
 		assertFalse(c.shows(BandToolKind.BLE));
 	}
@@ -70,7 +82,8 @@ class BandContextTest
 		BandContext c = BandContext.of(new FrequencyRange(2402, 2472), true, ListenService.FM, false,
 				BandScan.OFF);
 		assertTrue(c.shows(BandToolKind.FM));
-		assertTrue(c.shows(BandToolKind.BLE));
+		assertEquals(BandToolKind.FM, c.face());
+		assertFalse(c.shows(BandToolKind.BLE), "one face at a time: parked Listen wins");
 	}
 
 	@Test
