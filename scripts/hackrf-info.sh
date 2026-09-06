@@ -97,8 +97,7 @@ found=0
 if [ ! -d /sys/bus/usb/devices ]; then
 	echo "USB: no /sys/bus/usb/devices"
 	echo "  WSL2 does not see USB until the device is attached:"
-	echo "    usbipd list"
-	echo "    usbipd attach --wsl --busid <HackRF-BUSID>"
+	echo "    make wsl-usb"
 	echo
 else
 	echo "USB (sysfs)"

@@ -11,6 +11,8 @@ This directory contains the first-class documentation for **HotIron**: a HackRF 
 - [HackRF Hardware Setup](hardware.md)
 - [Usage](operator.md) — operator UI (Quick Select, auto-gain, waterfall)
 - [NFC / HF RFID](nfc.md) — 13.56 MHz PHY, sidebands, live overlay / `nfc_activity`, parked Sniff / `nfc_frames`
+- [GNSS L1](gnss.md) — RNSS L1 overlay / `gnss_activity`, parked GPS C/A sniff / `gnss_sv` (not a fix)
+- [CB 11 m](cb.md) — 40 AM channels, Scan occupancy, parked AM Listen / `cb_listen`
 - [nRF 2.4 GHz sniffer](nrf-sniffer.md) — bench J-Link / nRF DK, BLE overlay + UART host (15.4 / ANT decode not wired)
 - [Architecture](architecture.md) — layers, exclusive USB, MVC/hooks, queues, policies, MCP snapshot store
 - [Repository stats](stats.md) — first-party LOC, packages, tests (`make stats`)

@@ -4,11 +4,11 @@ import java.util.Locale;
 
 /**
  * Exclusive USB use: sweep, parked FM listen, parked ATSC watch, parked NFC
- * sniff, or released.
+ * sniff, parked GPS L1 sniff, parked CB AM listen, or released.
  */
 public enum RadioMode
 {
-	SWEEP, LISTEN, WATCH, NFC, STOPPED;
+	SWEEP, LISTEN, WATCH, NFC, GNSS, CB, STOPPED;
 
 	public String jsonName()
 	{
@@ -25,6 +25,10 @@ public enum RadioMode
 			return WATCH;
 		if (service == ListenService.NFC)
 			return NFC;
+		if (service == ListenService.GNSS)
+			return GNSS;
+		if (service == ListenService.CB)
+			return CB;
 		return LISTEN;
 	}
 
@@ -43,6 +47,6 @@ public enum RadioMode
 
 	public boolean parked()
 	{
-		return this == LISTEN || this == WATCH || this == NFC;
+		return this == LISTEN || this == WATCH || this == NFC || this == GNSS || this == CB;
 	}
 }

@@ -225,6 +225,21 @@ class SpectrumSnapshotStoreTest {
 	}
 
 	@Test
+	void publishGnssReplacesTheLiveClassification()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		assertFalse(store.gnssActivity().visible);
+		store.publishGnss(hotiron.core.GnssActivity.quiet());
+		assertTrue(store.gnssActivity().visible);
+		assertFalse(store.gnssActivity().any());
+		store.publishGnssSv(java.util.List.of(new hotiron.core.GpsSvHit(5, 40f, 500, 1, 9f)));
+		assertEquals(1, store.gnssSv().size());
+		assertTrue(store.gnssSvJson().contains("\"prn\":5"));
+		store.publishGnss(null);
+		assertFalse(store.gnssActivity().visible);
+	}
+
+	@Test
 	void publishNfcFrameCapsTheRing()
 	{
 		SpectrumSnapshotStore store = new SpectrumSnapshotStore(3);
@@ -237,5 +252,23 @@ class SpectrumSnapshotStoreTest {
 		assertTrue(store.nfcFramesJson(2).contains("UID"));
 		assertTrue(store.nfcFramesJson(2).contains("SEL1"));
 		assertFalse(store.nfcFramesJson(2).contains("ATQA"));
+	}
+
+	@Test
+	void operatorBriefReplacesPerFaceAndTruncates()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		int[] fires = { 0 };
+		store.addBriefListener(() -> fires[0]++);
+		assertTrue(store.briefs().isEmpty());
+		store.publishBrief(new hotiron.core.OperatorBrief("ble", "A", "one", java.util.List.of(), 1L, "mcp"));
+		store.publishBrief(new hotiron.core.OperatorBrief("ble", "B", "two", java.util.List.of(), 2L, "mcp"));
+		assertEquals(1, store.briefs().size());
+		assertEquals("B", store.brief("ble").title);
+		store.publishBrief(hotiron.core.OperatorBrief.clear("ble"));
+		assertNull(store.brief("ble"));
+		assertTrue(store.briefsJson().equals("{}"));
+		assertTrue(fires[0] >= 3);
+		assertEquals("sweep", store.inferBriefFace());
 	}
 }

@@ -98,7 +98,7 @@ public final class NordicSnifferProto
 		boolean adv = h.type == EVENT_PACKET_ADV || advAa || channel == 37 || channel == 38 || channel == 39;
 		String name = pduName(pdu, adv);
 		String addr = advAddress(pdu);
-		return new BleFrame(nowMs, channel, rssi, name, addr, toHex(pdu, 24), adv);
+		return new BleFrame(nowMs, channel, rssi, name, addr, toHex(pdu, 64), adv);
 	}
 
 	static boolean startsWithAdvAa(byte[] radio)

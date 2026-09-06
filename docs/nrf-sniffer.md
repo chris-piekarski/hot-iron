@@ -22,7 +22,7 @@ That is the **on-board J-Link OB** (Atmel SAM3U, firmware `J-Link OB-SAM3U128-V2
 
 **Identified 2026-08-24** with `nrfutil device device-info` (J-Link DLL + writable usbfs): **PCA10031 / nRF51822** (`NRF51_FAMILY`, `NRF51xxx_xxAC_REV3`). Official nRF Sniffer **4.1.1** HEX files are nRF52-only and must **not** be written to this chip. Last Nordic image for this board is the v2.x `sniffer_pca10031_*.hex` (nRF51 Dongle). Current HotIron host sends UART/SLIP **v1** commands (same as nrfutil) and parses **v2** device frames from this HEX; nRF52 4.x images still use 1 Mbps.
 
-`make udev` also covers `1366:1015` and `1366:0101` so the J-Link usbfs node is `0666` like the HackRF.
+`make udev` also covers `1366:1015` / `1366:0101` (usbfs `0666`) and the CDC ACM (`/dev/jlink-acm`, ModemManager ignore).
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ Worldwide unlicensed **2400–2483.5 MHz**. Same band as Wi-Fi. Not a separate a
 
 Idle phones light the **three** adv ticks. A connection sprinkles the 37 data channels (looks like hash next to Wi-Fi). AirTags / Tile / Find My beacons are this band (precision find is UWB ~6–8 GHz).
 
-Nordic’s BLE sniffer lists advertisers (address, name, RSSI), can follow one connection, and can decrypt **when the operator already has the keys** (LTK / IRK / OOB) for a device they are debugging. That is own-product debug, not a cracking tool. Do not add key recovery or MITM.
+HotIron’s ads-only host names a GAP local name (AD 0x08/0x09) and a few well-known 128-bit UUIDs (Nordic LBS / Blinky `00001523-…`, Nordic UART) from the advert PDU. It does not follow a connection or walk GATT. Nordic’s own sniffer can follow one connection and decrypt **when the operator already has the keys** (LTK / IRK / OOB) for a device they are debugging. That is own-product debug, not a cracking tool. Do not add key recovery or MITM.
 
 ### IEEE 802.15.4 (Thread / Zigbee / Matter)
 
@@ -110,7 +110,8 @@ Operator work. Not `make build` / `make firmware-update` (those are HackRF). Wro
 Attach the J-Link to WSL ([hardware.md](hardware.md)), then:
 
 ```bash
-make udev   # once; covers 1366:1015 and 1366:0101
+make udev      # once; covers 1366:1015 and 1366:0101
+make wsl-usb   # attach HackRF + this J-Link to Ubuntu
 nrfutil install device
 nrfutil device device-info --serial-number 000680852409 --jlink-dll "$JLINK_DLL"
 ```
@@ -135,9 +136,9 @@ If the nRF51 image is already on this machine from an earlier attempt, it is `~/
 ### 3. Program (this bench)
 
 ```bash
-# usbipd on Windows (bus id moves; --hardware-id survives that)
-usbipd list
-usbipd attach --wsl --hardware-id 1366:1015
+# from WSL (bus id moves; --hardware-id survives that)
+make wsl-usb
+# or: usbipd.exe attach --wsl --hardware-id 1366:1015
 
 export PATH="$HOME/.local/bin:$PATH"
 export JLINK_SN=000680852409
@@ -170,11 +171,10 @@ JLinkExe
 vcom enable
 ```
 
-Power-cycle the DK. It should come back as `1366:1015`. If Windows shows the new PID as **Not shared**, elevated:
+Power-cycle the DK. It should come back as `1366:1015`. If Windows shows the new PID as **Not shared**, bind once (Administrator PowerShell `usbipd bind --hardware-id 1366:1015`), then from WSL:
 
-```text
-usbipd bind --busid <id>
-usbipd attach --wsl --busid <id>
+```bash
+make wsl-usb
 ```
 
 Unplug/replug often restores `1015` without Commander.
@@ -186,7 +186,7 @@ lsusb -d 1366:1015
 ls -l /dev/ttyACM0 /dev/serial/by-id/*J-Link*
 ```
 
-Then sidebar **BLE sniff** or MCP `ble_sniff`. HackRF stays in `radioMode: sweep` on 2400–2484. `ble_frames` listing ADV_IND means the image is talking.
+Then sidebar **BLE sniff** or MCP `ble_sniff`. HackRF stays in `radioMode: sweep` on 2400–2484. `ble_frames` listing ADV_IND means the image is talking. The tools list is one row per MAC (not a scrolling PDU dump). Click a MAC to mark that channel on the spectrum/waterfall.
 
 This nRF51 HEX (`sniffer_pca10031_1c2a221.hex`, flashed 2026-08-27) is Nordic UART **v2** at **460800** baud with SLIP `0xAB`/`0xBC`. HotIron sends nrfutil-style **v1** host packets, parses v2 EVENT_PACKET, and falls back from 1 Mbps to 460800. `ble_frames` listing ADV_IND means the image is talking. Spectrum overlay does not need the flash.
 
@@ -194,17 +194,19 @@ Newer nRF52 DKs: use the **nRF USB** port with current `nrfutil ble-sniffer` (Ac
 
 ## WSL / permissions
 
-Same usbipd pattern as the HackRF ([hardware.md](hardware.md)):
+Same usbipd pattern as the HackRF ([hardware.md](hardware.md)). From this Ubuntu:
 
-```powershell
-usbipd list
-usbipd bind --busid <id>    # Administrator if the PID just changed (1015 ↔ 0101)
-usbipd attach --wsl --hardware-id 1366:1015
+```bash
+make udev       # once; covers 1366:1015 / 0101 and the CDC ACM
+make wsl-usb    # HackRF 1d50:6089 + J-Link 1366:1015 (+ host BT 8087:0033)
+lsusb -d 1d50:6089
+lsusb -d 1366:1015
+ls -l /dev/ttyACM0 /dev/serial/by-id/*J-Link* /dev/jlink-acm
 ```
 
-`--hardware-id` survives bus-id changes. After attach, `lsusb` shows both `1d50:6089` and `1366:1015`. If the OB is J-Link-only, bind `1366:0101` and restore VCOM (step 4 above).
+`--hardware-id` survives bus-id changes. After attach, `lsusb` shows both `1d50:6089` and `1366:1015`. If the OB is J-Link-only, bind `1366:0101` and restore VCOM (step 4 above). If the PID just changed (1015 ↔ 0101), Administrator PowerShell `usbipd bind --hardware-id 1366:1015` (or `0101`) once, then `make wsl-usb` again.
 
-`ttyACM0` is `root:dialout` here (user is in `dialout`). JLINK MSD is `root:disk`. ModemManager on some hosts sends AT to ACM and corrupts the UART; Zephyr’s Nordic J-Link note is a udev ignore for `ATTRS{idVendor}=="1366"`.
+`ttyACM0` is `root:dialout` here (user is in `dialout`; `make udev` also sets MODE 0666). JLINK MSD is `root:disk`. ModemManager on some hosts sends AT to ACM and corrupts the UART; `make udev` sets `ID_MM_DEVICE_IGNORE` on this VID.
 
 Do not run Zadig WinUSB on the J-Link if you still need it on Windows — usbipd bind is enough for WSL.
 

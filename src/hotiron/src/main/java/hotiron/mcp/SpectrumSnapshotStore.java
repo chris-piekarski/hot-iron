@@ -2,15 +2,21 @@ package hotiron.mcp;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import hotiron.core.FmBandLayer;
 import hotiron.core.FmStationHit;
 import hotiron.core.BleFrame;
+import hotiron.core.GnssActivity;
+import hotiron.core.GpsSvHit;
 import hotiron.core.NfcActivity;
 import hotiron.core.NfcFrame;
 import hotiron.core.HackRFSettings;
+import hotiron.core.OperatorBrief;
 import hotiron.core.MpegTsPlayer;
 import hotiron.core.MpegTsProbe;
 import hotiron.core.RadioIdentity;
@@ -24,7 +30,8 @@ import hotiron.mcp.SpectrumSnapshot.TvHit;
 
 /**
  * Latest sweep plus a short summary ring. Writers are the processing
- * hook; MCP tools only read.
+ * hook and store-only MCP notes ({@code operator_brief}). Snapshot
+ * tools do not open USB.
  */
 public final class SpectrumSnapshotStore
 {
@@ -52,11 +59,17 @@ public final class SpectrumSnapshotStore
 	private FmListenSpectrum fmListenSpectrum = FmListenSpectrum.empty();
 	private TvWatchSpectrum tvWatchSpectrum = TvWatchSpectrum.empty();
 	private NfcActivity nfc = NfcActivity.hidden();
+	private GnssActivity gnss = GnssActivity.hidden();
+	private List<GpsSvHit> gnssSv = List.of();
+	private List<hotiron.core.CbChannelHit> cbHits = List.of();
+	private int cbChannel = hotiron.core.CbChannelPlan.HIGHWAY_CHANNEL;
 	private final ArrayDeque<NfcFrame> nfcFrames = new ArrayDeque<NfcFrame>(DEFAULT_RING);
 	private final ArrayDeque<BleFrame> bleFrames = new ArrayDeque<BleFrame>(DEFAULT_RING);
 	private volatile boolean bleSniffing;
 	private volatile String bleStatus = "idle";
 	private volatile String blePort = "";
+	private final LinkedHashMap<String, OperatorBrief> briefs = new LinkedHashMap<>();
+	private final CopyOnWriteArrayList<Runnable> briefListeners = new CopyOnWriteArrayList<>();
 
 	public SpectrumSnapshotStore()
 	{
@@ -136,6 +149,8 @@ public final class SpectrumSnapshotStore
 						hit.powerDbm, hit.confidence, hit.stage, hit.frames, hit.snrDb, hit.pilotExcessDb));
 			}
 		}
+		if (settings.getCbChannel() != null)
+			cbChannel = settings.getCbChannel().getValue();
 		String mode = RadioMode.of(settings).jsonName();
 		RadioContext next = new RadioContext(paused, released, sweepsPerSec, id.displayBoard(), id.shortSerial(),
 				id.displayFirmware(), id.usbApi, id.present, radio.startMHz, radio.endMHz, radio.fftBinHz, radio.samples,
@@ -178,6 +193,84 @@ public final class SpectrumSnapshotStore
 		return nfcActivity().toJson();
 	}
 
+	public void publishGnss(GnssActivity next)
+	{
+		synchronized (lock)
+		{
+			gnss = next == null ? GnssActivity.hidden() : next;
+		}
+	}
+
+	public GnssActivity gnssActivity()
+	{
+		synchronized (lock)
+		{
+			return gnss;
+		}
+	}
+
+	public String gnssActivityJson()
+	{
+		return gnssActivity().toJson();
+	}
+
+	public void publishGnssSv(List<GpsSvHit> hits)
+	{
+		synchronized (lock)
+		{
+			gnssSv = hits == null ? List.of() : List.copyOf(hits);
+		}
+	}
+
+	public List<GpsSvHit> gnssSv()
+	{
+		synchronized (lock)
+		{
+			return gnssSv;
+		}
+	}
+
+	public String gnssSvJson()
+	{
+		List<GpsSvHit> hits;
+		synchronized (lock)
+		{
+			hits = gnssSv;
+		}
+		return hotiron.core.GnssSniffEngine.hitsJson(hits);
+	}
+
+	public void publishCb(List<hotiron.core.CbChannelHit> hits)
+	{
+		synchronized (lock)
+		{
+			cbHits = hits == null ? List.of() : List.copyOf(hits);
+		}
+	}
+
+	public String cbChannelsJson()
+	{
+		List<hotiron.core.CbChannelHit> hits;
+		int sel;
+		synchronized (lock)
+		{
+			hits = cbHits;
+			sel = cbChannel;
+		}
+		StringBuilder sb = new StringBuilder(64 + hits.size() * 64);
+		sb.append("{\"selected\":").append(sel);
+		sb.append(",\"count\":").append(hits.size());
+		sb.append(",\"channels\":[");
+		for (int i = 0; i < hits.size(); i++)
+		{
+			if (i > 0)
+				sb.append(',');
+			sb.append(hits.get(i).toJson());
+		}
+		sb.append("]}");
+		return sb.toString();
+	}
+
 	public void publishNfcFrame(NfcFrame frame)
 	{
 		if (frame == null)
@@ -208,6 +301,82 @@ public final class SpectrumSnapshotStore
 			while (bleFrames.size() > ringCap)
 				bleFrames.removeFirst();
 		}
+	}
+
+	public void addBriefListener(Runnable listener)
+	{
+		if (listener != null)
+			briefListeners.add(listener);
+	}
+
+	public void publishBrief(OperatorBrief brief)
+	{
+		if (brief == null)
+			return;
+		synchronized (lock)
+		{
+			if (brief.isEmpty())
+				briefs.remove(brief.face);
+			else
+				briefs.put(brief.face, brief);
+		}
+		for (Runnable r : briefListeners)
+		{
+			try
+			{
+				r.run();
+			}
+			catch (RuntimeException e)
+			{
+				/* listener must not break publish */
+			}
+		}
+	}
+
+	public OperatorBrief brief(String face)
+	{
+		String key = OperatorBrief.normalizeFace(face);
+		synchronized (lock)
+		{
+			return briefs.get(key);
+		}
+	}
+
+	public Map<String, OperatorBrief> briefs()
+	{
+		synchronized (lock)
+		{
+			return Map.copyOf(briefs);
+		}
+	}
+
+	public String inferBriefFace()
+	{
+		RadioContext ctx;
+		boolean ble;
+		synchronized (lock)
+		{
+			ctx = context;
+			ble = bleSniffing;
+		}
+		return OperatorBrief.inferFace(ctx == null ? null : ctx.radioMode, ble);
+	}
+
+	public String briefsJson()
+	{
+		Map<String, OperatorBrief> all = briefs();
+		StringBuilder sb = new StringBuilder(32 + all.size() * 80);
+		sb.append('{');
+		boolean first = true;
+		for (Map.Entry<String, OperatorBrief> e : all.entrySet())
+		{
+			if (!first)
+				sb.append(',');
+			first = false;
+			sb.append(quote(e.getKey())).append(':').append(e.getValue().toJson());
+		}
+		sb.append('}');
+		return sb.toString();
 	}
 
 	public void publishBleStatus(boolean sniffing, String port, String status)

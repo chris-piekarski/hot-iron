@@ -25,6 +25,7 @@ help: ## Show this help (colorized with categories)
 	@echo "  make build"
 	@echo "  make test"
 	@echo "  make info"
+	@echo "  make wsl-usb"
 	@echo "  make stats"
 	@echo "  make start"
 	@echo ""
@@ -86,10 +87,13 @@ firmware-update: ## Flash official GSG firmware (dry-run; CONFIRM=1 to write)
 udev: ## Install persistent udev rules (sudo once). Keeps usbfs writable after usbipd attach.
 	@$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/hackrf-udev-install.sh
 
+wsl-usb: ## Attach HackRF + nRF sniffer + host Bluetooth to this WSL2 distro (usbipd).
+	@$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/wsl-usb-attach.sh
+
 ##@ Run
 start: build ## Build if needed, then launch the Linux app (MCP on 127.0.0.1:8765).
 	./src/hotiron/build/hotiron/hotiron.sh
 
 mcp: start ## Alias for start. MCP listens on 127.0.0.1:8765 unless --no-mcp.
 
-.PHONY: build clean test native-test test-hw lint stats mermaid info firmware-update udev start mcp help deps runtime-deps
+.PHONY: build clean test native-test test-hw lint stats mermaid info firmware-update udev wsl-usb start mcp help deps runtime-deps

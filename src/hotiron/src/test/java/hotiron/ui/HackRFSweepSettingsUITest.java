@@ -192,6 +192,60 @@ class HackRFSweepSettingsUITest {
     }
 
     @Test
+    void gnssSniffButtonParksAsGnssWithoutRelease() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Sniff", ui.gnssSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.gnssSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.startGnssSniffCalls);
+        assertTrue(settings.isListening().getValue());
+        assertEquals(hotiron.core.ListenService.GNSS, settings.getListenService().getValue());
+        assertEquals(hotiron.core.RadioMode.GNSS, settings.radioMode());
+        assertEquals("Stop", ui.gnssSniffPanel().sniffButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.gnssSniffPanel().sniffButton().doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue());
+    }
+
+    @Test
+    void cbListenButtonParksAsCbWithoutRelease() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Listen", ui.cbTunerPanel().listenButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.cbTunerPanel().listenButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.startCbListenCalls);
+        assertTrue(settings.isListening().getValue());
+        assertEquals(hotiron.core.ListenService.CB, settings.getListenService().getValue());
+        assertEquals(hotiron.core.RadioMode.CB, settings.radioMode());
+        assertEquals("Stop", ui.cbTunerPanel().listenButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.cbTunerPanel().listenButton().doClick());
+        flushEdt();
+        assertFalse(settings.isListening().getValue());
+    }
+
+    @Test
+    void cbScanButtonParksAndHopsUntilStopped() throws Exception {
+        FakeHackRFSettings settings = new FakeHackRFSettings();
+        HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);
+        flushEdt();
+        assertEquals("Scan", ui.cbTunerPanel().scanButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.cbTunerPanel().scanButton().doClick());
+        flushEdt();
+        assertEquals(1, settings.startCbListenCalls);
+        assertTrue(settings.isListening().getValue());
+        assertTrue(settings.isCbChatterScanning().getValue());
+        assertEquals("Stop", ui.cbTunerPanel().scanButton().getText());
+        SwingUtilities.invokeAndWait(() -> ui.cbTunerPanel().scanButton().doClick());
+        flushEdt();
+        assertFalse(settings.isCbChatterScanning().getValue());
+        assertTrue(settings.isListening().getValue());
+    }
+
+    @Test
     void bleSniffButtonDoesNotParkTheHackrf() throws Exception {
         FakeHackRFSettings settings = new FakeHackRFSettings();
         HackRFSweepSettingsUI ui = new HackRFSweepSettingsUI(settings);

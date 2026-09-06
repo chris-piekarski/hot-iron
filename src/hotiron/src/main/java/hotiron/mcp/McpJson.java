@@ -59,6 +59,15 @@ final class McpJson
 		return null;
 	}
 
+	@SuppressWarnings("unchecked")
+	static List<Object> getList(Map<String, Object> o, String key)
+	{
+		Object v = get(o, key);
+		if (v instanceof List)
+			return (List<Object>) v;
+		return null;
+	}
+
 	static Boolean getBoolean(Map<String, Object> o, String key)
 	{
 		Object v = get(o, key);

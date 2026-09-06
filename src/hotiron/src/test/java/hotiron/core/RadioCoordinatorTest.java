@@ -165,6 +165,20 @@ class RadioCoordinatorTest
 	}
 
 	@Test
+	void gnssSniffIgnoresFmDialAndTvChannel()
+	{
+		FakeHackRFSettings s = new FakeHackRFSettings();
+		UsbCount usb = new UsbCount();
+		bind(s, usb);
+		s.startGnssSniff();
+		usb.now.set(0);
+		s.getListenKHz().setValue(95_100);
+		s.getTvChannel().setValue(14);
+		assertEquals(0, usb.now.get(), "GPS L1 LO is fixed");
+		assertEquals(RadioMode.GNSS, s.radioMode());
+	}
+
+	@Test
 	void operatorGainTurnsAutoGainOffAndSplitsLnaVga()
 	{
 		FakeHackRFSettings s = new FakeHackRFSettings();

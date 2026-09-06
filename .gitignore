@@ -2,6 +2,7 @@
 /*.webm
 /*.cmd
 /*.exe
+*.pcap
 *.swp
 .idea/
 *.iml

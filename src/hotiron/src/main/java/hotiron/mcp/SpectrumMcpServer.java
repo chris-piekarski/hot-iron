@@ -68,7 +68,25 @@ public final class SpectrumMcpServer
 			SpectrumMcpTools.AutoGainHook autoGain, SpectrumMcpTools.SweepHook sweep,
 			SpectrumMcpTools.BleSniffHook bleSniff)
 	{
-		this.tools = new SpectrumMcpTools(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff);
+		this(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff, null);
+	}
+
+	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
+			SpectrumMcpTools.FmListenHook fmListen, SpectrumMcpTools.NfcSniffHook nfcSniff,
+			SpectrumMcpTools.AutoGainHook autoGain, SpectrumMcpTools.SweepHook sweep,
+			SpectrumMcpTools.BleSniffHook bleSniff, SpectrumMcpTools.GnssSniffHook gnssSniff)
+	{
+		this(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff, gnssSniff, null);
+	}
+
+	public SpectrumMcpServer(SpectrumSnapshotStore store, SpectrumMcpTools.TvWatchHook tvWatch,
+			SpectrumMcpTools.FmListenHook fmListen, SpectrumMcpTools.NfcSniffHook nfcSniff,
+			SpectrumMcpTools.AutoGainHook autoGain, SpectrumMcpTools.SweepHook sweep,
+			SpectrumMcpTools.BleSniffHook bleSniff, SpectrumMcpTools.GnssSniffHook gnssSniff,
+			SpectrumMcpTools.CbListenHook cbListen)
+	{
+		this.tools = new SpectrumMcpTools(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff, gnssSniff,
+				cbListen);
 	}
 
 	public SpectrumMcpTools tools()

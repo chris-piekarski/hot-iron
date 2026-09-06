@@ -163,6 +163,24 @@ class AnalyzerSettingsTest {
 		assertEquals(NfcBandPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
 		assertEquals(NfcBandPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
 		assertTrue(s.isListening().getValue());
+		s.startGnssSniff();
+		assertEquals(RadioMode.GNSS, s.radioMode());
+		assertEquals(ListenService.GNSS, s.getListenService().getValue());
+		assertEquals(GnssBandPlan.GPS_VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(GnssBandPlan.GPS_VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertTrue(s.isListening().getValue());
+		s.startCbListen();
+		assertEquals(RadioMode.CB, s.radioMode());
+		assertEquals(ListenService.CB, s.getListenService().getValue());
+		assertEquals(CbChannelPlan.VIEW_START_MHZ, s.getFrequency().getValue().getStartMHz());
+		assertEquals(CbChannelPlan.VIEW_END_MHZ, s.getFrequency().getValue().getEndMHz());
+		assertEquals(19, s.getCbChannel().getValue());
+		s.startCbScan();
+		assertTrue(s.isCbChatterScanning().getValue());
+		assertEquals(RadioMode.CB, s.radioMode());
+		s.startCbScan();
+		assertFalse(s.isCbChatterScanning().getValue());
+		assertTrue(s.isListening().getValue());
 	}
 
 	@Test

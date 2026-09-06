@@ -12,3 +12,7 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="1fc9", ATTR{idProduct}=="000c", MODE="0666", 
 # Bench nRF DK J-Link OB. 1015 = CDC+MSD+BULK; 0101 = J-Link-only if VCOM was disabled.
 SUBSYSTEM=="usb", ATTR{idVendor}=="1366", ATTR{idProduct}=="1015", MODE="0666", GROUP="plugdev", SYMLINK+="jlink-ob-%k"
 SUBSYSTEM=="usb", ATTR{idVendor}=="1366", ATTR{idProduct}=="0101", MODE="0666", GROUP="plugdev", SYMLINK+="jlink-%k"
+# CDC ACM for BLE sniff. MODE 0666 for WSL usbipd; ignore ModemManager AT probes.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1366", ATTRS{idProduct}=="1015", MODE="0666", GROUP="dialout", SYMLINK+="jlink-acm", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{ID_MM_PORT_IGNORE}="1"
+# Motherboard Intel Wireless Bluetooth (AX201/AX210-class). Host adapter, not the nRF sniffer.
+SUBSYSTEM=="usb", ATTR{idVendor}=="8087", ATTR{idProduct}=="0033", MODE="0666", GROUP="plugdev", SYMLINK+="intel-bt-%k"

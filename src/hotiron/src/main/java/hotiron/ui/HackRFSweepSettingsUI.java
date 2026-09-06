@@ -57,6 +57,8 @@ public class HackRFSweepSettingsUI extends JPanel
 	private ChartToggleBar chartToggles;
 	private HardwarePane hardwarePane;
 	private BandToolsSlot bandSlot;
+	private OperatorBriefPane briefPane;
+	private Runnable onBandFaceChanged;
 	private JSpinner spinnerFFTBinHz;
 	private JSpinner spinner_numberOfSamples;
 	private JCheckBox chckbxAntennaPower;
@@ -75,6 +77,8 @@ public class HackRFSweepSettingsUI extends JPanel
 	private McpLogPane mcpLog;
 	private TvTunerPanel tvTunerPanel;
 	private NfcSniffPanel nfcSniffPanel;
+	private GnssSniffPanel gnssSniffPanel;
+	private CbTunerPanel cbTunerPanel;
 	private BleSniffPanel bleSniffPanel;
 	private JSlider sliderVolume;
 	private JComboBox<String> comboRadio;
@@ -117,11 +121,15 @@ public class HackRFSweepSettingsUI extends JPanel
 		tvTunerPanel = new TvTunerPanel();
 		btnWatch = tvTunerPanel.watchButton();
 		nfcSniffPanel = new NfcSniffPanel();
+		gnssSniffPanel = new GnssSniffPanel();
+		cbTunerPanel = new CbTunerPanel();
 		bleSniffPanel = new BleSniffPanel();
 		bandSlot = new BandToolsSlot(
 				new BandTool(BandToolKind.FM, tunerPanel),
 				new BandTool(BandToolKind.TV, tvTunerPanel),
 				new BandTool(BandToolKind.NFC, nfcSniffPanel),
+				new BandTool(BandToolKind.GNSS, gnssSniffPanel),
+				new BandTool(BandToolKind.CB, cbTunerPanel),
 				new BandTool(BandToolKind.BLE, bleSniffPanel));
 
 		gainRail = new SpectrumGainRail();
@@ -169,10 +177,15 @@ public class HackRFSweepSettingsUI extends JPanel
 		footer.installAutoSweep(chckbxAutoSweep);
 
 		mcpLog = new McpLogPane();
+		briefPane = new OperatorBriefPane();
 		JLabel toolsTitle = new JLabel("Spectrum tools", SwingConstants.LEFT);
 		setLayout(new BorderLayout(0, 6));
 		add(toolsTitle, BorderLayout.NORTH);
-		add(bandSlot, BorderLayout.CENTER);
+		JPanel center = new JPanel(new BorderLayout(0, 6));
+		center.setOpaque(false);
+		center.add(bandSlot, BorderLayout.CENTER);
+		center.add(briefPane, BorderLayout.SOUTH);
+		add(center, BorderLayout.CENTER);
 		add(mcpLog, BorderLayout.SOUTH);
 
 		bindViewToModel();
@@ -294,6 +307,37 @@ public class HackRFSweepSettingsUI extends JPanel
 			else
 				hRF.startSniff();
 		});
+		cbTunerPanel.setOnTune(dir -> {
+			hotiron.core.CbChannel next = hotiron.core.CbStationDial.tune(hRF.getCbChannel().getValue(), dir);
+			if (next.number != hRF.getCbChannel().getValue())
+				hRF.getCbChannel().setValue(next.number);
+		});
+		cbTunerPanel.setOnSeek(dir -> {
+			hotiron.core.CbChannel next = hotiron.core.CbStationDial.seek(hRF.getDetectedCbStations().getValue(),
+					hRF.getCbChannel().getValue(), dir);
+			if (next.number != hRF.getCbChannel().getValue())
+				hRF.getCbChannel().setValue(next.number);
+		});
+		cbTunerPanel.setOnSelect(ch -> {
+			if (ch != hRF.getCbChannel().getValue())
+				hRF.getCbChannel().setValue(ch);
+		});
+		cbTunerPanel.setOnScan(hRF::startCbScan);
+		cbTunerPanel.listenButton().addActionListener(e -> {
+			if (Boolean.TRUE.equals(hRF.isListening().getValue())
+					&& hRF.getListenService().getValue() == hotiron.core.ListenService.CB)
+				hRF.stopListen();
+			else
+				hRF.startCbListen();
+		});
+		new MVCController(cbTunerPanel.volumeSlider(), hRF.getListenVolume());
+		gnssSniffPanel.setOnSniff(() -> {
+			if (Boolean.TRUE.equals(hRF.isListening().getValue())
+					&& hRF.getListenService().getValue() == hotiron.core.ListenService.GNSS)
+				hRF.stopListen();
+			else
+				hRF.startGnssSniff();
+		});
 		bleSniffPanel.setOnSniff(() -> {
 			if (Boolean.TRUE.equals(hRF.isBleSniffing().getValue()))
 				hRF.stopBleSniff();
@@ -306,6 +350,8 @@ public class HackRFSweepSettingsUI extends JPanel
 			boolean fm = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.FM;
 			boolean tv = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.TV;
 			boolean nfc = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.NFC;
+			boolean gnss = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.GNSS;
+			boolean cb = parked && hRF.getListenService().getValue() == hotiron.core.ListenService.CB;
 			int kHz = hRF.getListenKHz().getValue();
 			tunerPanel.setKHz(kHz);
 			tunerPanel.setListening(fm);
@@ -316,6 +362,11 @@ public class HackRFSweepSettingsUI extends JPanel
 			tvTunerPanel.setQualifying(Boolean.TRUE.equals(hRF.isTvQualifying().getValue()),
 					hRF.getTvQualifyChannel().getValue());
 			nfcSniffPanel.setSniffing(nfc);
+			gnssSniffPanel.setSniffing(gnss);
+			cbTunerPanel.setChannel(hRF.getCbChannel().getValue());
+			cbTunerPanel.setListening(cb);
+			cbTunerPanel.setScanning(Boolean.TRUE.equals(hRF.isCbChatterScanning().getValue()));
+			cbTunerPanel.setStations(hRF.getDetectedCbStations().getValue());
 			bleSniffPanel.setSniffing(Boolean.TRUE.equals(hRF.isBleSniffing().getValue()));
 			btnPause.setEnabled(!parked && !released);
 			refreshBandTools();
@@ -325,15 +376,24 @@ public class HackRFSweepSettingsUI extends JPanel
 		hRF.getBandScan().addListener(scan -> SwingUtilities.invokeLater(() -> {
 			tunerPanel.setScanning(scan == hotiron.core.BandScan.FM);
 			tvTunerPanel.setScanning(scan == hotiron.core.BandScan.TV);
+			cbTunerPanel.setScanning(Boolean.TRUE.equals(hRF.isCbChatterScanning().getValue()));
 		}));
 		tunerPanel.setScanning(hRF.getBandScan().getValue() == hotiron.core.BandScan.FM);
 		tvTunerPanel.setScanning(hRF.getBandScan().getValue() == hotiron.core.BandScan.TV);
+		cbTunerPanel.setScanning(Boolean.TRUE.equals(hRF.isCbChatterScanning().getValue()));
+		hRF.isCbChatterScanning().addListener(on -> SwingUtilities.invokeLater(
+				() -> cbTunerPanel.setScanning(Boolean.TRUE.equals(on))));
 		hRF.getListenKHz().addListener(() -> SwingUtilities.invokeLater(syncListen));
 		hRF.getTvChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
+		hRF.getCbChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
 		hRF.getDetectedFmStations().addListener(hits -> SwingUtilities.invokeLater(() -> tunerPanel.setStations(hits)));
 		hRF.getDetectedTvStations().addListener(hits -> SwingUtilities.invokeLater(() -> {
 			tvTunerPanel.setStations(hits);
 			tvTunerPanel.setChannel(hRF.getTvChannel().getValue());
+		}));
+		hRF.getDetectedCbStations().addListener(hits -> SwingUtilities.invokeLater(() -> {
+			cbTunerPanel.setStations(hits);
+			cbTunerPanel.setChannel(hRF.getCbChannel().getValue());
 		}));
 		hRF.isTvQualifying().addListener(on -> SwingUtilities.invokeLater(syncListen));
 		hRF.getTvQualifyChannel().addListener(ch -> SwingUtilities.invokeLater(syncListen));
@@ -409,6 +469,18 @@ public class HackRFSweepSettingsUI extends JPanel
 	{
 		BandContext next = BandContext.of(hRF).stabilize(bandSlot.shown(), hRF.getFrequency().getValue());
 		bandSlot.apply(next);
+		if (onBandFaceChanged != null)
+			onBandFaceChanged.run();
+	}
+
+	public void setOnBandFaceChanged(Runnable onBandFaceChanged)
+	{
+		this.onBandFaceChanged = onBandFaceChanged;
+	}
+
+	public OperatorBriefPane briefPane()
+	{
+		return briefPane;
 	}
 
 	@Override
@@ -488,6 +560,14 @@ public class HackRFSweepSettingsUI extends JPanel
 		return nfcSniffPanel;
 	}
 
+	public GnssSniffPanel gnssSniffPanel() {
+		return gnssSniffPanel;
+	}
+
+	public CbTunerPanel cbTunerPanel() {
+		return cbTunerPanel;
+	}
+
 	public BleSniffPanel bleSniffPanel() {
 		return bleSniffPanel;
 	}
@@ -507,6 +587,11 @@ public class HackRFSweepSettingsUI extends JPanel
 	public void setFmSignalLevel(float level01)
 	{
 		tunerPanel.setLiveLevel(level01);
+	}
+
+	public void setCbSignalLevel(float level01)
+	{
+		cbTunerPanel.setLiveLevel(level01);
 	}
 
 	JButton restartButton() {
@@ -553,7 +638,7 @@ public class HackRFSweepSettingsUI extends JPanel
 		return bandSlot;
 	}
 
-	BandContext bandContext() {
+	public BandContext bandContext() {
 		return bandSlot.shown();
 	}
 

@@ -116,6 +116,18 @@ public enum BandToolKind
 		{
 			return scan == BandScan.NFC || (parked && service == ListenService.NFC);
 		}
+
+		@Override
+		double viewFit(FrequencyRange view)
+		{
+			if (view == null || !inView(view))
+				return 0;
+			/* PHY 12–15 is NFC; 26–28 is also NFC×2 but CB owns that QS. */
+			if (Math.abs(view.getStartMHz() - NfcBandPlan.VIEW_START_MHZ) < 0.5
+					&& Math.abs(view.getEndMHz() - NfcBandPlan.VIEW_END_MHZ) < 0.5)
+				return 1.0;
+			return 0.4;
+		}
 	},
 	BLE
 	{
@@ -141,6 +153,72 @@ public enum BandToolKind
 		{
 			return bleSniffing;
 		}
+	},
+	GNSS
+	{
+		@Override
+		boolean inView(FrequencyRange view)
+		{
+			return view != null && GnssBandPlan.viewIsGnss(view.getStartMHz(), view.getEndMHz());
+		}
+
+		@Override
+		boolean hold(FrequencyRange view)
+		{
+			if (view == null)
+				return false;
+			double start = view.getStartMHz();
+			double end = view.getEndMHz();
+			return GnssBandPlan.overlapsL1(start, end) && (end - start) <= GNSS_HIDE_SPAN_MHZ;
+		}
+
+		@Override
+		boolean pinned(boolean parked, ListenService service, boolean bleSniffing, BandScan scan)
+		{
+			return parked && service == ListenService.GNSS;
+		}
+
+		@Override
+		double viewFit(FrequencyRange view)
+		{
+			if (view == null || !inView(view))
+				return 0;
+			return BandContext.overlapMHz(view.getStartMHz(), view.getEndMHz(), GnssBandPlan.VIEW_START_MHZ,
+					GnssBandPlan.VIEW_END_MHZ) / Math.max(1, view.spanMHz());
+		}
+	},
+	CB
+	{
+		@Override
+		boolean inView(FrequencyRange view)
+		{
+			return view != null && CbChannelPlan.viewIsCb(view.getStartMHz(), view.getEndMHz());
+		}
+
+		@Override
+		boolean hold(FrequencyRange view)
+		{
+			if (view == null)
+				return false;
+			double start = view.getStartMHz();
+			double end = view.getEndMHz();
+			return CbChannelPlan.overlapsBand(start, end) && (end - start) <= CB_HIDE_SPAN_MHZ;
+		}
+
+		@Override
+		boolean pinned(boolean parked, ListenService service, boolean bleSniffing, BandScan scan)
+		{
+			return scan == BandScan.CB || (parked && service == ListenService.CB);
+		}
+
+		@Override
+		double viewFit(FrequencyRange view)
+		{
+			if (view == null || !inView(view))
+				return 0;
+			return BandContext.overlapMHz(view.getStartMHz(), view.getEndMHz(), CbChannelPlan.VIEW_START_MHZ,
+					CbChannelPlan.VIEW_END_MHZ) / Math.max(1, view.spanMHz());
+		}
 	};
 
 	static final double FM_SHOW_SPAN_MHZ = 80;
@@ -149,6 +227,8 @@ public enum BandToolKind
 	static final double TV_HIDE_SPAN_MHZ = 220;
 	static final double NFC_HIDE_SPAN_MHZ = 24;
 	static final double BLE_HIDE_SPAN_MHZ = 180;
+	static final double GNSS_HIDE_SPAN_MHZ = 120;
+	static final double CB_HIDE_SPAN_MHZ = 16;
 
 	abstract boolean inView(FrequencyRange view);
 

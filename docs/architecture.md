@@ -41,14 +41,14 @@ flowchart TD
 - `SpurFilter`, `PersistentDisplay`, `SpectrumPowerScale`, `IqSpectrum`
 - `AnalyzerSettings` (all `HackRFSettings` model values; radio vs display via `isRadioSetting`)
 - `SweepConfig` — immutable snapshot of **radio** fields only (range, FFT, samples, LNA/VGA, antenna, CLKOUT, serial)
-- `RadioMode` — derived (`stopped` / `sweep` / `listen` / `watch`), not stored
+- `RadioMode` — derived (`stopped` / `sweep` / `listen` / `watch` / `nfc` / `gnss`), not stored
 - `AutoGainPolicy` (LNA then VGA; display policy, writes radio gain)
 - `FmListenGainPolicy` / `TvWatchGainPolicy` — parked-IQ seeds (Listen adds IF so a 200 kHz station uses the 8-bit ADC; Watch UHF starts at LNA 40 + VGA 22, Auto Watch enables the RF amp for that session, and IF keeps trimming toward ~0.5 RMS)
 - `BandScanSession` — FM/TV/NFC **Scan** dwells each window after the first live sweep (TV: VHF then UHF; NFC: 12–15 then 27.12 / 40.68) so **Seek** jumps a pinned station list (NFC has no Seek list)
 - `AutoSweepPolicy` (FFT Bin + samples from span; display policy, writes radio FFT/samples; hysteresis so pan does not thrash)
 - `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz pad so FM 88–108 is filled)
-- `FrequencyAxis`, `BandMark`, `WifiBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer` (plot overlays do not invent their own MHz↔pixel map)
-- Channel catalogs + trackers: `FmChannelPlan` / `FmStationTracker`, `TvChannelPlan` / `TvStationTracker`, `WifiChannelPlan`, `NfcBandPlan` / `NfcActivityTracker`
+- `FrequencyAxis`, `BandMark`, `WifiBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer`, `GnssBandLayer` (plot overlays do not invent their own MHz↔pixel map)
+- Channel catalogs + trackers: `FmChannelPlan` / `FmStationTracker`, `TvChannelPlan` / `TvStationTracker`, `WifiChannelPlan`, `NfcBandPlan` / `NfcActivityTracker`, `GnssBandPlan` / `GnssActivityTracker`
 - `EMA`, `FFTBins`, `RadioIdentity`, `AudioSink` / `AudioSinks`
 - Frequency allocation tables
 
@@ -65,10 +65,10 @@ These are the best candidates for unit testing (and have the majority of our tes
 ### UI Layer
 - Swing + FlatLaf + JFreeChart. Settings widgets bind through `hotiron.mvc` (`ModelValue` + `MVCController`); do not add new model fields on the JFrame.
 - `WaterfallPlot` + `WaterfallTimeScale` (left gutter, newest at the top). Palette follows the live dB window when auto-scale is on. History is kept across gain-only USB restarts (`DatasetSpectrum.sameAxisAs`). Chart refresh is capped at 30 fps even when a narrow window finishes hundreds of sweeps per second.
-- Operator chrome is composed, not a growing JFrame: `OperatorShell` + `OperatorLayout` (banner / gain rail + plots / 520 px Spectrum tools + MCP log / status), `OperatorNavBanner`, `RadioSessionStrip`, `SpectrumGainRail`, `ChartToggleBar`, `BandToolsSlot`. Band faces register as `BandTool` + `BandToolKind`; `BandContext` is the single kind that qualifies (policy lives on the kind, not an if/else in the settings column). The slot fills the column and scrolls above the MCP log. `HackRFSweepSettingsUI` binds `AnalyzerSettings` to those parts. `SweepStatusBar`, radio identity, MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), BLE / ANT+ (`BleBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), NFC / 13.56 (`NfcBandLayer` + `NfcActivityTracker` + `NfcHud` / `NfcSniffHud`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch / NFC Scan works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen splits the bottom strip into parked RF | AUDIO waterfalls; Watch splits the same way into parked RF ±8 MHz | AUDIO 0–16 kHz. NFC Sniff keeps a single `WaterfallPlot` (NFC banner) at the same vertical split.
+- Operator chrome is composed, not a growing JFrame: `OperatorShell` + `OperatorLayout` (banner / gain rail + plots / 520 px Spectrum tools + MCP log / status), `OperatorNavBanner`, `RadioSessionStrip`, `SpectrumGainRail`, `ChartToggleBar`, `BandToolsSlot`. Band faces register as `BandTool` + `BandToolKind`; `BandContext` is the single kind that qualifies (policy lives on the kind, not an if/else in the settings column). The slot fills the column and scrolls above the Agent brief and MCP log. `HackRFSweepSettingsUI` binds `AnalyzerSettings` to those parts. `SweepStatusBar`, radio identity, MCP status (`McpStatus`). Spectrum overlays share `FrequencyAxis` + `BandHeaderPainter`: Wi-Fi (`WifiBandLayer`), BLE / ANT+ (`BleBandLayer`), live US FM (`FmBandLayer` + `FmStationTracker`), US TV (`TvBandLayer` + `TvChannelOverlay`), NFC / 13.56 (`NfcBandLayer` + `NfcActivityTracker` + `NfcHud` / `NfcSniffHud`), GNSS L1 (`GnssBandLayer` + `GnssActivityTracker` + `GnssHud` / `GnssSniffHud`), and zoomed-out Quick Select (`QuickSelectBandLayer`). Header hit-test is how click-to-listen / click-to-watch / NFC Scan works. Frequency zoom (`SpectrumZoom` + `SpectrumZoomHistory`) retunes the sweep like a Grafana time-range drag. Listen splits the bottom strip into parked RF | AUDIO waterfalls; Watch splits the same way into parked RF ±8 MHz | AUDIO 0–16 kHz. NFC Sniff keeps a single `WaterfallPlot` (NFC banner) at the same vertical split.
 
 ### MCP (`hotiron.mcp`)
-Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (on by default; `--no-mcp` to disable) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `tv_stations`, `nfc_activity`, `nfc_frames`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins`, `tv_debug`, `tv_debug_history`, `ble_frames`, `ble_activity`. Writes: `fm_listen` (US FM dial), `tv_watch` (US ATSC ch 2–36), and `nfc_sniff` set the same `AnalyzerSettings` the operator uses (EDT), then park. `ble_sniff` opens the nRF ACM (second USB) and sets 2400–2484; it does not park the HackRF. Snapshot tools must not restart USB or open `/dev/ttyACM0`. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
+Model Context Protocol on the **same JVM** as the GUI (no second USB open). `SweepUiHooks.onFullSweepProcessed` copies filled bins into `SpectrumSnapshotStore` at ≤10 Hz. `SpectrumMcpServer` speaks JSON-RPC (`Content-Length` or one JSON object per line) on stdio or `127.0.0.1:8765` (on by default; `--no-mcp` to disable) and publishes `McpStatus` (bind, clients, last tool) to the sidebar and status bar. Read tools: `spectrum_summary`, `spectrum_snapshot`, `radio_identity`, `sweep_config` (radio vs display, including `radioMode` / `listenMHz` / `tvChannel` / `tvLocked` / `autoSweep`), `fm_stations`, `tv_stations`, `nfc_activity`, `nfc_frames`, `gnss_activity`, `gnss_sv`, `fm_spectrum`, `tv_spectrum`, `spectrum_occupancy`, `spectrum_history`, `spectrum_history_bins`, `tv_debug`, `tv_debug_history`, `ble_frames`, `ble_activity`, `operator_briefs`. Writes: `fm_listen` (US FM dial), `tv_watch` (US ATSC ch 2–36), `nfc_sniff`, and `gnss_sniff` set the same `AnalyzerSettings` the operator uses (EDT), then park. `ble_sniff` opens the nRF ACM (second USB) and sets 2400–2484; it does not park the HackRF. `operator_brief` is a store-only note on the operator Agent brief pane / plot HUD (no USB). Snapshot tools must not restart USB or open `/dev/ttyACM0`. Hop holes are omitted, not reported as −150 dBm. Occupancy (`SpectrumOccupancy`) is deterministic on filled bins (noise+8 dB). Stdio clients use `scripts/mcp-hotiron-proxy.py`.
 
 ### Build System
 - Root `Makefile` — convenience targets (`make help`, `make test`, `make start`, etc.).
@@ -83,26 +83,38 @@ Model Context Protocol on the **same JVM** as the GUI (no second USB open). `Swe
 
 ## Exclusive USB
 
-`RadioMode` is derived, not stored (`RadioMode.of(settings)`): released → `stopped`; else parked + `ListenService.TV` → `watch`; parked + `ListenService.NFC` → `nfc`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`, `nfc_dec.h`).
+`RadioMode` is derived, not stored (`RadioMode.of(settings)`): released → `stopped`; else parked + `ListenService.TV` → `watch`; parked + `ListenService.NFC` → `nfc`; parked + `ListenService.GNSS` → `gnss`; parked + `ListenService.CB` → `cb`; parked FM → `listen`; otherwise `sweep`. Native headers document the same exclusive contract (`hackrf_sweep.h`, `hackrf_fm.h`, `nfc_dec.h`).
 
 ```mermaid
 flowchart TD
     Sweep -->|startListen| Listen
     Sweep -->|startWatch| Watch
     Sweep -->|startSniff| Nfc
+    Sweep -->|startGnssSniff| Gnss
+    Sweep -->|startCbListen| Cb
     Sweep -->|releaseRadio| Stopped
     Listen -->|stopListen| Sweep
     Watch -->|stopListen| Sweep
     Nfc -->|stopListen| Sweep
+    Gnss -->|stopListen| Sweep
+    Cb -->|stopListen| Sweep
     Listen -->|startWatch| Watch
     Watch -->|startListen| Listen
     Listen -->|startSniff| Nfc
     Watch -->|startSniff| Nfc
     Nfc -->|startListen| Listen
     Nfc -->|startWatch| Watch
+    Listen -->|startGnssSniff| Gnss
+    Watch -->|startGnssSniff| Gnss
+    Nfc -->|startGnssSniff| Gnss
+    Gnss -->|startListen| Listen
+    Gnss -->|startWatch| Watch
+    Gnss -->|startSniff| Nfc
     Listen -->|releaseRadio| Stopped
     Watch -->|releaseRadio| Stopped
     Nfc -->|releaseRadio| Stopped
+    Gnss -->|releaseRadio| Stopped
+    Cb -->|releaseRadio| Stopped
     Stopped -->|restartSweep| Sweep
 ```
 
@@ -189,7 +201,7 @@ Policies are `final` classes with private constructors and static methods. They 
 | `TvWatchGainPolicy` | UHF watch seed (LNA 40 + VGA 22) |
 | `AutoSweepPolicy` | Finest FFT bin with ≤~4000 dataset points, always 8192 samples, keep current bin while length stays 1500–6000 |
 | `RadioCoordinator` | Operator vs Auto vs parked retune; Auto writes run as `Source.AUTO_POLICY` so they do not look like spinner overrides |
-| `RadioSession` | Exclusive USB queue, debounce, sweep vs Listen vs Watch at start |
+| `RadioSession` | Exclusive USB queue, debounce, sweep vs Listen vs Watch vs NFC vs GNSS at start |
 | `SweepFramePolicy` | Chart ≤30 fps, axis-history, Auto-gain eligibility (off while parked or scanning) |
 | `SweepLiveLoop` | One full-sweep tick: axis, 10 Hz detect+MCP, then paint-gated detect/scan/AGC/paint |
 | `SpurFilter` | Calibrate across N sweeps, then subtract; recalibrate on axis change |
@@ -197,7 +209,7 @@ Policies are `final` classes with private constructors and static methods. They 
 
 ### Shared frequency map
 
-`FrequencyAxis` is the only MHz↔pixel map. Zoom-drag, waterfall, and every overlay use it. Layers are pure functions of axis + domain data (`WifiBandLayer`, `BleBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer`, `QuickSelectBandLayer`) and emit `BandMark`s. UI overlays are thin: `FrequencyAxis.fromArea` → layer `marks()` → `BandHeaderPainter.paint`. Do not add a second MHz↔pixel map. NFC Quick Select is **12–15 MHz** so Type A/B sidebands are on-screen; PHY notes are in [nfc.md](nfc.md).
+`FrequencyAxis` is the only MHz↔pixel map. Zoom-drag, waterfall, and every overlay use it. Layers are pure functions of axis + domain data (`WifiBandLayer`, `BleBandLayer`, `FmBandLayer`, `TvBandLayer`, `NfcBandLayer`, `GnssBandLayer`, `QuickSelectBandLayer`) and emit `BandMark`s. UI overlays are thin: `FrequencyAxis.fromArea` → layer `marks()` → `BandHeaderPainter.paint`. Do not add a second MHz↔pixel map. NFC Quick Select is **12–15 MHz** so Type A/B sidebands are on-screen; PHY notes are in [nfc.md](nfc.md). GNSS Quick Select is **1559–1610 MHz** RNSS L1; GPS C/A sniff parks 1575.42 / 4 MS/s ([gnss.md](gnss.md)).
 
 `FmStationTracker` / `TvStationTracker` / `NfcActivityTracker` add temporal hysteresis so a one-sweep flash is not labeled.
 

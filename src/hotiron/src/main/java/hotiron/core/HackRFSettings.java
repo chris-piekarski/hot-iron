@@ -94,6 +94,16 @@ public interface HackRFSettings {
 	/** Parked NFC sniff at 11.56 MHz / 10 MS/s. Stops the sweep; USB stays owned. */
 	public void startSniff();
 
+	/** Parked GPS L1 C/A sniff at 1575.42 MHz / 4 MS/s. Stops the sweep; USB stays owned. */
+	public default void startGnssSniff()
+	{
+	}
+
+	/** Parked CB AM listen at 27.185 MHz / 4 MS/s. Stops the sweep; USB stays owned. */
+	public default void startCbListen()
+	{
+	}
+
 	/** Parallel nRF BLE sniff. Sets 2400–2484; does not park the HackRF. */
 	public default void startBleSniff()
 	{
@@ -122,6 +132,30 @@ public interface HackRFSettings {
 
 	/** Dwell 12–15 MHz then 27.12 / 40.68 MHz NFC harmonics. */
 	public void startNfcScan();
+
+	/**
+	 * Park AM if needed and hop CB channels until chatter. Same exclusive
+	 * path as Listen. Press again to stop hopping (stay on the channel).
+	 */
+	public default void startCbScan()
+	{
+	}
+
+	public default ModelValueBoolean isCbChatterScanning()
+	{
+		return new ModelValueBoolean("CB chatter scan", false);
+	}
+
+	public default ModelValueInt getCbChannel()
+	{
+		return new ModelValueInt("CB channel", CbChannelPlan.HIGHWAY_CHANNEL, 1, CbChannelPlan.FIRST_CHANNEL,
+				CbChannelPlan.LAST_CHANNEL);
+	}
+
+	public default ModelValue<java.util.List<CbChannelHit>> getDetectedCbStations()
+	{
+		return new ModelValue<>("Detected CB", java.util.List.of());
+	}
 
 	public void stopScan();
 

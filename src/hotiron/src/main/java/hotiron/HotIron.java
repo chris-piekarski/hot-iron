@@ -84,6 +84,21 @@ import hotiron.core.FmListenEngine;
 import hotiron.core.FmStationDial;
 import hotiron.core.FmStationHit;
 import hotiron.core.BleSniffEngine;
+import hotiron.core.GnssActivity;
+import hotiron.core.GnssBandLayer;
+import hotiron.core.GnssBandPlan;
+import hotiron.core.GnssSniffEngine;
+import hotiron.core.GnssSniffGainPolicy;
+import hotiron.core.GpsSvHit;
+import hotiron.core.AmDemodulator;
+import hotiron.core.CbChannel;
+import hotiron.core.CbChannelHit;
+import hotiron.core.CbChannelPlan;
+import hotiron.core.CbListenEngine;
+import hotiron.core.CbListenGainPolicy;
+import hotiron.core.CbBandLayer;
+import hotiron.core.CbChatter;
+import hotiron.core.CbStationDial;
 import hotiron.core.NfcActivity;
 import hotiron.core.NfcFrame;
 import hotiron.core.NfcSniffEngine;
@@ -208,6 +223,10 @@ public class HotIron {
 
 	private volatile List<FmStationHit>				fmStations							= List.of();
 	private volatile NfcActivity					nfcActivity							= NfcActivity.quiet();
+	private volatile GnssActivity					gnssActivity						= GnssActivity.quiet();
+	private volatile List<GpsSvHit>					gnssHits							= List.of();
+	private volatile List<CbChannelHit>				cbHits								= List.of();
+	private volatile hotiron.core.BleMacRow			bleSelect;
 	private volatile List<hotiron.core.TvStationHit> tvStations = List.of();
 	private final StationDetectSink stationDetect = new StationDetectSink();
 	private hotiron.core.TvQualifySession tvQualify;
@@ -245,6 +264,9 @@ public class HotIron {
 	private SweepStatusBar sweepStatusBar;
 	private final FmListenEngine fmEngine = new FmListenEngine();
 	private final NfcSniffEngine nfcEngine = new NfcSniffEngine();
+	private final GnssSniffEngine gnssEngine = new GnssSniffEngine();
+	private final CbListenEngine cbEngine = new CbListenEngine();
+	private final hotiron.core.CbChatterScan cbChatterScan = new hotiron.core.CbChatterScan();
 	private final Object bleLock = new Object();
 	private volatile BleSniffEngine bleEngine;
 	private volatile NfcFrame lastNfcFrame;
@@ -274,6 +296,8 @@ public class HotIron {
 				fmEngine.stop();
 				tvEngine.stop();
 				nfcEngine.stop();
+				gnssEngine.stop();
+				cbEngine.stop();
 				if (threadHackrfSweep != null) {
 					try {
 						threadHackrfSweep.join(2000);
@@ -349,6 +373,18 @@ public class HotIron {
 			}
 
 			@Override
+			public void startGnssSniff() {
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
+			}
+
+			@Override
+			public void startCbListen() {
+				radioSession.cancelDebounce();
+				radioSession.applyNow();
+			}
+
+			@Override
 			public void startBleSniff() {
 				startBleSniffSession();
 			}
@@ -395,6 +431,21 @@ public class HotIron {
 
 		refreshRadioIdentity();
 		settingsPanel = new HackRFSweepSettingsUI(settings);
+		settingsPanel.setOnBandFaceChanged(this::refreshOperatorBrief);
+		snapshotStore.addBriefListener(() -> SwingUtilities.invokeLater(this::refreshOperatorBrief));
+		settingsPanel.bleSniffPanel().setOnSelect(row -> {
+			bleSelect = row;
+			if (waterfallPlot != null)
+			{
+				if (row != null && Double.isFinite(row.mhz()))
+					waterfallPlot.setPacketHighlight(row.mhz(), row.lastMs);
+				else
+					waterfallPlot.clearPacketHighlight();
+			}
+			if (chartPanel != null)
+				chartPanel.repaint();
+		});
+		refreshOperatorBrief();
 
 		splitPane = OperatorShell.verticalPlots(
 				OperatorShell.spectrumStack(settingsPanel.chartToggleBar(), chartPanel), waterfallPlot);
@@ -507,6 +558,9 @@ public class HotIron {
 				settings.startBleSniff();
 			else
 				settings.stopBleSniff();
+		}), () -> runOnEdt(settings::startGnssSniff), ch -> runOnEdt(() -> {
+			settings.getCbChannel().setValue(ch);
+			settings.startCbListen();
 		}));
 		mcpServer.addStatusListener(s -> settings.getMcpStatus().setValue(s));
 	}
@@ -717,6 +771,8 @@ public class HotIron {
 							hotiron.mcp.SpectrumSnapshot.DEFAULT_MAX_POINTS, null), nowMs);
 					snapshotStore.publishContext(settings, fmHits, sweepsPerSec);
 					snapshotStore.publishNfc(stationDetect.lastNfc());
+					snapshotStore.publishGnss(stationDetect.lastGnss());
+					snapshotStore.publishCb(stationDetect.lastCb());
 				}
 			}, new SweepLiveLoop.Hooks() {
 				@Override
@@ -783,6 +839,8 @@ public class HotIron {
 			fmStations = stationDetect.lastFm();
 			tvStations = stationDetect.lastTv();
 			nfcActivity = stationDetect.lastNfc();
+			gnssActivity = stationDetect.lastGnss();
+			cbHits = stationDetect.lastCb();
 			synchronized (perfWatch) {
 				perfWatch.hwFullSpectrumRefreshes++;
 			}
@@ -898,9 +956,12 @@ public class HotIron {
 		final boolean watch = mode == RadioMode.WATCH;
 		final boolean listen = mode == RadioMode.LISTEN;
 		final boolean nfc = mode == RadioMode.NFC;
+		final boolean gnss = mode == RadioMode.GNSS;
+		final boolean cb = mode == RadioMode.CB;
 		threadHackrfSweep = new Thread(() -> {
 			Thread.currentThread().setName(watch ? "hackrf_tv"
-					: (listen ? "hackrf_fm" : (nfc ? "hackrf_nfc" : "hackrf_sweep")));
+					: (listen ? "hackrf_fm" : (nfc ? "hackrf_nfc" : (gnss ? "hackrf_gnss"
+							: (cb ? "hackrf_cb" : "hackrf_sweep")))));
 			try {
 				forceStopSweep = false;
 				if (sweepEngine != null)
@@ -911,6 +972,10 @@ public class HotIron {
 					runFmListen();
 				else if (nfc)
 					runNfcSniff();
+				else if (gnss)
+					runGnssSniff();
+				else if (cb)
+					runCbListen();
 				else
 					sweep();
 			} catch (IOException e) {
@@ -1047,6 +1112,7 @@ public class HotIron {
 					FmChannelOverlay.paint(g2, area, start, end, java.util.List.of(),
 							settings.getListenKHz().getValue());
 					ListenHud.paint(g2, area, settings.getListenKHz().getValue() / 1000.0, fmAudioOk);
+					paintOperatorBrief(g2, area, start, end);
 					return;
 				}
 				boolean tvParked = settings.isListening().getValue()
@@ -1059,6 +1125,7 @@ public class HotIron {
 							settings.getTvChannel().getValue());
 					WatchHud.paint(g2, area, settings.getTvChannel().getValue(), tvEngine.locked(),
 							tvEngine.snrDb(), tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames());
+					paintOperatorBrief(g2, area, start, end);
 					return;
 				}
 				boolean nfcParked = settings.isListening().getValue()
@@ -1069,6 +1136,30 @@ public class HotIron {
 					double end = xy.getDomainAxis().getUpperBound();
 					hotiron.ui.NfcChannelOverlay.paint(g2, area, start, end, nfcActivity);
 					NfcSniffHud.paint(g2, area, lastNfcFrame, nfcFieldOn);
+					paintOperatorBrief(g2, area, start, end);
+					return;
+				}
+				boolean gnssParked = settings.isListening().getValue()
+						&& settings.getListenService().getValue() == hotiron.core.ListenService.GNSS;
+				if (gnssParked)
+				{
+					double start = xy.getDomainAxis().getLowerBound();
+					double end = xy.getDomainAxis().getUpperBound();
+					hotiron.ui.GnssChannelOverlay.paint(g2, area, start, end, gnssActivity);
+					hotiron.ui.GnssSniffHud.paint(g2, area, gnssHits);
+					paintOperatorBrief(g2, area, start, end);
+					return;
+				}
+				boolean cbParked = settings.isListening().getValue()
+						&& settings.getListenService().getValue() == hotiron.core.ListenService.CB;
+				if (cbParked)
+				{
+					double start = xy.getDomainAxis().getLowerBound();
+					double end = xy.getDomainAxis().getUpperBound();
+					hotiron.ui.CbChannelOverlay.paint(g2, area, start, end, cbHits, settings.getCbChannel().getValue());
+					hotiron.ui.CbHud.paint(g2, area, settings.getCbChannel().getValue(), true,
+							Boolean.TRUE.equals(settings.isCbChatterScanning().getValue()));
+					paintOperatorBrief(g2, area, start, end);
 					return;
 				}
 				BufferedImage img = imageFrequencyAllocationTableBands;
@@ -1084,9 +1175,19 @@ public class HotIron {
 				hotiron.ui.TvChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), tvStations,
 						settings.getTvChannel().getValue());
 				hotiron.ui.NfcChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), nfcActivity);
+				hotiron.ui.GnssChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), gnssActivity);
+				hotiron.ui.CbChannelOverlay.paint(g2, area, range.getStartMHz(), range.getEndMHz(), cbHits,
+						settings.getCbChannel().getValue());
 				if (hotiron.core.NfcBandLayer.tagsReadable(range.getStartMHz(), range.getEndMHz())
 						&& !settings.isListening().getValue())
 					hotiron.ui.NfcHud.paint(g2, area, nfcActivity, settings.getBandScan().getValue());
+				if (GnssBandLayer.tagsReadable(range.getStartMHz(), range.getEndMHz())
+						&& !settings.isListening().getValue())
+					hotiron.ui.GnssHud.paint(g2, area, gnssActivity);
+				if (CbBandLayer.tagsReadable(range.getStartMHz(), range.getEndMHz())
+						&& !settings.isListening().getValue())
+					hotiron.ui.CbHud.paint(g2, area, settings.getCbChannel().getValue(), false,
+							Boolean.TRUE.equals(settings.isCbChatterScanning().getValue()));
 				if (settings.isListening().getValue())
 				{
 					if (settings.getListenService().getValue() == hotiron.core.ListenService.TV)
@@ -1095,6 +1196,7 @@ public class HotIron {
 					else
 						ListenHud.paint(g2, area, settings.getListenKHz().getValue() / 1000.0, fmAudioOk);
 				}
+				paintOperatorBrief(g2, area, range.getStartMHz(), range.getEndMHz());
 				spectrumZoomOverlay.paint(g2, area);
 			}
 
@@ -1306,6 +1408,24 @@ public class HotIron {
 			settings.startNfcScan();
 			return;
 		}
+		java.util.List<BandMark> gnssMarks = GnssBandLayer.marks(axis, gnssActivity);
+		BandMark gnssHit = BandHeaderPainter.hitTest(e.getX(), e.getY(), area, axis, gnssMarks);
+		if (gnssHit != null && Math.abs(gnssHit.labelMHz - GnssBandPlan.GPS_L1_MHZ) < 0.5)
+		{
+			settings.startGnssSniff();
+			return;
+		}
+		java.util.List<BandMark> cbMarks = CbBandLayer.marks(axis, cbHits, settings.getCbChannel().getValue());
+		BandMark cbHit = BandHeaderPainter.hitTest(e.getX(), e.getY(), area, axis, cbMarks);
+		if (cbHit != null)
+		{
+			CbChannel cb = CbChannelPlan.nearest(cbHit.labelMHz);
+			if (cb == null)
+				return;
+			settings.getCbChannel().setValue(cb.number);
+			settings.startCbListen();
+			return;
+		}
 		java.util.List<BandMark> tvMarks = hotiron.core.TvBandLayer.marks(axis, tvStations,
 				settings.getTvChannel().getValue());
 		BandMark tvHit = BandHeaderPainter.hitTest(e.getX(), e.getY(), area, axis, tvMarks);
@@ -1401,6 +1521,8 @@ public class HotIron {
 				stationDetect.resetTv();
 			else if (scan == hotiron.core.BandScan.NFC)
 				stationDetect.resetNfc();
+			else if (scan == hotiron.core.BandScan.CB)
+				stationDetect.resetCb();
 		});
 		settings.getFrequency().addListener((range) -> {
 			flushPersistentOverlay();
@@ -1428,6 +1550,27 @@ public class HotIron {
 		settings.getListenVolume().addListener(v -> {
 			fmEngine.setVolume(v);
 			tvEngine.setVolume(v);
+			cbEngine.setVolume(v);
+		});
+		settings.getCbChannel().addListener(ch -> {
+			if (cbEngine.running())
+				cbEngine.setChannel(ch);
+			if (cbChatterScan.active() && ch != cbChatterScan.current())
+				settings.isCbChatterScanning().setValue(false);
+			flushPersistentOverlay();
+			if (chartPanel != null)
+				SwingUtilities.invokeLater(chartPanel::repaint);
+		});
+		settings.isCbChatterScanning().addListener(on -> {
+			if (!Boolean.TRUE.equals(on))
+			{
+				cbChatterScan.stop();
+				if (chartPanel != null)
+					SwingUtilities.invokeLater(chartPanel::repaint);
+				return;
+			}
+			if (cbEngine.running())
+				armCbChatterScan();
 		});
 		settings.isListening().addListener(() -> {
 			flushPersistentOverlay();
@@ -1803,6 +1946,20 @@ public class HotIron {
 				&& settings.getListenService().getValue() == hotiron.core.ListenService.NFC);
 	}
 
+	private void showGnssRfSpectrum(GnssSniffEngine.ViewRow view) {
+		if (view == null || view.isEmpty())
+			return;
+		paintParkedRf(view.mhz, view.dbfs, view.binHz, () -> settings.isListening().getValue()
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.GNSS);
+	}
+
+	private void showCbRfSpectrum(FmListenSpectrum snap) {
+		if (snap == null || snap.isEmpty())
+			return;
+		paintParkedRf(snap.mhz, snap.dbfs, snap.binHz, () -> settings.isListening().getValue()
+				&& settings.getListenService().getValue() == hotiron.core.ListenService.CB);
+	}
+
 	/**
 	 * Same scrolling RF waterfall for Listen ±2 MHz and Watch ±8 MHz.
 	 * Always map through the live (or default −100…+20) dB window — never
@@ -2057,6 +2214,132 @@ public class HotIron {
 		}
 	}
 
+	private void armCbChatterScan()
+	{
+		int next = CbStationDial.tune(settings.getCbChannel().getValue(), +1).number;
+		cbChatterScan.start(next, System.currentTimeMillis());
+		if (next != settings.getCbChannel().getValue())
+			settings.getCbChannel().setValue(next);
+	}
+
+	private void onCbChatter(float carrier, float modulation)
+	{
+		if (!cbChatterScan.active())
+			return;
+		int ch = settings.getCbChannel().getValue();
+		switch (cbChatterScan.consider(ch, CbChatter.isChatter(carrier, modulation), System.currentTimeMillis()))
+		{
+			case HIT:
+				pinCbChatterHit(ch);
+				settings.isCbChatterScanning().setValue(false);
+				break;
+			case NEXT:
+				settings.getCbChannel().setValue(cbChatterScan.advance(System.currentTimeMillis()));
+				break;
+			default:
+				break;
+		}
+	}
+
+	private void pinCbChatterHit(int channel)
+	{
+		CbChannel c = CbChannelPlan.clamp(channel);
+		java.util.List<CbChannelHit> cur = settings.getDetectedCbStations().getValue();
+		java.util.ArrayList<CbChannelHit> next = new java.util.ArrayList<>(
+				cur == null ? java.util.List.of() : cur);
+		for (CbChannelHit hit : next)
+		{
+			if (hit != null && hit.channel != null && hit.channel.number == c.number)
+				return;
+		}
+		next.add(new CbChannelHit(c, -40f, 1f));
+		settings.getDetectedCbStations().setValue(java.util.List.copyOf(next));
+	}
+
+	private void runCbListen() {
+		CbChannel ch = CbChannelPlan.clamp(settings.getCbChannel().getValue());
+		cbEngine.setChannel(ch.number);
+		cbEngine.setVolume(settings.getListenVolume().getValue());
+		enterListenWaterfalls(CbChannelPlan.LO_HZ);
+		final long[] lastRowMs = { 0L };
+		final long[] lastRfMs = { 0L };
+		cbEngine.setRfSpectrumListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastRfMs[0] < 50)
+				return;
+			lastRfMs[0] = now;
+			FmListenSpectrum snap = FmListenSpectrum.fromRow(now, ch.centerMHz(), CbChannelPlan.LO_HZ,
+					cbEngine.rfSpectrum().sampleRate(), cbEngine.rfSpectrum().binHz(), row);
+			showCbRfSpectrum(snap);
+			pushParkedRfWaterfall(row, cbEngine.rfSpectrum().sampleRate(), CbChannelPlan.LO_HZ);
+		});
+		cbEngine.setChatterListener((carrier, modulation) -> SwingUtilities.invokeLater(
+				() -> onCbChatter(carrier, modulation)));
+		cbEngine.setLevelListener(level -> SwingUtilities.invokeLater(() -> {
+			if (settingsPanel != null)
+				settingsPanel.setCbSignalLevel((float) level);
+		}));
+		cbEngine.setSpectrumListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastRowMs[0] < 33)
+				return;
+			lastRowMs[0] = now;
+			waterfallPlot.addAudioFrame(row, AudioSpectrum.DISPLAY_HZ);
+			waterfallPlot.repaint();
+			float peak = -150f;
+			for (int i = 0; i < row.length; i++)
+			{
+				if (row[i] > peak)
+					peak = row[i];
+			}
+			final float peakDb = peak;
+			final int bins = row.length;
+			SwingUtilities.invokeLater(() -> {
+				if (sweepStatusBar != null && settings.isListening().getValue())
+					sweepStatusBar.setListenDualInfo(AudioSpectrum.BIN_HZ, bins, waterfallPlot.getFps(),
+							Double.valueOf(peakDb));
+			});
+		});
+		AudioSink sink = AudioSinks.openPlayback();
+		fmAudioOk = !(sink instanceof RecordingAudioSink);
+		cbEngine.start(sink);
+		if (Boolean.TRUE.equals(settings.isCbChatterScanning().getValue()) && !cbChatterScan.active())
+			armCbChatterScan();
+		snapshotStore.publishContext(settings, fmStations, 0);
+		if (chartPanel != null)
+			SwingUtilities.invokeLater(chartPanel::repaint);
+		if (settingsPanel != null)
+			SwingUtilities.invokeLater(() -> settingsPanel.cbTunerPanel().setListening(true));
+		try {
+			int lna = settings.getGainLNA().getValue();
+			int vga = settings.getGainVGA().getValue();
+			if (settings.isAutoGain().getValue())
+			{
+				int total = CbListenGainPolicy.seed();
+				lna = GainPolicy.lnaGain(total);
+				vga = GainPolicy.vgaGain(total);
+			}
+			System.err.println("CB listen: ch " + ch.number + " " + ch.freqLabel() + " MHz AM LO "
+					+ CbChannelPlan.LO_HZ + " Hz LNA " + lna + " VGA " + vga);
+			HackRFFmNativeBridge.configure(settings.getSelectedSerial().getValue(),
+					settings.getClkoutEnable().getValue());
+			HackRFFmNativeBridge.start(iq -> cbEngine.offerIq(iq), CbChannelPlan.LO_HZ, AmDemodulator.IQ_RATE_HZ, lna,
+					vga, settings.getAntennaPowerEnable().getValue(), settings.getAntennaLNA().getValue());
+		} finally {
+			cbEngine.setRfSpectrumListener(null);
+			cbEngine.setSpectrumListener(null);
+			cbEngine.setLevelListener(null);
+			cbEngine.setChatterListener(null);
+			cbEngine.stop();
+			leaveListenWaterfalls();
+			if (chart != null)
+				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
+						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
+			if (settingsPanel != null)
+				SwingUtilities.invokeLater(() -> settingsPanel.cbTunerPanel().setListening(false));
+		}
+	}
+
 	private void startBleSniffSession()
 	{
 		synchronized (bleLock)
@@ -2075,11 +2358,15 @@ public class HotIron {
 			try
 			{
 				BleSniffEngine.Port port = BleSniffEngine.openLinux(path);
+				SwingUtilities.invokeLater(() -> {
+					if (settingsPanel != null)
+						settingsPanel.bleSniffPanel().resetStations();
+				});
 				bleEngine = new BleSniffEngine(port, frame -> {
 					snapshotStore.publishBleFrame(frame);
 					SwingUtilities.invokeLater(() -> {
 						if (settingsPanel != null)
-							settingsPanel.bleSniffPanel().setFrames(snapshotStore.bleFrames());
+							settingsPanel.bleSniffPanel().ingest(frame);
 					});
 				}, status -> {
 					snapshotStore.publishBleStatus(true, path, status);
@@ -2118,7 +2405,12 @@ public class HotIron {
 		if (engine != null)
 			engine.close();
 		snapshotStore.publishBleStatus(false, "", "idle");
+		bleSelect = null;
 		SwingUtilities.invokeLater(() -> {
+			if (waterfallPlot != null)
+				waterfallPlot.clearPacketHighlight();
+			if (chartPanel != null)
+				chartPanel.repaint();
 			if (settingsPanel != null)
 			{
 				settingsPanel.bleSniffPanel().setSniffing(false);
@@ -2223,6 +2515,105 @@ public class HotIron {
 		}
 	}
 
+	private void runGnssSniff() {
+		gnssHits = List.of();
+		waterfallPlot.setGnssMode(true);
+		final long[] lastRfMs = { 0L };
+		gnssEngine.setRfSpectrumListener(row -> {
+			long now = System.currentTimeMillis();
+			if (now - lastRfMs[0] < 33)
+				return;
+			lastRfMs[0] = now;
+			GnssSniffEngine.ViewRow view = GnssSniffEngine.cropGps(row, gnssEngine.rfSpectrum().binHz(),
+					GnssSniffEngine.LO_HZ);
+			showGnssRfSpectrum(view);
+			if (view.isEmpty())
+				return;
+			waterfallPlot.addGnssFrame(view.dbfs, view.mhz[0], view.mhz[view.mhz.length - 1]);
+			waterfallPlot.repaint();
+			float peak = -150f;
+			for (int i = 0; i < view.dbfs.length; i++)
+			{
+				if (view.dbfs[i] > peak)
+					peak = view.dbfs[i];
+			}
+			final float peakDb = peak;
+			final int bins = view.dbfs.length;
+			final float binHz = view.binHz;
+			SwingUtilities.invokeLater(() -> {
+				if (sweepStatusBar != null && settings.isListening().getValue())
+					sweepStatusBar.setGnssInfo(binHz, bins, waterfallPlot.getFps(), Double.valueOf(peakDb));
+			});
+		});
+		gnssEngine.setHitsListener(hits -> {
+			gnssHits = hits == null ? List.of() : hits;
+			snapshotStore.publishGnssSv(gnssHits);
+			final List<GpsSvHit> snap = gnssHits;
+			SwingUtilities.invokeLater(() -> {
+				if (settingsPanel != null)
+				{
+					settingsPanel.gnssSniffPanel().setHits(snap);
+					settingsPanel.gnssSniffPanel().setStatus(hotiron.ui.GnssSniffHud.text(snap));
+				}
+				if (chartPanel != null)
+					chartPanel.repaint();
+			});
+		});
+		gnssEngine.start();
+		snapshotStore.publishContext(settings, fmStations, 0);
+		if (chartPanel != null)
+			SwingUtilities.invokeLater(chartPanel::repaint);
+		if (settingsPanel != null)
+			SwingUtilities.invokeLater(() -> {
+				settingsPanel.gnssSniffPanel().setSniffing(true);
+				settingsPanel.gnssSniffPanel().setStatus(hotiron.ui.GnssSniffHud.text(List.of()));
+			});
+		try {
+			int lna = GnssSniffGainPolicy.seedLna();
+			int vga = GnssSniffGainPolicy.seedVga();
+			boolean antPwr = GnssSniffGainPolicy.seedAntennaPower();
+			System.err.println("GNSS sniff: LO " + GnssSniffEngine.LO_HZ + " Hz " + GnssSniffEngine.IQ_RATE_HZ
+					+ " S/s LNA " + lna + " VGA " + vga + " antPwr:" + antPwr);
+			HackRFFmNativeBridge.configure(settings.getSelectedSerial().getValue(),
+					settings.getClkoutEnable().getValue());
+			HackRFFmNativeBridge.start(iq -> gnssEngine.offerIq(iq), GnssSniffEngine.LO_HZ, GnssSniffEngine.IQ_RATE_HZ,
+					lna, vga, antPwr, false);
+		} finally {
+			gnssEngine.setRfSpectrumListener(null);
+			gnssEngine.setHitsListener(null);
+			gnssEngine.stop();
+			waterfallPlot.setGnssMode(false);
+			gnssHits = List.of();
+			snapshotStore.publishGnssSv(List.of());
+			if (chart != null)
+				SwingUtilities.invokeLater(() -> chart.getXYPlot().getDomainAxis()
+						.setRange(getFreq().getStartMHz(), getFreq().getEndMHz()));
+			if (settingsPanel != null)
+				SwingUtilities.invokeLater(() -> settingsPanel.gnssSniffPanel().setSniffing(false));
+		}
+	}
+
+	private void refreshOperatorBrief()
+	{
+		if (settingsPanel == null)
+			return;
+		hotiron.core.BandToolKind kind = settingsPanel.bandContext().face();
+		String face = hotiron.core.OperatorBrief.faceOf(kind);
+		settingsPanel.briefPane().setBrief(snapshotStore.brief(face));
+		if (chartPanel != null)
+			chartPanel.repaint();
+	}
+
+	private void paintOperatorBrief(java.awt.Graphics2D g2, java.awt.geom.Rectangle2D area, double startMHz,
+			double endMHz)
+	{
+		if (settingsPanel == null)
+			return;
+		hotiron.core.BandToolKind kind = settingsPanel.bandContext().face();
+		hotiron.ui.OperatorBriefOverlay.paint(g2, area, startMHz, endMHz,
+				snapshotStore.brief(hotiron.core.OperatorBrief.faceOf(kind)), bleSelect);
+	}
+
 	/**
 	 * no need to synchronize, executes only in launcher thread
 	 */
@@ -2234,6 +2625,8 @@ public class HotIron {
 		fmEngine.stop();
 		tvEngine.stop();
 		nfcEngine.stop();
+		gnssEngine.stop();
+		cbEngine.stop();
 		if (threadHackrfSweep != null) {
 			while (threadHackrfSweep.isAlive()) {
 				forceStopSweep = true;

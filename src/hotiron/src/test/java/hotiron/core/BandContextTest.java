@@ -60,6 +60,46 @@ class BandContextTest
 	}
 
 	@Test
+	void gnssPresetShowsGnss()
+	{
+		BandContext c = BandContext.of(new FrequencyRange(1559, 1610), false, null, false, BandScan.OFF);
+		assertTrue(c.shows(BandToolKind.GNSS));
+		assertEquals(BandToolKind.GNSS, c.face());
+		assertFalse(c.shows(BandToolKind.FM));
+		BandContext gps = BandContext.of(new FrequencyRange(1573, 1578), false, null, false, BandScan.OFF);
+		assertTrue(gps.shows(BandToolKind.GNSS));
+		assertFalse(BandContext.of(new FrequencyRange(1, 7250), false, null, false, BandScan.OFF).shows(BandToolKind.GNSS));
+	}
+
+	@Test
+	void parkedGnssPinsTheToolOnWifi2()
+	{
+		BandContext c = BandContext.of(new FrequencyRange(2402, 2472), true, ListenService.GNSS, false,
+				BandScan.OFF);
+		assertTrue(c.shows(BandToolKind.GNSS));
+		assertEquals(BandToolKind.GNSS, c.face());
+		assertFalse(c.shows(BandToolKind.FM));
+	}
+
+	@Test
+	void cbPresetShowsCbNotHfSurvey()
+	{
+		BandContext c = BandContext.of(new FrequencyRange(26, 28), false, null, false, BandScan.OFF);
+		assertTrue(c.shows(BandToolKind.CB));
+		assertEquals(BandToolKind.CB, c.face());
+		BandContext hf = BandContext.of(new FrequencyRange(3, 30), false, null, false, BandScan.OFF);
+		assertFalse(hf.shows(BandToolKind.CB), "HF 3–30 is a survey; CB is 26–28");
+	}
+
+	@Test
+	void parkedCbPinsTheToolOnWifi2()
+	{
+		BandContext c = BandContext.of(new FrequencyRange(2402, 2472), true, ListenService.CB, false, BandScan.OFF);
+		assertTrue(c.shows(BandToolKind.CB));
+		assertEquals(BandToolKind.CB, c.face());
+	}
+
+	@Test
 	void nfcPresetShowsNfcNotHfSurvey()
 	{
 		BandContext nfc = BandContext.of(new FrequencyRange(12, 15), false, null, false, BandScan.OFF);

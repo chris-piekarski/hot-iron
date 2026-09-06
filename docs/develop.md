@@ -63,7 +63,7 @@ cd src/hotiron && make native-test
 
 `make info` prints the SDK/USB API this tree is pinned to (libhackrf `v2026.01.3`, USB API from the firmware sources, JNA), attached HackRF USB devices, device firmware when the usbfs node is writable, and whether a newer Great Scott Gadgets release exists (GitHub; skip with `HACKRF_INFO_NO_NET=1`).
 
-`make firmware-update` is a **dry-run** of an official GSG SPI-flash. It only writes with `CONFIRM=1`. It is not part of `make build` or `make test`. See [hardware.md](hardware.md).
+`make firmware-update` is a **dry-run** of an official GSG SPI-flash. It only writes with `CONFIRM=1`. It is not part of `make build` or `make test`. See [hardware.md](hardware.md). On WSL2, `make wsl-usb` attaches the HackRF, the nRF BLE sniffer, and the motherboard Intel Bluetooth (`8087:0033`) to this Ubuntu (`scripts/wsl-usb-attach.sh`). Host BT is not the nRF sniffer.
 
 Coverage:
 
@@ -121,7 +121,7 @@ For the native C/C++ parts, a clang-format command is commented in the Makefile.
 
 ## Architecture Notes
 
-See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool. NFC / 13.56 MHz spectrum notes: [nfc.md](nfc.md). Bench nRF / 2.4 GHz BLE–ANT–15.4 notes: [nrf-sniffer.md](nrf-sniffer.md) (second USB; do not park the HackRF).
+See [architecture.md](architecture.md) for layers, exclusive USB (`RadioMode`), settings/hooks, queues, policy objects, and how engines, overlays, and MCP share data. Read that before adding a second MHz↔pixel map, a `ModelValue` on the JFrame, or a USB open from an MCP snapshot tool. NFC / 13.56 MHz spectrum notes: [nfc.md](nfc.md). GNSS L1 overlay + GPS C/A sniff: [gnss.md](gnss.md) (not a PVT fix). Bench nRF / 2.4 GHz BLE–ANT–15.4 notes: [nrf-sniffer.md](nrf-sniffer.md) (second USB; do not park the HackRF).
 
 Key directories:
 - `src/hotiron/src/main/java/hotiron/core/` — Engines, DSP, policies, channel plans (best place for unit tests)

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `make wsl-usb` (`scripts/wsl-usb-attach.sh`) attaches the HackRF (`1d50:6089`), nRF BLE sniffer (`1366:1015`), and motherboard Intel Bluetooth (`8087:0033`) to this WSL2 Ubuntu via Windows `usbipd`. Host BT steals the adapter from Windows. `--watch` re-attaches after unplug/reset. `--bt` / `--hackrf` / `--ble` select one.
+- BLE sniff keeps the full advert PDU (not a 24-byte clip) and labels a GAP local name or known 128-bit UUID (Nordic LBS / UART) on the MAC row and in `ble_frames` JSON.
+- BLE sniff table is one row per MAC (live PDU/channel/RSSI on the right). Click a MAC to mark that ~2 MHz slice on the spectrum and waterfall, with a time hairline at the last PDU. Agent brief pane is 25% taller.
+- MCP `operator_brief` / `operator_briefs`: an agent can post a per-face note onto the operator **Agent brief** pane (under Spectrum tools, above the MCP log) and a one-line plot HUD with optional MHz ticks. No USB. BLE / NFC / GNSS / CB / FM / TV / sweep share the pane.
+- CB **11 m** Quick Select **26–28 MHz** (40 FCC AM channels). **Scan** parks AM and hops until chatter (stops on voice, not a dead carrier). **Listen** parks 4 MS/s AM at 27.185 MHz (channel mix is software, no USB retune). MCP `cb_channels` / `cb_listen`. Not FM broadcast and not SSB.
+- GNSS L1 overlay + GPS C/A sniff: Quick Select **1559–1610** ticks GPS / BDS / GLO occupancy (`gnss_activity`). **Sniff** parks at **1575.42 MHz / 4 MS/s** and lists visible C/A PRNs (C/N0, Doppler) — not a PVT fix. MCP write `gnss_sniff`, read `gnss_sv`. Notes: [docs/gnss.md](docs/gnss.md).
 - Quick Select **Air** 118–137, **ADS-B** 978–1091 (1090 ES + UAT), **GNSS** 1559–1610 L1, **WiFi 6** 5925–7125 (U-NII-5…8), **n41** 2496–2690, and **C-band** 3700–3980. Aviation chips share a color group; Wi-Fi 6 overlay ticks 20 MHz ch 1–233.
 - USB hot-load: if a HackRF appears after launch (WSL `usbipd attach`), the sweep starts without restarting the window. **Stop** still owns USB until **Restart**.
 - BLE Quick Select **2400–2484 MHz** (includes adv 39 at 2480; Wi-Fi 2 stays 2402–2472), `BleBandPlan` / `BleBandLayer` ticks, occupancy labels, and parallel nRF BLE sniff on the J-Link ACM (does not park the HackRF). MCP write `ble_sniff`, read `ble_frames` / `ble_activity`. Flash recipe (PCA10031 / nRF51822, not 4.1.1 nRF52 HEX): [docs/nrf-sniffer.md](docs/nrf-sniffer.md#flash-recipe).
@@ -18,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TV tuner roster grades occupancy vs MPEG-2 **picture**. Scan sweeps VHF then UHF, then qualifies the strongest UHF ATSC-like bricks by parking Watch. Seek prefers picture. MCP `tv_stations`.
 
 ### Fixed
+- Header labels at the right edge of the plot (BLE adv **39** at 2480 in a 2400–2484 window) slide in instead of being dropped.
+- GNSS sniff PRN chips (C/N0, Doppler) hold last-known values; a missed 1 ms acquisition no longer blanks the HUD. Parked sniff turns on SMA 3.3 V bias for an active GPS patch (not the RF amp).
 - FM analog **SIG** meter is a short Simpson window packed under the digital readout. While Listening it follows demodulated audio (pre-volume) with VU ballistics; otherwise it is the Scan S-meter. Frequency is the slide-rule only.
 - Spectrum tools show one Quick Select face at a time (V-TV is TV, not FM beside it) and scroll in the space above the MCP log.
 - FM Listen waterfalls no longer freeze after a few seconds: spectrum frames still publish when the IQ queue is busy. PCM stays on `fm-wfm-demod`; chart/waterfall listeners are latest-wins on `fm-wfm-display`. Java Sound buffer is 200 ms.

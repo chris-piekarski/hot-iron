@@ -13,6 +13,8 @@ public final class OperatorLayout
 	public static final int BAND_SLOT_HEIGHT = 500;
 	/** MCP activity log under the band slot. */
 	public static final int MCP_LOG_HEIGHT = 148;
+	/** Agent brief under the band face (collapses when empty). */
+	public static final int BRIEF_HEIGHT = 150;
 	public static final int MIN_FRAME_WIDTH = 1220;
 	/** Sweep-range column beside the survey wave (digits + ◀ − + ▶). */
 	public static final int RANGE_WIDTH = 248;

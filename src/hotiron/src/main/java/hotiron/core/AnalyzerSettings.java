@@ -31,6 +31,14 @@ public final class AnalyzerSettings implements HackRFSettings
 		{
 		}
 
+		default void startGnssSniff()
+		{
+		}
+
+		default void startCbListen()
+		{
+		}
+
 		default void startBleSniff()
 		{
 		}
@@ -132,6 +140,11 @@ public final class AnalyzerSettings implements HackRFSettings
 	private final ModelValueBoolean tvQualifying = new ModelValueBoolean("TV qualify", false);
 	private final ModelValueInt tvQualifyChannel = new ModelValueInt("TV qualify ch", 0, 1, 0,
 			TvChannelPlan.LAST_FCC_CHANNEL);
+	private final ModelValueInt cbChannel = new ModelValueInt("CB channel", CbChannelPlan.HIGHWAY_CHANNEL, 1,
+			CbChannelPlan.FIRST_CHANNEL, CbChannelPlan.LAST_CHANNEL);
+	private final ModelValue<List<CbChannelHit>> detectedCbStations = new ModelValue<List<CbChannelHit>>(
+			"Detected CB", List.of());
+	private final ModelValueBoolean cbChatterScanning = new ModelValueBoolean("CB chatter scan", false);
 
 	public void setHardware(Hardware hardware)
 	{
@@ -308,6 +321,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	@Override
 	public void restartSweep()
 	{
+		cbChatterScanning.setValue(false);
 		listening.setValue(false);
 		radioReleased.setValue(false);
 		hardware.restartSweep();
@@ -317,6 +331,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	public void releaseRadio()
 	{
 		stopScan();
+		cbChatterScanning.setValue(false);
 		listening.setValue(false);
 		radioReleased.setValue(true);
 		hardware.releaseRadio();
@@ -326,6 +341,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	public void startListen()
 	{
 		stopScan();
+		cbChatterScanning.setValue(false);
 		listenService.setValue(ListenService.FM);
 		listening.setValue(true);
 		radioReleased.setValue(false);
@@ -336,6 +352,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	public void startWatch()
 	{
 		stopScan();
+		cbChatterScanning.setValue(false);
 		listenService.setValue(ListenService.TV);
 		listening.setValue(true);
 		radioReleased.setValue(false);
@@ -346,6 +363,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	public void startSniff()
 	{
 		stopScan();
+		cbChatterScanning.setValue(false);
 		listenService.setValue(ListenService.NFC);
 		listening.setValue(true);
 		radioReleased.setValue(false);
@@ -353,6 +371,35 @@ public final class AnalyzerSettings implements HackRFSettings
 				|| getFrequency().getValue().getEndMHz() != NfcBandPlan.VIEW_END_MHZ)
 			getFrequency().setValue(NfcBandPlan.phyWindow());
 		hardware.startSniff();
+	}
+
+	@Override
+	public void startGnssSniff()
+	{
+		stopScan();
+		cbChatterScanning.setValue(false);
+		listenService.setValue(ListenService.GNSS);
+		listening.setValue(true);
+		radioReleased.setValue(false);
+		FrequencyRange want = GnssBandPlan.gpsL1Window();
+		if (getFrequency().getValue() == null || getFrequency().getValue().getStartMHz() != want.getStartMHz()
+				|| getFrequency().getValue().getEndMHz() != want.getEndMHz())
+			getFrequency().setValue(want);
+		hardware.startGnssSniff();
+	}
+
+	@Override
+	public void startCbListen()
+	{
+		stopScan();
+		listenService.setValue(ListenService.CB);
+		listening.setValue(true);
+		radioReleased.setValue(false);
+		FrequencyRange want = CbChannelPlan.viewWindow();
+		if (getFrequency().getValue() == null || getFrequency().getValue().getStartMHz() != want.getStartMHz()
+				|| getFrequency().getValue().getEndMHz() != want.getEndMHz())
+			getFrequency().setValue(want);
+		hardware.startCbListen();
 	}
 
 	@Override
@@ -418,6 +465,20 @@ public final class AnalyzerSettings implements HackRFSettings
 	}
 
 	@Override
+	public void startCbScan()
+	{
+		if (Boolean.TRUE.equals(cbChatterScanning.getValue()))
+		{
+			cbChatterScanning.setValue(false);
+			return;
+		}
+		stopScan();
+		if (!Boolean.TRUE.equals(listening.getValue()) || listenService.getValue() != ListenService.CB)
+			startCbListen();
+		cbChatterScanning.setValue(true);
+	}
+
+	@Override
 	public void stopScan()
 	{
 		if (bandScan.getValue() == BandScan.OFF)
@@ -456,6 +517,8 @@ public final class AnalyzerSettings implements HackRFSettings
 			detectedFmStations.setValue(List.of());
 		else if (scan == BandScan.TV)
 			detectedTvStations.setValue(TvStationDial.keepWatchMemory(detectedTvStations.getValue()));
+		else if (scan == BandScan.CB)
+			detectedCbStations.setValue(List.of());
 		if (!window.equals(frequency.getValue()))
 			frequency.setValue(window);
 		bandScan.setValue(scan);
@@ -468,6 +531,7 @@ public final class AnalyzerSettings implements HackRFSettings
 	{
 		if (!Boolean.TRUE.equals(listening.getValue()))
 			return;
+		cbChatterScanning.setValue(false);
 		listening.setValue(false);
 		if (!Boolean.TRUE.equals(radioReleased.getValue()))
 			hardware.restartSweep();
@@ -507,6 +571,24 @@ public final class AnalyzerSettings implements HackRFSettings
 	public ModelValueInt getTvChannel()
 	{
 		return tvChannel;
+	}
+
+	@Override
+	public ModelValueInt getCbChannel()
+	{
+		return cbChannel;
+	}
+
+	@Override
+	public ModelValue<List<CbChannelHit>> getDetectedCbStations()
+	{
+		return detectedCbStations;
+	}
+
+	@Override
+	public ModelValueBoolean isCbChatterScanning()
+	{
+		return cbChatterScanning;
 	}
 
 	@Override

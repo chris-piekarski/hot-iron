@@ -22,6 +22,12 @@ class RadioModeTest
 		s.startSniff();
 		assertEquals(RadioMode.NFC, s.radioMode());
 		assertTrue(s.radioMode().parked());
+		s.startGnssSniff();
+		assertEquals(RadioMode.GNSS, s.radioMode());
+		assertTrue(s.radioMode().parked());
+		s.startCbListen();
+		assertEquals(RadioMode.CB, s.radioMode());
+		assertTrue(s.radioMode().parked());
 		s.releaseRadio();
 		assertEquals(RadioMode.STOPPED, s.radioMode());
 		assertFalse(s.radioMode().parked());
@@ -35,6 +41,8 @@ class RadioModeTest
 		assertEquals("listen", RadioMode.LISTEN.jsonName());
 		assertEquals("watch", RadioMode.WATCH.jsonName());
 		assertEquals("nfc", RadioMode.NFC.jsonName());
+		assertEquals("gnss", RadioMode.GNSS.jsonName());
+		assertEquals("cb", RadioMode.CB.jsonName());
 		assertEquals("stopped", RadioMode.STOPPED.jsonName());
 	}
 }

@@ -114,6 +114,32 @@ class RadioSessionTest
 	}
 
 	@Test
+	void gnssStartsGnssMode()
+	{
+		FakeHackRFSettings s = new FakeHackRFSettings();
+		Rec rec = new Rec();
+		RadioSession session = new RadioSession(s, rec, rec);
+		s.startGnssSniff();
+		session.applyNow();
+		session.drainOne();
+		assertEquals(0, rec.prepares);
+		assertEquals(List.of(RadioMode.GNSS), rec.started);
+	}
+
+	@Test
+	void cbStartsCbMode()
+	{
+		FakeHackRFSettings s = new FakeHackRFSettings();
+		Rec rec = new Rec();
+		RadioSession session = new RadioSession(s, rec, rec);
+		s.startCbListen();
+		session.applyNow();
+		session.drainOne();
+		assertEquals(0, rec.prepares);
+		assertEquals(List.of(RadioMode.CB), rec.started);
+	}
+
+	@Test
 	void releasedApplyIsIgnored()
 	{
 		FakeHackRFSettings s = new FakeHackRFSettings();

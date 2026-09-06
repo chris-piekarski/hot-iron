@@ -15,7 +15,7 @@ class QuickSelectPresetTest {
 
     @Test
     void everyPresetIsAValidHackrfSweepWindow() {
-        assertEquals(23, QuickSelectPreset.values().length);
+        assertEquals(24, QuickSelectPreset.values().length);
         for (QuickSelectPreset preset : QuickSelectPreset.values()) {
             assertTrue(preset.startMHz >= 1, preset.label + " below HackRF floor");
             assertTrue(preset.endMHz <= 7250, preset.label + " above selector max");
@@ -42,6 +42,7 @@ class QuickSelectPresetTest {
         assertRange(QuickSelectPreset.N41, 2496, 2690);
         assertRange(QuickSelectPreset.CBAND, 3700, 3980);
         assertRange(QuickSelectPreset.NFC, 12, 15);
+        assertRange(QuickSelectPreset.CB, 26, 28);
         assertRange(QuickSelectPreset.FM, 88, 108);
         assertRange(QuickSelectPreset.AIR, 118, 137);
         assertRange(QuickSelectPreset.ADSB, 978, 1091);

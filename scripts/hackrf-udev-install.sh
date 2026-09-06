@@ -17,6 +17,6 @@ if command -v udevadm >/dev/null 2>&1; then
 	udevadm trigger --subsystem-match=usb --action=add || true
 fi
 echo "installed $DEST"
-echo "Re-plug or: usbipd attach --wsl --busid <id>   then: make info"
-echo "WSL auto-reattach: usbipd attach --wsl --auto-attach --hardware-id 1d50:6089"
+echo "WSL: make wsl-usb     (attaches HackRF + nRF sniffer + host Bluetooth)"
+echo "Then: make info"
 exit 0

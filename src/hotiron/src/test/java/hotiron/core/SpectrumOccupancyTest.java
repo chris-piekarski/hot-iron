@@ -160,6 +160,15 @@ class SpectrumOccupancyTest {
 		assertTrue(r.emitters.get(0).peakDbm >= r.emitters.get(r.emitters.size() - 1).peakDbm);
 	}
 
+	@Test
+	void gnssL1BumpGetsAGpsLabel() {
+		float[] mhz = { 1574.5f, 1575.0f, 1575.42f, 1575.8f, 1576.2f };
+		float[] dbm = { -70f, -68f, -62f, -69f, -71f };
+		SpectrumOccupancy.Result r = SpectrumOccupancy.from(mhz, dbm, -90f, 100_000f, 1559, 1610);
+		assertEquals(1, r.emitters.size(), r.toJson());
+		assertEquals("GPS", r.emitters.get(0).label);
+	}
+
 	private static DatasetSpectrum wifiNoise() {
 		DatasetSpectrum ds = new DatasetSpectrum(100_000f, 2402, 2472, -150f);
 		for (int i = 0; i < ds.spectrumLength(); i++)

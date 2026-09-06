@@ -28,8 +28,9 @@ From the repository root:
 
 ```bash
 make help          # every target, with descriptions
-make info          # confirm the radio, firmware, and SDK pin
 make udev          # Linux once: persistent USB permissions
+make wsl-usb       # WSL2 only: attach HackRF + nRF sniffer + host Bluetooth
+make info          # confirm the radio, firmware, and SDK pin
 make start         # build if needed, launch GUI + MCP on 127.0.0.1:8765
 ```
 
@@ -52,5 +53,5 @@ The tools column shows the board name, short serial, and firmware when the radio
 
 - [MCP for AI agents](agents.md) — read tools, Listen/Watch controls, diagnostics, client config
 - [Usage](operator.md) — buttons, gain, and the status line
-- [Radio setup](hardware.md) — firmware, udev, Zadig
+- [Radio setup](hardware.md) — firmware, udev, WSL `make wsl-usb`, Zadig
 - [Development](develop.md) — if you are changing the code

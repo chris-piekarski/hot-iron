@@ -292,7 +292,7 @@ mermaid: ## Parse-check first-party Mermaid diagrams (uses mmdc if installed)
 	@$(abspath $(CURDIR)/../../scripts/check-mermaid.sh)
 
 ##@ Hardware
-.PHONY: info firmware-update udev
+.PHONY: info firmware-update udev wsl-usb
 info: ## List HackRF devices, app SDK/API versions, and upstream updates
 	@$(abspath $(CURDIR)/../../scripts/hackrf-info.sh)
 
@@ -302,6 +302,9 @@ firmware-update: ## Flash official GSG firmware (dry-run; CONFIRM=1 to write)
 
 udev: ## Install persistent udev rules (sudo once)
 	@$(abspath $(CURDIR)/../../scripts/hackrf-udev-install.sh)
+
+wsl-usb: ## Attach HackRF + nRF sniffer + host Bluetooth to this WSL2 distro (usbipd)
+	@$(abspath $(CURDIR)/../../scripts/wsl-usb-attach.sh)
 
 ##@ Run & Dev
 start: build ## Build if needed, then start the Linux app (MCP on 127.0.0.1:8765)

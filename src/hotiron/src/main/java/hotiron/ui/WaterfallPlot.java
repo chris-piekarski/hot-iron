@@ -64,6 +64,7 @@ public class WaterfallPlot extends JPanel {
 	private boolean				audioMode				= false;
 	private boolean				videoMode				= false;
 	private boolean				nfcMode					= false;
+	private boolean				gnssMode				= false;
 	private boolean				listenRfMode			= false;
 	private boolean				alignToChart			= true;
 	private float				nfcStartMHz				= 12f;
@@ -71,6 +72,10 @@ public class WaterfallPlot extends JPanel {
 	private float				audioHzMax				= 16_000f;
 	private double				videoCenterHz			= 0;
 	private float				videoSpanHz				= 12_000_000f;
+	private double				packetMhz				= Double.NaN;
+	private long				packetEpochMs			= 0L;
+	private static final Color	PACKET_FILL				= new Color(255, 196, 64, 55);
+	private static final Color	PACKET_LINE				= new Color(255, 230, 140, 230);
 
 	public WaterfallPlot(ChartPanel chartPanel, int maxHeight) {
 		setPreferredSize(new Dimension(100, 200));
@@ -130,6 +135,7 @@ public class WaterfallPlot extends JPanel {
 		audioMode = false;
 		videoMode = false;
 		nfcMode = false;
+		gnssMode = false;
 
 		int size = spectrum.spectrumLength();
 		double freqRange = (spectrum.getFreqStopMHz() - spectrum.getFreqStartMHz()) * 1000000d;
@@ -263,6 +269,7 @@ public class WaterfallPlot extends JPanel {
 		audioMode = true;
 		videoMode = false;
 		nfcMode = false;
+		gnssMode = false;
 		listenRfMode = false;
 		audioHzMax = hzMax > 0 ? hzMax : 16_000f;
 		lastSpectrum = null;
@@ -278,6 +285,7 @@ public class WaterfallPlot extends JPanel {
 		videoMode = true;
 		audioMode = false;
 		nfcMode = false;
+		gnssMode = false;
 		listenRfMode = false;
 		videoSpanHz = spanHz > 0 ? spanHz : 12_000_000f;
 		videoCenterHz = centerHz;
@@ -292,11 +300,29 @@ public class WaterfallPlot extends JPanel {
 		if (db == null || db.length == 0)
 			return;
 		nfcMode = true;
+		gnssMode = false;
 		audioMode = false;
 		videoMode = false;
 		listenRfMode = false;
 		nfcStartMHz = startMHz;
 		nfcEndMHz = endMHz > startMHz ? endMHz : startMHz + 3f;
+		lastSpectrum = null;
+		addParkedDbRow(db);
+	}
+
+	/**
+	 * One row of parked GPS L1 RF (1573–1578 MHz). Same raster as NFC.
+	 */
+	public synchronized void addGnssFrame(float[] db, float startMHz, float endMHz) {
+		if (db == null || db.length == 0)
+			return;
+		gnssMode = true;
+		nfcMode = false;
+		audioMode = false;
+		videoMode = false;
+		listenRfMode = false;
+		nfcStartMHz = startMHz;
+		nfcEndMHz = endMHz > startMHz ? endMHz : startMHz + 5f;
 		lastSpectrum = null;
 		addParkedDbRow(db);
 	}
@@ -312,6 +338,7 @@ public class WaterfallPlot extends JPanel {
 		audioMode = false;
 		videoMode = false;
 		nfcMode = false;
+		gnssMode = false;
 		videoSpanHz = spanHz > 0 ? spanHz : 4_000_000f;
 		videoCenterHz = centerHz;
 		lastSpectrum = null;
@@ -372,13 +399,14 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	public synchronized void setAudioMode(boolean on) {
-		if (audioMode == on && !videoMode && !nfcMode && !listenRfMode)
+		if (audioMode == on && !videoMode && !nfcMode && !gnssMode && !listenRfMode)
 			return;
 		audioMode = on;
 		if (on)
 		{
 			videoMode = false;
 			nfcMode = false;
+			gnssMode = false;
 			listenRfMode = false;
 		}
 		clearHistory();
@@ -391,6 +419,7 @@ public class WaterfallPlot extends JPanel {
 		{
 			audioMode = false;
 			nfcMode = false;
+			gnssMode = false;
 			listenRfMode = false;
 			videoCenterHz = centerHz;
 			videoSpanHz = hotiron.core.IqSpectrum.DISPLAY_HZ;
@@ -406,6 +435,21 @@ public class WaterfallPlot extends JPanel {
 		{
 			audioMode = false;
 			videoMode = false;
+			gnssMode = false;
+			listenRfMode = false;
+		}
+		if (was != on)
+			clearHistory();
+	}
+
+	public synchronized void setGnssMode(boolean on) {
+		boolean was = gnssMode;
+		gnssMode = on;
+		if (on)
+		{
+			audioMode = false;
+			videoMode = false;
+			nfcMode = false;
 			listenRfMode = false;
 		}
 		if (was != on)
@@ -420,6 +464,7 @@ public class WaterfallPlot extends JPanel {
 			audioMode = false;
 			videoMode = false;
 			nfcMode = false;
+			gnssMode = false;
 			videoCenterHz = centerHz;
 			videoSpanHz = spanHz > 0 ? spanHz : 4_000_000f;
 		}
@@ -568,7 +613,7 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	private double translateChartXToFrequency(int x) {
-		if (nfcMode) {
+		if (nfcMode || gnssMode) {
 			if (chartWidth <= 0)
 				return -1;
 			double u = x / (double) chartWidth;
@@ -611,6 +656,12 @@ public class WaterfallPlot extends JPanel {
 	}
 
 	public static String modeBanner(boolean audio, boolean video, boolean nfc) {
+		return modeBanner(audio, video, nfc, false);
+	}
+
+	public static String modeBanner(boolean audio, boolean video, boolean nfc, boolean gnss) {
+		if (gnss)
+			return "parked IQ  ·  GPS L1  ·  1573–1578 MHz";
 		if (nfc)
 			return "parked IQ  ·  NFC  ·  12–15 MHz";
 		if (video)
@@ -639,7 +690,7 @@ public class WaterfallPlot extends JPanel {
 	private String instanceBanner() {
 		if (listenRfMode)
 			return videoSpanHz >= 10_000_000f ? modeBannerWatchRf() : modeBannerListenRf();
-		return modeBanner(audioMode, videoMode, nfcMode);
+		return modeBanner(audioMode, videoMode, nfcMode, gnssMode);
 	}
 
 	static String formatAudioHz(double hz) {
@@ -662,7 +713,7 @@ public class WaterfallPlot extends JPanel {
 		int th = fm.getAscent() + fm.getDescent();
 		int x = x0 + 8;
 		int y = 8;
-		boolean gold = audioMode || videoMode || nfcMode || listenRfMode;
+		boolean gold = audioMode || videoMode || nfcMode || gnssMode || listenRfMode;
 		g.setColor(gold ? BANNER_AUDIO : BANNER_RF);
 		g.fillRoundRect(x, y, tw + padX * 2, th + padY * 2, 8, 8);
 		g.setColor(gold ? BANNER_AUDIO_TEXT : BANNER_RF_TEXT);
@@ -708,7 +759,9 @@ public class WaterfallPlot extends JPanel {
 		g.setColor(TIME_AXIS_COLOR);
 		int y = h - 2;
 		g.drawLine(x0, y - 10, x0 + w, y - 10);
-		float[] ticks = { 12f, 12.71f, 13.56f, 14.41f, 15f };
+		float[] ticks = gnssMode
+				? new float[] { 1573f, 1574.42f, 1575.42f, 1576.42f, 1578f }
+				: new float[] { 12f, 12.71f, 13.56f, 14.41f, 15f };
 		FontMetrics fm = g.getFontMetrics();
 		for (float mhz : ticks) {
 			if (mhz < nfcStartMHz - 0.02f || mhz > nfcEndMHz + 0.02f)
@@ -753,6 +806,61 @@ public class WaterfallPlot extends JPanel {
 			if (tx + tw > x0 + w)
 				tx = x0 + w - tw;
 			g.drawString(lab, tx, y);
+		}
+	}
+
+	public void setPacketHighlight(double mhz, long epochMs)
+	{
+		packetMhz = mhz;
+		packetEpochMs = epochMs;
+		repaint();
+	}
+
+	public void clearPacketHighlight()
+	{
+		packetMhz = Double.NaN;
+		packetEpochMs = 0L;
+		repaint();
+	}
+
+	private int mhzToChartX(double mhz)
+	{
+		if (lastSpectrum == null || chartWidth <= 0 || !Double.isFinite(mhz))
+			return -1;
+		hotiron.core.FrequencyAxis axis = hotiron.core.FrequencyAxis.of(lastSpectrum.getFreqStartMHz(),
+				lastSpectrum.getFreqStopMHz(), chartWidth);
+		if (!axis.containsMhz(mhz))
+			return -1;
+		return chartXOffset + axis.mhzToXInt(mhz);
+	}
+
+	private void drawPacketHighlight(Graphics2D g, long[] times, int h)
+	{
+		if (audioMode || nfcMode || gnssMode || videoMode || listenRfMode)
+			return;
+		if (!Double.isFinite(packetMhz))
+			return;
+		int xLo = mhzToChartX(packetMhz - 1);
+		int xHi = mhzToChartX(packetMhz + 1);
+		int xc = mhzToChartX(packetMhz);
+		g.setColor(PACKET_FILL);
+		if (xLo >= 0 && xHi >= 0)
+		{
+			int left = Math.min(xLo, xHi);
+			int width = Math.max(2, Math.abs(xHi - xLo));
+			g.fillRect(left, 0, width, h);
+		}
+		g.setColor(PACKET_LINE);
+		if (xc >= 0)
+			g.drawLine(xc, 0, xc, h);
+		if (packetEpochMs > 0 && times != null && times.length > 0 && times[0] > 0)
+		{
+			double age = (times[0] - packetEpochMs) / 1000.0;
+			if (age >= 0)
+			{
+				int y = WaterfallTimeScale.yForAge(times, h, age);
+				g.drawLine(chartXOffset, y, chartXOffset + chartWidth, y);
+			}
 		}
 	}
 
@@ -808,6 +916,7 @@ public class WaterfallPlot extends JPanel {
 		synchronized (this) {
 			times = rowEpochMs == null ? null : rowEpochMs.clone();
 		}
+		drawPacketHighlight(g, times, h);
 		drawTimeAxis(g, times, h);
 
 		drawModeBanner(g, chartXOffset);
@@ -815,7 +924,7 @@ public class WaterfallPlot extends JPanel {
 			drawAudioHzAxis(g, chartXOffset, w, h);
 		else if (videoMode || listenRfMode)
 			drawVideoMhzAxis(g, chartXOffset, w, h);
-		else if (nfcMode)
+		else if (nfcMode || gnssMode)
 			drawNfcMhzAxis(g, chartXOffset, w, h);
 
 		if (displayMarker) {

@@ -48,6 +48,18 @@ public final class SpectrumMcpTools
 		void setEnabled(boolean enabled);
 	}
 
+	@FunctionalInterface
+	public interface GnssSniffHook
+	{
+		void sniff();
+	}
+
+	@FunctionalInterface
+	public interface CbListenHook
+	{
+		void listen(int channel);
+	}
+
 	private final SpectrumSnapshotStore store;
 	private final TvWatchHook tvWatch;
 	private final FmListenHook fmListen;
@@ -55,6 +67,8 @@ public final class SpectrumMcpTools
 	private final AutoGainHook autoGain;
 	private final SweepHook sweep;
 	private final BleSniffHook bleSniff;
+	private final GnssSniffHook gnssSniff;
+	private final CbListenHook cbListen;
 
 	public SpectrumMcpTools(SpectrumSnapshotStore store)
 	{
@@ -86,6 +100,20 @@ public final class SpectrumMcpTools
 	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
 			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep, BleSniffHook bleSniff)
 	{
+		this(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff, null);
+	}
+
+	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
+			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep, BleSniffHook bleSniff,
+			GnssSniffHook gnssSniff)
+	{
+		this(store, tvWatch, fmListen, nfcSniff, autoGain, sweep, bleSniff, gnssSniff, null);
+	}
+
+	public SpectrumMcpTools(SpectrumSnapshotStore store, TvWatchHook tvWatch, FmListenHook fmListen,
+			NfcSniffHook nfcSniff, AutoGainHook autoGain, SweepHook sweep, BleSniffHook bleSniff,
+			GnssSniffHook gnssSniff, CbListenHook cbListen)
+	{
 		if (store == null)
 			throw new IllegalArgumentException("store");
 		this.store = store;
@@ -95,6 +123,8 @@ public final class SpectrumMcpTools
 		this.autoGain = autoGain;
 		this.sweep = sweep;
 		this.bleSniff = bleSniff;
+		this.gnssSniff = gnssSniff;
+		this.cbListen = cbListen;
 	}
 
 	public SpectrumSnapshotStore store()
@@ -123,7 +153,7 @@ public final class SpectrumMcpTools
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("sweep_config",
-						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|nfc|stopped), listenMHz, tvChannel, plus display flags (autoSweep, autoGain, autoScale, peaks).",
+						"Armed radio settings (range, FFT, gain, CLKOUT), radioMode (sweep|listen|watch|nfc|gnss|cb|stopped), listenMHz, tvChannel, plus display flags (autoSweep, autoGain, autoScale, peaks).",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("tv_debug",
@@ -162,8 +192,29 @@ public final class SpectrumMcpTools
 						"Live local RF spectrum from the same parked 4 MS/s IQ stream used by FM Listen (dBFS).",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
+				+ tool("gnss_activity",
+						"Live RNSS L1 occupancy (GPS/Galileo 1575.42, BDS B1I, GLONASS L1). Sweep classifier only — not a GPS fix.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("gnss_sv",
+						"Last-known GPS L1 C/A PRN peaks from parked sniff (C/N0, Doppler, dwell). A missed search does not clear the list. Empty unless radioMode is gnss.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("gnss_sniff",
+						"Park the HackRF at GPS L1 1575.42 MHz / 4 MS/s and acquire C/A PRNs. Same exclusive RF path as the GNSS Sniff control. Not a PVT fix.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("cb_channels",
+						"Occupied US CB 11 m AM channels (1–40) from the live sweep or last Scan. Occupancy is not a decoded voice call.",
+						"{\"type\":\"object\",\"properties\":{}}")
+				+ ","
+				+ tool("cb_listen",
+						"Park the HackRF on a US CB AM channel (1-40) and start Listen. Same exclusive RF path as the UI. AM, not FM broadcast.",
+						"{\"type\":\"object\",\"properties\":{\"channel\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":40}},"
+								+ "\"required\":[\"channel\"]}")
+				+ ","
 				+ tool("spectrum_occupancy",
-						"Emitters above noise+8 dB: width, occupied fraction, optional BLE / Wi-Fi / NFC label.",
+						"Emitters above noise+8 dB: width, occupied fraction, optional BLE / Wi-Fi / NFC / GNSS label.",
 						"{\"type\":\"object\",\"properties\":{}}")
 				+ ","
 				+ tool("spectrum_history",
@@ -207,6 +258,17 @@ public final class SpectrumMcpTools
 				+ tool("ble_activity",
 						"HackRF spectrum summary plus the BLE frame ring in one payload (same stream). Optional maxSamples.",
 						"{\"type\":\"object\",\"properties\":{\"maxSamples\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200}}}")
+				+ ","
+				+ tool("operator_brief",
+						"Post a note on the operator Spectrum tools (Agent brief) and a one-line plot HUD. No USB. Optional face (ble|nfc|gnss|cb|fm|tv|sweep), title, body, marks[{mhz,label}], clear.",
+						"{\"type\":\"object\",\"properties\":{\"face\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},"
+								+ "\"body\":{\"type\":\"string\"},\"clear\":{\"type\":\"boolean\"},"
+								+ "\"marks\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{"
+								+ "\"mhz\":{\"type\":\"number\"},\"label\":{\"type\":\"string\"}}}}}}")
+				+ ","
+				+ tool("operator_briefs",
+						"Last agent note per Spectrum tools face. Snapshot only — does not open USB.",
+						"{\"type\":\"object\",\"properties\":{}}")
 				+ "]}";
 	}
 
@@ -247,6 +309,16 @@ public final class SpectrumMcpTools
 			return textResult(store.nfcFramesJson(McpJson.getInt(args, "maxSamples")), false);
 		if ("nfc_sniff".equals(name))
 			return nfcSniffCall();
+		if ("gnss_activity".equals(name))
+			return textResult(store.gnssActivityJson(), false);
+		if ("gnss_sv".equals(name))
+			return textResult(store.gnssSvJson(), false);
+		if ("gnss_sniff".equals(name))
+			return gnssSniffCall();
+		if ("cb_channels".equals(name))
+			return textResult(store.cbChannelsJson(), false);
+		if ("cb_listen".equals(name))
+			return cbListenCall(args);
 		if ("auto_gain".equals(name))
 			return autoGainCall(args);
 		if ("sweep".equals(name))
@@ -257,6 +329,10 @@ public final class SpectrumMcpTools
 			return textResult(store.bleFramesJson(McpJson.getInt(args, "maxSamples")), false);
 		if ("ble_activity".equals(name))
 			return textResult(store.bleActivityJson(McpJson.getInt(args, "maxSamples")), false);
+		if ("operator_brief".equals(name))
+			return operatorBriefCall(args);
+		if ("operator_briefs".equals(name))
+			return textResult(store.briefsJson(), false);
 		if ("fm_spectrum".equals(name))
 		{
 			FmListenSpectrum fm = store.fmListenSpectrum();
@@ -332,6 +408,28 @@ public final class SpectrumMcpTools
 		return textResult("{\"ok\":true,\"radioMode\":\"nfc\",\"loHz\":11560000,\"sampleRate\":10000000}", false);
 	}
 
+	private String gnssSniffCall()
+	{
+		if (gnssSniff == null)
+			throw new IllegalArgumentException("gnss_sniff is not bound");
+		gnssSniff.sniff();
+		return textResult("{\"ok\":true,\"radioMode\":\"gnss\",\"loHz\":1575420000,\"sampleRate\":4000000}", false);
+	}
+
+	private String cbListenCall(Map<String, Object> args)
+	{
+		if (cbListen == null)
+			throw new IllegalArgumentException("cb_listen is not bound");
+		Integer ch = McpJson.getInt(args, "channel");
+		if (ch == null)
+			throw new IllegalArgumentException("cb_listen requires channel");
+		hotiron.core.CbChannel plan = hotiron.core.CbChannelPlan.clamp(ch.intValue());
+		cbListen.listen(plan.number);
+		return textResult(String.format(java.util.Locale.US,
+				"{\"ok\":true,\"cbChannel\":%d,\"mhz\":%.3f,\"radioMode\":\"cb\"}", plan.number, plan.centerMHz()),
+				false);
+	}
+
 	private String autoGainCall(Map<String, Object> args)
 	{
 		if (autoGain == null)
@@ -349,6 +447,41 @@ public final class SpectrumMcpTools
 			throw new IllegalArgumentException("sweep is not bound");
 		sweep.sweep();
 		return textResult("{\"ok\":true,\"radioMode\":\"sweep\"}", false);
+	}
+
+	private String operatorBriefCall(Map<String, Object> args)
+	{
+		String face = McpJson.getString(args, "face");
+		if (face == null || face.isBlank())
+			face = store.inferBriefFace();
+		face = hotiron.core.OperatorBrief.normalizeFace(face);
+		Boolean clear = McpJson.getBoolean(args, "clear");
+		if (Boolean.TRUE.equals(clear))
+		{
+			store.publishBrief(hotiron.core.OperatorBrief.clear(face));
+			return textResult("{\"ok\":true,\"cleared\":true,\"face\":\"" + face + "\"}", false);
+		}
+		java.util.List<hotiron.core.OperatorBrief.Mark> marks = new java.util.ArrayList<>();
+		java.util.List<Object> rawMarks = McpJson.getList(args, "marks");
+		if (rawMarks != null)
+		{
+			for (Object o : rawMarks)
+			{
+				if (!(o instanceof Map))
+					continue;
+				@SuppressWarnings("unchecked")
+				Map<String, Object> m = (Map<String, Object>) o;
+				Double mhz = McpJson.getDouble(m, "mhz");
+				if (mhz == null)
+					continue;
+				String label = McpJson.getString(m, "label");
+				marks.add(new hotiron.core.OperatorBrief.Mark(mhz.doubleValue(), label));
+			}
+		}
+		hotiron.core.OperatorBrief brief = new hotiron.core.OperatorBrief(face, McpJson.getString(args, "title"),
+				McpJson.getString(args, "body"), marks, System.currentTimeMillis(), "mcp");
+		store.publishBrief(brief);
+		return textResult(brief.toJson(), false);
 	}
 
 	private String bleSniffCall(Map<String, Object> args)

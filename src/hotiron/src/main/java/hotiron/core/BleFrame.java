@@ -47,6 +47,13 @@ public final class BleFrame
 		sb.append(",\"address\":").append(jsonQuote(address));
 		sb.append(",\"advertising\":").append(advertising);
 		sb.append(",\"hex\":").append(jsonQuote(hex));
+		BleAdv adv = BleAdv.parseHex(hex);
+		if (!adv.localName.isEmpty())
+			sb.append(",\"localName\":").append(jsonQuote(adv.localName));
+		if (!adv.uuid.isEmpty())
+			sb.append(",\"uuid\":").append(jsonQuote(adv.uuid));
+		if (!adv.service.isEmpty())
+			sb.append(",\"service\":").append(jsonQuote(adv.service));
 		sb.append('}');
 		return sb.toString();
 	}

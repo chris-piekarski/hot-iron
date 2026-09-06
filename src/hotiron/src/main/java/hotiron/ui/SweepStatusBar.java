@@ -85,12 +85,21 @@ public class SweepStatusBar extends JPanel {
 
 	public void setSweepInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbm, boolean audio,
 			boolean video, boolean nfc) {
-		mode.setText("Panel  " + WaterfallPlot.modeBanner(audio, video, nfc));
+		setSweepInfo(rbwHz, fftBins, waterfallFps, peakDbm, audio, video, nfc, false);
+	}
+
+	public void setSweepInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbm, boolean audio,
+			boolean video, boolean nfc, boolean gnss) {
+		mode.setText("Panel  " + WaterfallPlot.modeBanner(audio, video, nfc, gnss));
 		resolution.setText("Resolution  " + formatHz(rbwHz));
 		bins.setText("FFT bins  " + formatBins(fftBins));
-		String ratePrefix = nfc ? "NFC  " : video ? "Video  " : audio ? "Audio  " : "Waterfall  ";
+		String ratePrefix = gnss ? "GNSS  " : nfc ? "NFC  " : video ? "Video  " : audio ? "Audio  " : "Waterfall  ";
 		rate.setText(ratePrefix + formatFps(waterfallFps));
-		peak.setText("Peak  " + ((audio || video || nfc) ? formatPeakDbfs(peakDbm) : formatPeakDbm(peakDbm)));
+		peak.setText("Peak  " + ((audio || video || nfc || gnss) ? formatPeakDbfs(peakDbm) : formatPeakDbm(peakDbm)));
+	}
+
+	public void setGnssInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbfs) {
+		setSweepInfo(rbwHz, fftBins, waterfallFps, peakDbfs, false, false, false, true);
 	}
 
 	public void setListenDualInfo(double rbwHz, int fftBins, double waterfallFps, Double peakDbfs) {

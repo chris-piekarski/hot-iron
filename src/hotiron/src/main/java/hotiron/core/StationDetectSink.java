@@ -13,9 +13,13 @@ public final class StationDetectSink
 	private final FmStationTracker fmTracker;
 	private final TvStationTracker tvTracker;
 	private final NfcActivityTracker nfcTracker;
+	private final GnssActivityTracker gnssTracker;
+	private final CbChannelTracker cbTracker;
 	private List<FmStationHit> fmHits = List.of();
 	private List<TvStationHit> tvHits = List.of();
 	private NfcActivity nfc = NfcActivity.quiet();
+	private GnssActivity gnss = GnssActivity.quiet();
+	private List<CbChannelHit> cbHits = List.of();
 
 	public StationDetectSink()
 	{
@@ -27,6 +31,8 @@ public final class StationDetectSink
 		this.fmTracker = new FmStationTracker(clockMs);
 		this.tvTracker = new TvStationTracker(clockMs);
 		this.nfcTracker = new NfcActivityTracker(clockMs);
+		this.gnssTracker = new GnssActivityTracker(clockMs);
+		this.cbTracker = new CbChannelTracker(clockMs);
 	}
 
 	public List<FmStationHit> lastFm()
@@ -42,6 +48,16 @@ public final class StationDetectSink
 	public NfcActivity lastNfc()
 	{
 		return nfc;
+	}
+
+	public GnssActivity lastGnss()
+	{
+		return gnss;
+	}
+
+	public List<CbChannelHit> lastCb()
+	{
+		return cbHits;
 	}
 
 	public void resetFm()
@@ -60,6 +76,18 @@ public final class StationDetectSink
 		nfc = NfcActivity.quiet();
 	}
 
+	public void resetGnss()
+	{
+		gnssTracker.reset();
+		gnss = GnssActivity.quiet();
+	}
+
+	public void resetCb()
+	{
+		cbTracker.reset();
+		cbHits = List.of();
+	}
+
 	/**
 	 * Axis change on a live broadcast window drops tracker memory so a
 	 * retune does not keep stale 97.3 labels.
@@ -72,6 +100,10 @@ public final class StationDetectSink
 			tvTracker.reset();
 		if (NfcBandPlan.overlapsInterest(startMHz, endMHz))
 			nfcTracker.reset();
+		if (GnssBandPlan.overlapsL1(startMHz, endMHz))
+			gnssTracker.reset();
+		if (CbChannelPlan.overlapsBand(startMHz, endMHz))
+			cbTracker.reset();
 	}
 
 	public void update(DatasetSpectrum ds, FrequencyRange view, HackRFSettings settings)
@@ -98,6 +130,24 @@ public final class StationDetectSink
 			publishTv(settings, tvHits);
 		}
 		nfc = nfcTracker.update(ds, start, end);
+		gnss = gnssTracker.update(ds, start, end);
+		if (CbChannelPlan.overlapsBand(start, end))
+		{
+			boolean scan = settings.getBandScan() != null && settings.getBandScan().getValue() == BandScan.CB;
+			float margin = scan ? CbChannelPlan.SCAN_MARGIN_DB : CbChannelPlan.DETECT_MARGIN_DB;
+			cbHits = cbTracker.update(ds, start, end, margin);
+			publishCb(settings, cbHits);
+		}
+	}
+
+	public static void publishCb(HackRFSettings settings, List<CbChannelHit> hits)
+	{
+		if (settings == null || settings.getDetectedCbStations() == null)
+			return;
+		List<CbChannelHit> cur = settings.getDetectedCbStations().getValue();
+		if (CbStationDial.sameChannels(cur, hits))
+			return;
+		settings.getDetectedCbStations().setValue(hits == null ? List.of() : List.copyOf(hits));
 	}
 
 	public static void publishFm(HackRFSettings settings, List<FmStationHit> hits)

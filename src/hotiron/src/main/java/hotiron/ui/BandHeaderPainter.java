@@ -205,10 +205,10 @@ public final class BandHeaderPainter
 				if (w > occ - 4)
 					continue;
 			}
-			double left = x - w / 2.0;
-			double right = left + w;
-			if (left < area.getMinX() + 1 || right > area.getMaxX() - 1)
+			double left = clampLabelLeft(x, w, area);
+			if (Double.isNaN(left))
 				continue;
+			double right = left + w;
 			if (!tuned && overlaps(placed, left, right))
 				continue;
 			g.setColor(LABEL_SHADOW);
@@ -217,6 +217,28 @@ public final class BandHeaderPainter
 			g.drawString(mark.label, (float) left, labelY);
 			placed.add(new double[] { left, right });
 		}
+	}
+
+	/**
+	 * Center the label on {@code centerX}, then slide it in if it would clip
+	 * the plot. BLE adv 39 sits at 2480 in a 2400–2484 window; dropping the
+	 * glyph there leaves an unlabeled tick. Returns NaN if the string is
+	 * wider than the plot.
+	 */
+	static double clampLabelLeft(double centerX, int width, Rectangle2D area)
+	{
+		if (area == null || width <= 0)
+			return Double.NaN;
+		double minL = area.getMinX() + 1;
+		double maxR = area.getMaxX() - 1;
+		if (width > maxR - minL)
+			return Double.NaN;
+		double left = centerX - width / 2.0;
+		if (left < minL)
+			left = minL;
+		if (left + width > maxR)
+			left = maxR - width;
+		return left;
 	}
 
 	static Font labelFont(boolean tuned)

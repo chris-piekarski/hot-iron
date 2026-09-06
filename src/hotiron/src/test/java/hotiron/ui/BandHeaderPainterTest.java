@@ -75,4 +75,18 @@ class BandHeaderPainterTest {
 				"header must fit the bold channel labels");
 		assertEquals(13, BandHeaderPainter.LABEL_SIZE);
 	}
+
+	@Test
+	void rightEdgeLabelSlidesInInsteadOfDropping()
+	{
+		Rectangle2D area = new Rectangle2D.Double(40, 20, 720, 250);
+		FrequencyAxis axis = FrequencyAxis.fromArea(area, 2400, 2484);
+		double x = axis.mhzToX(2480);
+		int w = 80;
+		assertTrue(x + w / 2.0 > area.getMaxX() - 1, "centered 39 would clip the right edge");
+		double left = BandHeaderPainter.clampLabelLeft(x, w, area);
+		assertTrue(Double.isFinite(left));
+		assertTrue(left >= area.getMinX() + 1 - 0.01);
+		assertTrue(left + w <= area.getMaxX() - 1 + 0.01);
+	}
 }

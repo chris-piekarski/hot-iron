@@ -153,6 +153,10 @@ public final class SpectrumOccupancy
 				label = WifiChannelPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
 			if (label == null)
 				label = NfcBandPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
+			if (label == null)
+				label = GnssBandPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
+			if (label == null)
+				label = CbChannelPlan.labelForPeak(peakAt, viewStartMHz, viewEndMHz);
 			emitters.add(new Emitter(peakAt, peak, start, end, width, label));
 		}
 		emitters.sort(Comparator.comparingDouble((Emitter e) -> e.peakDbm).reversed());

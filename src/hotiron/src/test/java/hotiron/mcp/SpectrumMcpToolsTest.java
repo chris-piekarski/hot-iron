@@ -54,6 +54,11 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("nfc_activity"));
 		assertTrue(list.contains("nfc_frames"));
 		assertTrue(list.contains("nfc_sniff"));
+		assertTrue(list.contains("gnss_activity"));
+		assertTrue(list.contains("gnss_sv"));
+		assertTrue(list.contains("gnss_sniff"));
+		assertTrue(list.contains("cb_channels"));
+		assertTrue(list.contains("cb_listen"));
 		assertTrue(list.contains("fm_spectrum"));
 		assertTrue(list.contains("spectrum_occupancy"));
 		assertTrue(list.contains("spectrum_history"));
@@ -68,6 +73,8 @@ class SpectrumMcpToolsTest {
 		assertTrue(list.contains("ble_sniff"));
 		assertTrue(list.contains("ble_frames"));
 		assertTrue(list.contains("ble_activity"));
+		assertTrue(list.contains("operator_brief"));
+		assertTrue(list.contains("operator_briefs"));
 		assertNull(tools.handleRpc("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}"));
 	}
 
@@ -257,6 +264,63 @@ class SpectrumMcpToolsTest {
 	}
 
 	@Test
+	void gnssSniffParksWhenBound()
+	{
+		int[] calls = { 0 };
+		SpectrumMcpTools tools = new SpectrumMcpTools(new SpectrumSnapshotStore(), null, null, null, null, null, null,
+				() -> calls[0]++);
+		String out = tools.call("gnss_sniff", Map.of());
+		assertEquals(1, calls[0]);
+		assertTrue(out.contains("radioMode"));
+		assertTrue(out.contains("gnss"));
+		assertTrue(out.contains("1575420000"));
+		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> unbound.call("gnss_sniff", Map.of()));
+		assertTrue(ex.getMessage().contains("not bound"));
+	}
+
+	@Test
+	void gnssActivityReportsPublishedClassification()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		SpectrumMcpTools tools = new SpectrumMcpTools(store);
+		store.publishGnss(hotiron.core.GnssActivity.quiet());
+		String quiet = tools.call("gnss_activity", Map.of());
+		assertTrue(quiet.contains("quiet") || quiet.contains("\"gpsL1\":false"));
+		store.publishGnss(new hotiron.core.GnssActivity(true, false, false, -70f, Float.NaN, Float.NaN, -90f, 0.8f, true));
+		String live = tools.call("gnss_activity", Map.of());
+		assertTrue(live.contains("GPS/Galileo"));
+		store.publishGnssSv(java.util.List.of(new hotiron.core.GpsSvHit(7, 42f, 0, 0, 12f)));
+		String sv = tools.call("gnss_sv", Map.of());
+		assertTrue(sv.contains("prn") && sv.contains("7"), sv);
+	}
+
+	@Test
+	void cbListenParksTheNamedChannel()
+	{
+		int[] got = { 0 };
+		SpectrumMcpTools tools = new SpectrumMcpTools(new SpectrumSnapshotStore(), null, null, null, null, null, null,
+				null, ch -> got[0] = ch);
+		String out = tools.call("cb_listen", Map.of("channel", 19));
+		assertEquals(19, got[0]);
+		assertTrue(out.contains("cbChannel"));
+		assertTrue(out.contains("27.185"));
+		SpectrumMcpTools unbound = new SpectrumMcpTools(new SpectrumSnapshotStore());
+		assertThrows(IllegalArgumentException.class, () -> unbound.call("cb_listen", Map.of("channel", 19)));
+	}
+
+	@Test
+	void cbChannelsReportsPublishedHits()
+	{
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		SpectrumMcpTools tools = new SpectrumMcpTools(store);
+		store.publishCb(java.util.List.of(new hotiron.core.CbChannelHit(hotiron.core.CbChannelPlan.find(19), -55f)));
+		String json = tools.call("cb_channels", Map.of());
+		assertTrue(json.contains("19"), json);
+	}
+
+	@Test
 	void autoGainWritesTheExistingCheckbox()
 	{
 		boolean[] got = { true };
@@ -304,6 +368,23 @@ class SpectrumMcpToolsTest {
 		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
 				() -> unbound.call("ble_sniff", Map.of()));
 		assertTrue(ex.getMessage().contains("not bound"));
+	}
+
+	@Test
+	void operatorBriefWritesTheStoreWithoutUsbHooks()
+	{
+		int[] sweeps = { 0 };
+		SpectrumSnapshotStore store = new SpectrumSnapshotStore();
+		SpectrumMcpTools tools = new SpectrumMcpTools(store, null, null, null, null, () -> sweeps[0]++);
+		String out = tools.call("operator_brief", Map.of("face", "ble", "title", "Room BLE", "body", "Swift Pair nearby",
+				"marks", java.util.List.of(Map.of("mhz", 2437.6, "label", "Wi-Fi 6"))));
+		assertEquals(0, sweeps[0]);
+		assertTrue(out.contains("Room BLE"), out);
+		assertTrue(out.contains("2437.6") || out.contains("2437.6000"), out);
+		String all = tools.call("operator_briefs", Map.of());
+		assertTrue(all.contains("Room BLE"), all);
+		tools.call("operator_brief", Map.of("face", "ble", "clear", true));
+		assertFalse(tools.call("operator_briefs", Map.of()).contains("Room BLE"));
 	}
 
 	@Test

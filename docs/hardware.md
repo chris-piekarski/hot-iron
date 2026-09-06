@@ -25,7 +25,7 @@ make firmware-update VERSION=2026.01.3 CONFIRM=1   # write SPI flash
 
 `CONFIRM=1` is required to write. The target refuses HackRF Pro images on a One, refuses if the usbfs node is not writable, and is **not** run by `make build` or `make test`.
 
-After a write, press RESET (WSL: `usbipd detach` / `attach`) and run `make info`.
+After a write, press RESET (WSL: `make wsl-usb`) and run `make info`.
 
 Official instructions: https://hackrf.readthedocs.io/en/latest/updating_firmware.html
 
@@ -62,40 +62,44 @@ You should see your device without permission errors. `make info` still lists th
 
 ## WSL2 (Windows host, Linux build)
 
-Windows does not share USB with WSL2 until you attach the device.
+Windows does not share USB with WSL2 until you attach the device. From this Ubuntu:
 
-**Once (Administrator PowerShell):**
+```bash
+make udev       # once: usbfs + J-Link ACM MODE 0666
+make wsl-usb    # each session, and after a radio reset / unplug
+make info       # HackRF on Linux?
+```
+
+`make wsl-usb` runs `scripts/wsl-usb-attach.sh`. It calls Windows `usbipd.exe` and attaches these devices to this distro:
+
+| Device | VID:PID | Linux node |
+|---|---|---|
+| HackRF One | `1d50:6089` | `/dev/bus/usb/…` |
+| nRF J-Link (BLE sniff) | `1366:1015` | usbfs + `/dev/ttyACM*` / `jlink-acm` |
+| Intel Wireless Bluetooth (motherboard) | `8087:0033` | usbfs + `hci0` (`btusb`) |
+
+Host Bluetooth is the Intel adapter Windows uses for headphones / pairing. Attaching it **steals it from Windows** (`usbipd bind --force`). It is **not** the nRF packet sniffer — sidebar **BLE sniff** still opens the J-Link ACM.
+
+`--hardware-id` survives bus-id changes. `./scripts/wsl-usb-attach.sh --watch` keeps auto-attaching after a firmware reset or unplug. `--list` / `--detach` / `--hackrf` / `--ble` / `--bt` are the other flags.
+
+**Once (Administrator PowerShell)** — share the devices so attach does not need elevation every time:
 
 ```powershell
 usbipd list
-usbipd bind --busid <BUSID>          # persist "Shared" across reboots
+usbipd bind --hardware-id 1d50:6089
+usbipd bind --hardware-id 1366:1015
+usbipd bind --force --hardware-id 8087:0033
 ```
 
-**Once per Windows logon** — run this in Administrator PowerShell; it stays active and re-attaches after a radio reset or unplug:
+`bind` only marks the device shared; it does not attach it to WSL. If bind was never done, `make wsl-usb` prompts a Windows UAC dialog.
 
-```powershell
-usbipd attach --wsl --auto-attach --hardware-id 1d50:6089
-```
-
-`--hardware-id` survives bus-id changes. `--auto-attach` re-attaches after firmware reset or unplug. `bind` only marks the device shared; it does not attach it to WSL.
+Until `make udev` has been run, usbipd nodes are often `root:root` and the script chmod's them. After udev, a new attach comes up writable.
 
 HotIron hot-loads a newly attached HackRF (WSL `usbipd attach` while the window is open) and starts the sweep. If you pressed **Stop**, it leaves USB alone until **Restart**.
 
-**Once in WSL:**
-
-```bash
-make udev    # persistent usbfs MODE=0666; no more chmod after each attach
-```
-
-Until `make udev` has been run, usbipd nodes are often `root:root` and need:
-
-```bash
-sudo chmod a+rw /dev/bus/usb/00X/00Y
-```
-
 HackRF One is `1d50:6089`. In WSL, `lsusb` should then show Great Scott Gadgets HackRF One.
 
-The bench nRF board is a second USB: SEGGER J-Link serial **`000680852409`**, identified as **PCA10031 / nRF51822**. Normal PID is **`1366:1015`** (CDC+MSD+BULK). J-Link Commander can leave it as **`1366:0101`** (J-Link-only, no ACM) — bind that ID and restore VCOM before sniffing. `make udev` covers both PIDs. Sidebar **BLE sniff** / MCP `ble_sniff` opens the ACM; snapshot tools do not. Flash recipe (identify, HEX, `nrfutil device program`): [nrf-sniffer.md](nrf-sniffer.md#flash-recipe).
+The bench nRF board is a second USB: SEGGER J-Link serial **`000680852409`**, identified as **PCA10031 / nRF51822**. Normal PID is **`1366:1015`** (CDC+MSD+BULK). J-Link Commander can leave it as **`1366:0101`** (J-Link-only, no ACM) — bind that ID and restore VCOM before sniffing. `make udev` covers both PIDs and the CDC ACM (and tells ModemManager to leave it alone). Sidebar **BLE sniff** / MCP `ble_sniff` opens the ACM; snapshot tools do not. Flash recipe (identify, HEX, `nrfutil device program`): [nrf-sniffer.md](nrf-sniffer.md#flash-recipe).
 
 List the radio and run hardware smoke tests (not part of `make test`):
 

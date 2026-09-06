@@ -23,6 +23,8 @@ public class FakeHackRFSettings implements HackRFSettings {
 	public int startListenCalls;
 	public int startWatchCalls;
 	public int startSniffCalls;
+	public int startGnssSniffCalls;
+	public int startCbListenCalls;
 	public int startBleSniffCalls;
 	public int stopBleSniffCalls;
 	public List<String> listedSerials = new ArrayList<String>();
@@ -52,6 +54,16 @@ public class FakeHackRFSettings implements HackRFSettings {
 			@Override
 			public void startSniff() {
 				startSniffCalls++;
+			}
+
+			@Override
+			public void startGnssSniff() {
+				startGnssSniffCalls++;
+			}
+
+			@Override
+			public void startCbListen() {
+				startCbListenCalls++;
 			}
 
 			@Override
@@ -212,6 +224,16 @@ public class FakeHackRFSettings implements HackRFSettings {
 	}
 
 	@Override
+	public void startGnssSniff() {
+		inner.startGnssSniff();
+	}
+
+	@Override
+	public void startCbListen() {
+		inner.startCbListen();
+	}
+
+	@Override
 	public void startBleSniff() {
 		inner.startBleSniff();
 	}
@@ -244,6 +266,11 @@ public class FakeHackRFSettings implements HackRFSettings {
 	@Override
 	public void startNfcScan() {
 		inner.startNfcScan();
+	}
+
+	@Override
+	public void startCbScan() {
+		inner.startCbScan();
 	}
 
 	@Override
@@ -284,6 +311,21 @@ public class FakeHackRFSettings implements HackRFSettings {
 	@Override
 	public ModelValueInt getTvChannel() {
 		return inner.getTvChannel();
+	}
+
+	@Override
+	public ModelValueInt getCbChannel() {
+		return inner.getCbChannel();
+	}
+
+	@Override
+	public ModelValue<java.util.List<hotiron.core.CbChannelHit>> getDetectedCbStations() {
+		return inner.getDetectedCbStations();
+	}
+
+	@Override
+	public ModelValueBoolean isCbChatterScanning() {
+		return inner.isCbChatterScanning();
 	}
 
 	@Override
