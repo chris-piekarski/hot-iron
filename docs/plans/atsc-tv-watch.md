@@ -31,12 +31,19 @@ One RF path. **Watching stops the sweep.** Pause still only freezes the plot. St
 - [x] GNU Radio-compatible 16-phase RRC resampler (filter before decimation)
 - [x] GNU Radio-compatible 8-tap MMSE symbol interpolator + real-time recursive FPLL NCO
 - [x] GNU Radio long-form DC blocker + field-sync-only equalizer adaptation
+- [x] Cholesky least-squares FF + DFE equalizer (`solve_spd`), segment-sync LMS tracking, and Euclidean Viterbi branch metrics (`OnAir@b7cf9ac` port)
+- [x] ATSC A/65 PSIP TVCT/CVCT (`0x1FFB` / `0xC8`) virtual channel & callsign decoding in `MpegTsProbe` + primary DTV program selection
+- [x] Reception Doctor root-cause diagnostics (`diagnosis.code` / `fix` / `text`, `clipFraction`, `cfoHz`, `sroPpm`, `eqSnrDb`, `spectrumSnrDb`, `interfererDb`) in `TvWatchDebug` and `tv_debug`
+- [x] Decode-quality & clip/interferer-aware IF gain policy in `TvWatchGainPolicy`
 - [x] Preserve a complete HackRF transfer (about 106 TS packets) and retry IQ polarity before lock
 - [x] Drop stale IQ backlog and reset the complete decoder after any discontinuity
 - [x] Native stage diagnostics + MCP `tv_debug` / `tv_debug_history`
 - [x] FFmpeg/TS decode counters on `tv_debug` + 2 s console line (process, stdin, PMT/video PID, stderr)
 - [x] Start `ffmpeg` only after a healthy RS window; stop it on RS collapse; map PMT PIDs; quiet concealment spam
 - [x] Main chart + MCP `tv_spectrum` show live local ±8 MHz RF from the parked IQ stream
+- [x] OnAir Cholesky least-squares feed-forward + 32-tap DFE equalizer, segment-sync tracking, deinterleaver zero-flush filter, and multipath self-test
+- [x] PSIP TVCT/CVCT (`0x1FFB`) virtual channel & callsign decoding (`7.1 KATV`) in `MpegTsProbe`, `TvTunerPanel`, `TvChannelRoster`, `WatchHud`, `tv_stations`, and `tv_debug`
+- [x] Reception Doctor root-cause diagnostics (`diagnosis.code` / `fix` / `text`, `clipFraction`, `cfoHz`, `sroPpm`, `eqSnrDb`, `spectrumSnrDb`, `interfererDb`) in `TvWatchDebug` and `TvWatchGainPolicy`
 - [ ] Hardware IT Watch start/stop then resume sweep
 - [x] Live ATSC lock + CRC-valid PAT + decoded MPEG-2 frames on RF channels 28 and 33
 

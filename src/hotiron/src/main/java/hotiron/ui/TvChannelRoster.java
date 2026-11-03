@@ -122,7 +122,7 @@ public final class TvChannelRoster extends JPanel
 			if (hit == null || hit.channel == null)
 				continue;
 			int fcc = hit.channel.fccChannel;
-			JButton b = new JButton(hit.label());
+			JButton b = new JButton(hit.rosterLabel());
 			b.setFocusable(false);
 			b.setFont(b.getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12)
 					: b.getFont().deriveFont(Font.BOLD, 12f));
@@ -180,8 +180,9 @@ public final class TvChannelRoster extends JPanel
 	private static String tip(TvStationHit hit)
 	{
 		String band = hit.channel.vhf() ? "VHF" : "UHF";
+		String st = hit.station.isEmpty() ? "" : "  " + hit.station;
 		String extra = hit.grade == TvChannelGrade.NO_LOCK && !hit.stage.isEmpty() ? " · " + hit.stage : "";
-		return "ch " + hit.label() + "  " + band + "  " + hit.grade.rosterLabel() + extra;
+		return "ch " + hit.label() + st + "  " + band + "  " + hit.grade.rosterLabel() + extra;
 	}
 
 	private static List<TvStationHit> sorted(List<TvStationHit> hits)

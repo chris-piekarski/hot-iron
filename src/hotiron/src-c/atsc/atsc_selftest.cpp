@@ -6,6 +6,14 @@
 #include "atsc_rx.h"
 #include "atsc_dc_blocker.h"
 #include "atsc_rx_filter.h"
+#include "atsc_deinterleaver_impl.h"
+#include "atsc_derandomizer_impl.h"
+#include "atsc_equalizer_impl.h"
+#include "atsc_fs_checker_impl.h"
+#include "atsc_pnXXX_impl.h"
+#include "atsc_randomize.h"
+#include "atsc_rs_decoder_impl.h"
+#include "atsc_viterbi_decoder_impl.h"
 #include <gnuradio/dtv/atsc_consts.h>
 #include <gnuradio/filter/mmse_fir_interpolator_ff.h>
 #include <gnuradio/math.h>
@@ -17,6 +25,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 static constexpr double PI = 3.14159265358979323846;
@@ -294,6 +303,202 @@ static int filter_selftest(double input_rate)
 	return 0;
 }
 
+static void rs207_encode(const uint8_t in187[187], uint8_t out207[207])
+{
+	static bool init = false;
+	static uint8_t exp_tab[512];
+	static uint8_t log_tab[256];
+	static uint8_t gen[21]; // g(x) = prod_{i=0..19} (x + alpha^i), monic gen[0]=1
+	if (!init)
+	{
+		int x = 1;
+		for (int i = 0; i < 255; i++)
+		{
+			exp_tab[i] = (uint8_t) x;
+			exp_tab[i + 255] = (uint8_t) x;
+			log_tab[x] = (uint8_t) i;
+			x <<= 1;
+			if (x & 0x100)
+				x ^= 0x11d;
+		}
+		log_tab[0] = 0;
+		memset(gen, 0, sizeof(gen));
+		gen[0] = 1;
+		for (int i = 0; i < 20; i++)
+		{
+			for (int j = i + 1; j > 0; j--)
+			{
+				uint8_t prod = gen[j] ? exp_tab[log_tab[gen[j]] + i] : 0;
+				gen[j] = prod ^ gen[j - 1];
+			}
+			gen[0] = exp_tab[log_tab[gen[0]] + i];
+		}
+		// Reverse so gen[0] is x^20 coefficient (1) and gen[1..20] are lower terms
+		std::reverse(gen, gen + 21);
+		init = true;
+	}
+	memcpy(out207, in187, 187);
+	uint8_t par[20]{};
+	for (int i = 0; i < 187; i++)
+	{
+		uint8_t fb = in187[i] ^ par[0];
+		for (int j = 0; j < 19; j++)
+		{
+			uint8_t term = (fb && gen[j + 1]) ? exp_tab[log_tab[fb] + log_tab[gen[j + 1]]] : 0;
+			par[j] = par[j + 1] ^ term;
+		}
+		par[19] = (fb && gen[20]) ? exp_tab[log_tab[fb] + log_tab[gen[20]]] : 0;
+	}
+	memcpy(out207 + 187, par, 20);
+}
+
+static int rs_and_equalizer_multipath_selftest()
+{
+	// 1. Verify Reed-Solomon (207,187) encode + decode_rs_char error correction (up to 10 byte errors).
+	gr::dtv::atsc_rs_decoder_impl rsd;
+	uint8_t msg[187];
+	for (int i = 0; i < 187; i++)
+		msg[i] = (uint8_t) ((i * 73 + 19) & 0xff);
+	uint8_t cw[207];
+	rs207_encode(msg, cw);
+	// Inject 8 corrupted bytes across the codeword
+	for (int k = 0; k < 8; k++)
+		cw[k * 20 + 3] ^= (uint8_t) (0x5a + k);
+	uint8_t decoded[188]{};
+	int corr = rsd.decode(decoded, cw);
+	if (corr != 8 || memcmp(decoded, msg, 187) != 0)
+	{
+		fprintf(stderr, "selftest: RS(207,187) failed to correct 8 byte errors (corr=%d)\n", corr);
+		return 1;
+	}
+	fprintf(stderr, "selftest: RS(207,187) corrected %d byte errors cleanly\n", corr);
+
+	// 2. Verify OnAir Cholesky LS + DFE equalizer on multipath echoes (post-echo -5 dB @ 6 syms, pre-echo -9 dB @ -3 syms).
+	const int nsegs = 16;
+	const int total_syms = nsegs * gr::dtv::ATSC_DATA_SEGMENT_LENGTH;
+	std::vector<float> tx(total_syms, 0.f);
+	uint32_t rng = 0x9e3779b9u;
+	for (int s = 0; s < nsegs; s++)
+	{
+		float* seg = &tx[s * gr::dtv::ATSC_DATA_SEGMENT_LENGTH];
+		seg[0] = +5.f;
+		seg[1] = -5.f;
+		seg[2] = -5.f;
+		seg[3] = +5.f;
+		if (s == 0 || s == 8)
+		{
+			int mask = (s == 8) ? 1 : 0;
+			int idx = 4;
+			for (int j = 0; j < 511; j++)
+				seg[idx++] = atsc_pn511[j] ? +5.f : -5.f;
+			for (int j = 0; j < 63; j++)
+				seg[idx++] = atsc_pn63[j] ? +5.f : -5.f;
+			for (int j = 0; j < 63; j++)
+				seg[idx++] = (atsc_pn63[j] ^ mask) ? +5.f : -5.f;
+			for (int j = 0; j < 63; j++)
+				seg[idx++] = atsc_pn63[j] ? +5.f : -5.f;
+			for (; idx < gr::dtv::ATSC_DATA_SEGMENT_LENGTH; idx++)
+				seg[idx] = (idx & 1) ? +5.f : -5.f;
+		}
+		else
+		{
+			for (int j = 4; j < gr::dtv::ATSC_DATA_SEGMENT_LENGTH; j++)
+			{
+				rng = rng * 1664525u + 1013904223u;
+				int sym = (rng >> 29) & 7;
+				seg[j] = (float) (2 * sym - 7);
+			}
+		}
+	}
+
+	// Apply multipath channel: direct path + pre-echo (-9 dB at -3 syms) + post-echo (-5 dB at +6 syms) + DC offset
+	std::vector<float> rx_syms(total_syms, 0.f);
+	for (int i = 0; i < total_syms; i++)
+	{
+		float v = tx[i] + 0.35f;
+		if (i + 3 < total_syms)
+			v += 0.35f * tx[i + 3]; // pre-echo 3 symbols early
+		if (i - 6 >= 0)
+			v -= 0.56f * tx[i - 6]; // post-echo 6 symbols late (-5 dB)
+		rx_syms[i] = v;
+	}
+
+	gr::dtv::atsc_fs_checker_impl fsc;
+	gr::dtv::atsc_equalizer_impl equ;
+	int sym_errors_after_eq = 0;
+	int sym_checked = 0;
+	for (int s = 0; s < nsegs; s++)
+	{
+		float fsc_out[gr::dtv::ATSC_DATA_SEGMENT_LENGTH];
+		gr::dtv::plinfo pli;
+		gr::gr_vector_int n1{ 1 };
+		gr::gr_vector_const_void_star ins1{ &rx_syms[s * gr::dtv::ATSC_DATA_SEGMENT_LENGTH] };
+		gr::gr_vector_void_star outs1{ fsc_out, &pli };
+		if (fsc.general_work(1, n1, ins1, outs1) <= 0)
+			continue;
+		float eq_out[gr::dtv::ATSC_DATA_SEGMENT_LENGTH];
+		gr::dtv::plinfo eq_pl;
+		gr::gr_vector_const_void_star ins2{ fsc_out, &pli };
+		gr::gr_vector_void_star outs2{ eq_out, &eq_pl };
+		if (equ.general_work(1, n1, ins2, outs2) <= 0)
+			continue;
+		int orig_seg = (s - 1); // equalizer has 1-segment lookahead delay
+		if (orig_seg > 0 && orig_seg != 8)
+		{
+			const float* ref = &tx[orig_seg * gr::dtv::ATSC_DATA_SEGMENT_LENGTH];
+			for (int j = 4; j < gr::dtv::ATSC_DATA_SEGMENT_LENGTH; j++)
+			{
+				float sliced = std::max(-7.f, std::min(7.f, 2.f * std::floor(eq_out[j] * 0.5f) + 1.f));
+				if (std::fabs(sliced - ref[j]) > 0.5f)
+					sym_errors_after_eq++;
+				sym_checked++;
+			}
+		}
+	}
+	if (sym_checked == 0 || sym_errors_after_eq > sym_checked / 50 || equ.snr_db() < 18.f)
+	{
+		fprintf(stderr, "selftest: multipath equalizer failed errors=%d/%d snr=%.1f dB\n",
+				sym_errors_after_eq, sym_checked, equ.snr_db());
+		return 1;
+	}
+	fprintf(stderr, "selftest: multipath equalizer errors=%d/%d snr=%.1f dB\n",
+			sym_errors_after_eq, sym_checked, equ.snr_db());
+
+	// 3. Exercise Viterbi + Deinterleaver + RS + Derandomizer + Plinfo blocks for full coverage.
+	gr::dtv::atsc_viterbi_decoder_impl vit;
+	gr::dtv::atsc_deinterleaver_impl dei;
+	gr::dtv::atsc_derandomizer_impl der;
+	std::vector<float> vit_in(12 * gr::dtv::ATSC_DATA_SEGMENT_LENGTH, 1.f);
+	gr::dtv::plinfo vit_plin[12];
+	for (int i = 0; i < 12; i++)
+		vit_plin[i].set_regular_seg(false, i);
+	unsigned char vit_out[12 * gr::dtv::ATSC_MPEG_RS_ENCODED_LENGTH]{};
+	gr::dtv::plinfo vit_plout[12];
+	gr::gr_vector_const_void_star vins{ vit_in.data(), vit_plin };
+	gr::gr_vector_void_star vouts{ vit_out, vit_plout };
+	for (int blk = 0; blk < 6; blk++)
+	{
+		for (int i = 0; i < 12; i++)
+			vit_plin[i].set_regular_seg(false, (blk * 12 + i) % 312);
+		vit.work(12, vins, vouts);
+		unsigned char dei_out[12 * gr::dtv::ATSC_MPEG_RS_ENCODED_LENGTH]{};
+		gr::dtv::plinfo dei_pl[12];
+		gr::gr_vector_const_void_star dins{ vit_out, vit_plout };
+		gr::gr_vector_void_star douts{ dei_out, dei_pl };
+		dei.work(12, dins, douts);
+		unsigned char rs_out[12 * gr::dtv::ATSC_MPEG_PKT_LENGTH]{};
+		gr::dtv::plinfo rs_pl[12];
+		gr::gr_vector_const_void_star rins{ dei_out, dei_pl };
+		gr::gr_vector_void_star routs{ rs_out, rs_pl };
+		rsd.work(12, rins, routs);
+		unsigned char der_out[12 * gr::dtv::ATSC_MPEG_PKT_LENGTH]{};
+		gr::gr_vector_const_void_star erins{ rs_out, rs_pl };
+		gr::gr_vector_void_star erouts{ der_out };
+		der.work(12, erins, erouts);
+	}
+	return 0;
+}
+
 int main()
 {
 	if (volk_selftest() != 0)
@@ -309,6 +514,8 @@ int main()
 	if (filter_selftest(20e6) != 0)
 		return 1;
 	if (filter_selftest(16e6) != 0)
+		return 1;
+	if (rs_and_equalizer_multipath_selftest() != 0)
 		return 1;
 
 	const double fs = 12e6;
@@ -329,6 +536,7 @@ int main()
 	{
 		double t = i / fs;
 		int si = (int) (t * SYM);
+		int seg_idx = (si / 832) % 313;
 		int pos = si % 832;
 		float lvl;
 		if (pos == 0)
@@ -337,6 +545,14 @@ int main()
 			lvl = -5.f;
 		else if (pos == 3)
 			lvl = 5.f;
+		else if (seg_idx == 0 && pos < 4 + 511)
+			lvl = atsc_pn511[pos - 4] ? 5.f : -5.f;
+		else if (seg_idx == 0 && pos < 4 + 511 + 63)
+			lvl = atsc_pn63[pos - 4 - 511] ? 5.f : -5.f;
+		else if (seg_idx == 0 && pos < 4 + 511 + 126)
+			lvl = (atsc_pn63[pos - 4 - 511 - 63] ^ (((si / (832 * 313)) & 1))) ? 5.f : -5.f;
+		else if (seg_idx == 0 && pos < 4 + 511 + 189)
+			lvl = atsc_pn63[pos - 4 - 511 - 126] ? 5.f : -5.f;
 		else
 			lvl = ((si >> 2) & 1) ? 3.f : -3.f;
 		lvl += 1.25f;

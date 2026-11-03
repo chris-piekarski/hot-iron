@@ -62,6 +62,55 @@ class TvWatchDebugTest {
 		assertEquals(3, d.previewFrames);
 	}
 
+	@Test
+	void receptionDoctorDiagnosesOverloadDropsWeakSignalInterfererAndMultipath() {
+		assertEquals("stopped", TvWatchDebug.empty().diagnosisCode());
+		TvWatchDebug clipped = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 0, 0, 0, 0,
+				1f, 0.45f, 1f, 0f, 0f, 0f, 0.02f, 0f, 0f, 0f, 15f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("clipping", clipped.diagnosisCode());
+		assertEquals("lower_gain", clipped.diagnosisFix());
+
+		TvWatchDebug dropped = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 3, 0, 0, 0,
+				1f, 0.40f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 15f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("iq_drops", dropped.diagnosisCode());
+
+		TvWatchDebug weak = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 0, 0, 0, 0,
+				1f, 0.02f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 10f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("weak_signal", weak.diagnosisCode());
+		assertEquals("raise_gain", weak.diagnosisFix());
+
+		TvWatchDebug flat = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 0, 0, 0, 0,
+				1f, 0.30f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 1.2f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("no_signal", flat.diagnosisCode());
+		assertEquals("check_antenna", flat.diagnosisFix());
+
+		TvWatchDebug interferer = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 0, 0, 0, 0,
+				1f, 0.40f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 12f, 18f, MpegTsPlayer.Stats.empty());
+		assertEquals("interferer", interferer.diagnosisCode());
+		assertEquals("lower_gain", interferer.diagnosisFix());
+
+		TvWatchDebug offCentre = new TvWatchDebug(1, true, true, false, false, false,
+				0, 0, 0, 0, 0, 0, 0, 0, 100_000, 0, 0, 0, 0,
+				1f, 0.40f, 1f, 0f, 0f, 0f, 0f, 85_000f, 0f, 0f, 12f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("off_centre", offCentre.diagnosisCode());
+		assertEquals("calibrate_ppm", offCentre.diagnosisFix());
+
+		TvWatchDebug multipath = new TvWatchDebug(1, true, true, false, false, false,
+				64, 64, 0, 400, 1, 0, 0, 64, 100_000, 0, 0, 0, 0,
+				1f, 0.45f, 1f, -30f, 0.5f, 0.8f, 0f, 0f, 0f, 11f, 14f, 0f, MpegTsPlayer.Stats.empty());
+		assertEquals("multipath_or_low_snr", multipath.diagnosisCode());
+		assertEquals("optimise_gain", multipath.diagnosisFix());
+
+		TvWatchDebug healthy = atPat(5, ffmpegWaiting());
+		assertEquals("looks_fine", healthy.diagnosisCode());
+		assertEquals("none", healthy.diagnosisFix());
+	}
+
 	private static TvWatchDebug atPat(int frames, MpegTsPlayer.Stats ffmpeg) {
 		return sample(true, 1_000_000, 1000, 500, 100, 1, true, frames, ffmpeg);
 	}

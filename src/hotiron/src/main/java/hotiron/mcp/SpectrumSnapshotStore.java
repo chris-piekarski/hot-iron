@@ -146,7 +146,8 @@ public final class SpectrumSnapshotStore
 				if (hit == null || hit.channel == null)
 					continue;
 				tv.add(new TvHit(hit.channel.fccChannel, (float) hit.channel.centerMHz(), hit.grade.jsonName(),
-						hit.powerDbm, hit.confidence, hit.stage, hit.frames, hit.snrDb, hit.pilotExcessDb));
+						hit.powerDbm, hit.confidence, hit.stage, hit.frames, hit.snrDb, hit.pilotExcessDb,
+						hit.station));
 			}
 		}
 		if (settings.getCbChannel() != null)
@@ -631,6 +632,25 @@ public final class SpectrumSnapshotStore
 				.append(SpectrumSnapshot.Json.num(d.equalizerMainTap)).append(',');
 		SpectrumSnapshot.Json.appendKey(sb, "equalizerPeakTap")
 				.append(SpectrumSnapshot.Json.num(d.equalizerPeakTap)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "clipFraction")
+				.append(SpectrumSnapshot.Json.num(d.clipFraction)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "cfoHz")
+				.append(SpectrumSnapshot.Json.num(d.cfoHz)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "sroPpm")
+				.append(SpectrumSnapshot.Json.num(d.sroPpm)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "eqSnrDb")
+				.append(SpectrumSnapshot.Json.num(d.eqSnrDb)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "spectrumSnrDb")
+				.append(SpectrumSnapshot.Json.num(d.spectrumSnrDb)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "interfererDb")
+				.append(SpectrumSnapshot.Json.num(d.interfererDb)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "diagnosis").append('{');
+		SpectrumSnapshot.Json.appendKey(sb, "code")
+				.append(SpectrumSnapshot.Json.quote(d.diagnosisCode())).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "fix")
+				.append(SpectrumSnapshot.Json.quote(d.diagnosisFix())).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "text")
+				.append(SpectrumSnapshot.Json.quote(d.diagnosisText())).append("},");
 		SpectrumSnapshot.Json.appendKey(sb, "ffmpeg");
 		appendFfmpeg(sb, d.ffmpeg);
 		sb.append('}');
@@ -678,8 +698,19 @@ public final class SpectrumSnapshotStore
 		SpectrumSnapshot.Json.appendKey(sb, "audioPid").append(ts.audioPid).append(',');
 		SpectrumSnapshot.Json.appendKey(sb, "audioStreamType").append(ts.audioStreamType).append(',');
 		SpectrumSnapshot.Json.appendKey(sb, "audioPackets").append(ts.audioPackets).append(',');
-		SpectrumSnapshot.Json.appendKey(sb, "audioPesStarts").append(ts.audioPesStarts);
-		sb.append("}}");
+		SpectrumSnapshot.Json.appendKey(sb, "audioPesStarts").append(ts.audioPesStarts).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "virtualChannel")
+				.append(SpectrumSnapshot.Json.quote(ts.virtualChannel)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "callSign")
+				.append(SpectrumSnapshot.Json.quote(ts.callSign)).append(',');
+		SpectrumSnapshot.Json.appendKey(sb, "subchannels").append('[');
+		for (int i = 0; i < ts.channels.size(); i++)
+		{
+			if (i > 0)
+				sb.append(',');
+			sb.append(SpectrumSnapshot.Json.quote(ts.channels.get(i).label()));
+		}
+		sb.append("]}}");
 	}
 
 	public String sweepConfigJson()

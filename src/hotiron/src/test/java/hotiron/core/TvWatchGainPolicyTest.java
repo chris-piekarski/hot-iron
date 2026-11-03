@@ -60,4 +60,40 @@ class TvWatchGainPolicyTest
 		assertFalse(TvWatchGainPolicy.antennaLna(false, false));
 		assertTrue(TvWatchGainPolicy.antennaLna(false, true));
 	}
+
+	@Test
+	void spectrumSnrAndInterfererMeasureChannelAgainstGuardBands()
+	{
+		TvChannel ch = TvChannelPlan.findByFccChannel(33); // 584..590 MHz, center 587 MHz
+		int n = 256;
+		float[] mhz = new float[n];
+		float[] dbfs = new float[n];
+		for (int i = 0; i < n; i++)
+		{
+			mhz[i] = 579f + (16f * i) / (n - 1);
+			double d = Math.abs(mhz[i] - ch.centerMHz());
+			dbfs[i] = d <= 2.8 ? -30f : -45f;
+		}
+		float snr = TvWatchGainPolicy.spectrumSnrDb(mhz, dbfs, ch);
+		assertTrue(Float.isFinite(snr) && snr > 12f && snr < 16f, "expected ~14 dB SNR, got " + snr);
+		assertTrue(TvWatchGainPolicy.interfererExcessDb(mhz, dbfs, ch) < 0f);
+
+		// Add a strong adjacent interferer at +6 MHz (+20 dB above the wanted channel)
+		dbfs[n - 10] = -10f;
+		float interf = TvWatchGainPolicy.interfererExcessDb(mhz, dbfs, ch);
+		assertEquals(20f, interf, 0.1f);
+		assertEquals(56, TvWatchGainPolicy.retuneForQuality(62, 0.48f, 0f, 10f, snr, interf));
+	}
+
+	@Test
+	void chooseOptimalGainPicksLowestUnclippedStepWithinHalfDbOfBestSnr()
+	{
+		java.util.List<TvWatchGainPolicy.GainPoint> pts = java.util.List.of(
+				new TvWatchGainPolicy.GainPoint(46, 17.0f, 14f, 0.25f, 0f),
+				new TvWatchGainPolicy.GainPoint(54, 19.8f, 16f, 0.38f, 0f),
+				new TvWatchGainPolicy.GainPoint(62, 20.1f, 16.2f, 0.50f, 0f),
+				new TvWatchGainPolicy.GainPoint(70, 21.5f, 17f, 0.65f, 0.01f)); // clipped, excluded
+		assertEquals(54, TvWatchGainPolicy.chooseOptimalGain(pts, 62),
+				"54 dB is within 0.5 dB of 62 dB (20.1 dB) and 70 dB is clipped");
+	}
 }

@@ -16,6 +16,7 @@ The TV tuner Seek list must distinguish **RF occupancy** from **MPEG-2 frames th
 - [x] TV tuner roster in spectrum tools (picture vs RF only)
 - [x] Overlay style by grade
 - [x] MCP `tv_stations`
+- [x] PSIP TVCT virtual channel & callsign labels (`33 · 7.1 KATV`) on `TvChannelRoster`, `TvTunerPanel`, `WatchHud`, and `tv_stations`
 - [x] `HotIron` qualify-after-scan + Watch stamp
 - [ ] Live UHF Scan → roster picture on a known brick (ch 33)
 

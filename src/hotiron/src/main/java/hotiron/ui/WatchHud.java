@@ -21,26 +21,39 @@ public final class WatchHud
 	public static String text(int fccChannel, boolean locked, float snrDb, int packets, int mpegFrames,
 			int previewFrames)
 	{
-		if (mpegFrames > 0)
-			return parked(fccChannel, "live");
-		if (locked && snrDb >= 5f)
-			return parked(fccChannel, String.format(Locale.US, "ATSC lock  %.0f dB", snrDb));
-		if (locked)
-			return parked(fccChannel, String.format(Locale.US, "8VSB weak  %.0f dB (no picture)", snrDb));
-		if (previewFrames > 0)
-			return parked(fccChannel, "IQ video");
-		if (packets > 0)
-			return parked(fccChannel, String.format(Locale.US, "8VSB  %d TS pkt (no picture)", packets));
-		return parked(fccChannel, "no ATSC lock");
+		return text(fccChannel, "", locked, snrDb, packets, mpegFrames, previewFrames);
 	}
 
-	private static String parked(int fccChannel, String detail)
+	public static String text(int fccChannel, String station, boolean locked, float snrDb, int packets,
+			int mpegFrames, int previewFrames)
 	{
-		return String.format(Locale.US, "WATCH ch %d — parked IQ · %s", fccChannel, detail);
+		if (mpegFrames > 0)
+			return parked(fccChannel, station, "live");
+		if (locked && snrDb >= 5f)
+			return parked(fccChannel, station, String.format(Locale.US, "ATSC lock  %.0f dB", snrDb));
+		if (locked)
+			return parked(fccChannel, station, String.format(Locale.US, "8VSB weak  %.0f dB (no picture)", snrDb));
+		if (previewFrames > 0)
+			return parked(fccChannel, station, "IQ video");
+		if (packets > 0)
+			return parked(fccChannel, station, String.format(Locale.US, "8VSB  %d TS pkt (no picture)", packets));
+		return parked(fccChannel, station, "no ATSC lock");
+	}
+
+	private static String parked(int fccChannel, String station, String detail)
+	{
+		String st = station == null || station.trim().isEmpty() ? "" : " (" + station.trim() + ")";
+		return String.format(Locale.US, "WATCH ch %d%s — parked IQ · %s", fccChannel, st, detail);
 	}
 
 	public static void paint(Graphics2D g0, Rectangle2D area, int fccChannel, boolean locked, float snrDb,
 			int packets, int mpegFrames, int previewFrames)
+	{
+		paint(g0, area, fccChannel, "", locked, snrDb, packets, mpegFrames, previewFrames);
+	}
+
+	public static void paint(Graphics2D g0, Rectangle2D area, int fccChannel, String station, boolean locked,
+			float snrDb, int packets, int mpegFrames, int previewFrames)
 	{
 		if (g0 == null || area == null || area.getWidth() < 8)
 			return;
@@ -48,7 +61,7 @@ public final class WatchHud
 		try
 		{
 			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-			String s = text(fccChannel, locked, snrDb, packets, mpegFrames, previewFrames);
+			String s = text(fccChannel, station, locked, snrDb, packets, mpegFrames, previewFrames);
 			int w = g.getFontMetrics().stringWidth(s) + 16;
 			int h = g.getFontMetrics().getHeight() + 6;
 			int x = (int) Math.round(area.getMinX() + 8);

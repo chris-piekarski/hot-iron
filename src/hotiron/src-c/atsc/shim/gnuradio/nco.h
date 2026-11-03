@@ -62,6 +62,7 @@ public:
 	}
 	void adjust_phase(float x) { rotate(d_sin_phase, d_cos_phase, x); }
 	void adjust_freq(float x) { rotate(d_sin_freq, d_cos_freq, x); }
+	double get_freq() const { return std::atan2(d_sin_freq, d_cos_freq); }
 };
 } // namespace gr
 #endif

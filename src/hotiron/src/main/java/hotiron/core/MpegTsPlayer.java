@@ -596,6 +596,16 @@ public final class MpegTsPlayer
 			this.ts = ts == null ? MpegTsProbe.Snapshot.empty() : ts;
 		}
 
+		public Stats withPsipFrom(MpegTsProbe.Snapshot fallbackTs)
+		{
+			MpegTsProbe.Snapshot merged = ts.withPsipFrom(fallbackTs);
+			if (merged == ts)
+				return this;
+			return new Stats(started, launchFailed, videoAlive, audioAlive, videoExitCode, startedMs,
+					waitMs, tsBytesOffered, tsBytesWritten, tsQueueDepth, tsQueueCap, tsDropped,
+					writeErrors, stdoutBytes, partialFrameBytes, stdoutEof, lastStderr, merged);
+		}
+
 		public static Stats empty()
 		{
 			return new Stats(false, false, false, false, EXIT_NONE, 0, 0, 0, 0, 0, TS_QUEUE_CAP, 0,

@@ -30,6 +30,12 @@ public final class TvWatchDebug
 	public final float rsGoodRatioDb;
 	public final float equalizerMainTap;
 	public final float equalizerPeakTap;
+	public final float clipFraction;
+	public final float cfoHz;
+	public final float sroPpm;
+	public final float eqSnrDb;
+	public final float spectrumSnrDb;
+	public final float interfererDb;
 	public final MpegTsPlayer.Stats ffmpeg;
 
 	public TvWatchDebug(long timestampMs, boolean running, boolean nativeAvailable,
@@ -54,6 +60,23 @@ public final class TvWatchDebug
 			long droppedChunks, int queueDepth, int frames, int previewFrames,
 			float agcGain, float rmsIq, float rmsBaseband, float rsGoodRatioDb,
 			float equalizerMainTap, float equalizerPeakTap, MpegTsPlayer.Stats ffmpeg)
+	{
+		this(timestampMs, running, nativeAvailable, hasPat, locked, inverted, packets, badPackets,
+				goodPackets, segments, fieldSegments, pendingBaseband, rsGoodWindow, rsWindow,
+				totalIqSamples, droppedChunks, queueDepth, frames, previewFrames, agcGain, rmsIq,
+				rmsBaseband, rsGoodRatioDb, equalizerMainTap, equalizerPeakTap, 0f, 0f, 0f, 0f,
+				Float.NaN, Float.NaN, ffmpeg);
+	}
+
+	public TvWatchDebug(long timestampMs, boolean running, boolean nativeAvailable,
+			boolean hasPat, boolean locked, boolean inverted, long packets,
+			long badPackets, long goodPackets, long segments, long fieldSegments,
+			long pendingBaseband, long rsGoodWindow, long rsWindow, long totalIqSamples,
+			long droppedChunks, int queueDepth, int frames, int previewFrames,
+			float agcGain, float rmsIq, float rmsBaseband, float rsGoodRatioDb,
+			float equalizerMainTap, float equalizerPeakTap, float clipFraction,
+			float cfoHz, float sroPpm, float eqSnrDb, float spectrumSnrDb, float interfererDb,
+			MpegTsPlayer.Stats ffmpeg)
 	{
 		this.timestampMs = timestampMs;
 		this.running = running;
@@ -80,6 +103,12 @@ public final class TvWatchDebug
 		this.rsGoodRatioDb = rsGoodRatioDb;
 		this.equalizerMainTap = equalizerMainTap;
 		this.equalizerPeakTap = equalizerPeakTap;
+		this.clipFraction = clipFraction;
+		this.cfoHz = cfoHz;
+		this.sroPpm = sroPpm;
+		this.eqSnrDb = eqSnrDb;
+		this.spectrumSnrDb = spectrumSnrDb;
+		this.interfererDb = interfererDb;
 		this.ffmpeg = ffmpeg == null ? MpegTsPlayer.Stats.empty() : ffmpeg;
 	}
 
@@ -97,7 +126,109 @@ public final class TvWatchDebug
 				packets, badPackets, goodPackets, segments, fieldSegments, pendingBaseband,
 				rsGoodWindow, rsWindow, totalIqSamples, droppedChunks, queueDepth, frames,
 				previewFrames, agcGain, rmsIq, rmsBaseband, rsGoodRatioDb, equalizerMainTap,
-				equalizerPeakTap, ffmpeg);
+				equalizerPeakTap, clipFraction, cfoHz, sroPpm, eqSnrDb, spectrumSnrDb,
+				interfererDb, ffmpeg);
+	}
+
+	public TvWatchDebug withSpectrumMetrics(float spectrumSnrDb, float interfererDb)
+	{
+		return new TvWatchDebug(timestampMs, running, nativeAvailable, hasPat, locked, inverted,
+				packets, badPackets, goodPackets, segments, fieldSegments, pendingBaseband,
+				rsGoodWindow, rsWindow, totalIqSamples, droppedChunks, queueDepth, frames,
+				previewFrames, agcGain, rmsIq, rmsBaseband, rsGoodRatioDb, equalizerMainTap,
+				equalizerPeakTap, clipFraction, cfoHz, sroPpm, eqSnrDb, spectrumSnrDb,
+				interfererDb, ffmpeg);
+	}
+
+	/**
+	 * Reception Doctor root-cause code explaining why 8-VSB is or is not
+	 * locking (overload, drops, weak/missing signal, adjacent interferer,
+	 * carrier offset, or multipath).
+	 */
+	public String diagnosisCode()
+	{
+		if (!running)
+			return "stopped";
+		if (!nativeAvailable)
+			return "native_missing";
+		if (totalIqSamples == 0)
+			return "waiting_iq";
+		if (TvWatchGainPolicy.isClipped(rmsIq, clipFraction))
+			return "clipping";
+		if (!locked && droppedChunks > 0)
+			return "iq_drops";
+		if (!locked && rmsIq > 0f && rmsIq < TvWatchGainPolicy.MIN_RMS)
+			return "weak_signal";
+		if (!locked && Float.isFinite(spectrumSnrDb) && spectrumSnrDb < TvWatchGainPolicy.MIN_USABLE_SNR_DB)
+			return "no_signal";
+		if (!locked && Float.isFinite(interfererDb) && interfererDb >= TvWatchGainPolicy.INTERFERER_DB)
+			return "interferer";
+		if (!locked && Math.abs(cfoHz) > 60_000f)
+			return "off_centre";
+		if (!locked && segments > 0 && rsWindow >= TvWatchEngine.RS_MIN_WINDOW && rsGoodWindow == 0)
+			return "multipath_or_low_snr";
+		return "looks_fine";
+	}
+
+	public String diagnosisFix()
+	{
+		switch (diagnosisCode())
+		{
+		case "clipping":
+		case "interferer":
+			return "lower_gain";
+		case "weak_signal":
+			return "raise_gain";
+		case "no_signal":
+			return "check_antenna";
+		case "off_centre":
+			return "calibrate_ppm";
+		case "multipath_or_low_snr":
+			return "optimise_gain";
+		default:
+			return "none";
+		}
+	}
+
+	public String diagnosisText()
+	{
+		switch (diagnosisCode())
+		{
+		case "stopped":
+			return "TV Watch is stopped.";
+		case "native_missing":
+			return "Native ATSC 8-VSB receiver is not loaded.";
+		case "waiting_iq":
+			return "Waiting for IQ samples from HackRF.";
+		case "clipping":
+			return String.format(java.util.Locale.US,
+					"ADC converter is overloaded (rms=%.2f, clip=%.2f%%); lower IF gain.",
+					rmsIq, clipFraction * 100f);
+		case "iq_drops":
+			return "IQ chunks were dropped (" + droppedChunks + ") before 8-VSB trellis lock.";
+		case "weak_signal":
+			return String.format(java.util.Locale.US,
+					"IF level is too low (rms=%.3f); raise gain or enable LNA.", rmsIq);
+		case "no_signal":
+			return String.format(java.util.Locale.US,
+					"No 6 MHz ATSC channel stands above the noise floor (in-band SNR %.1f dB).",
+					spectrumSnrDb);
+		case "interferer":
+			return String.format(java.util.Locale.US,
+					"Strong out-of-channel signal (+%.1f dB) in the 16 MS/s window can swamp the receiver; lower gain.",
+					interfererDb);
+		case "off_centre":
+			return String.format(java.util.Locale.US,
+					"ATSC pilot is shifted by %+.1f kHz; check channel or crystal PPM.",
+					cfoHz / 1000f);
+		case "multipath_or_low_snr":
+			return String.format(java.util.Locale.US,
+					"Sync found but Reed-Solomon is failing (eq SNR %.1f dB); multipath echo or low SNR.",
+					eqSnrDb);
+		default:
+			return locked ? "Decoder is locked and front-end looks healthy."
+					: "Front-end looks healthy; acquiring ATSC sync.";
+		}
 	}
 
 	public String stage()

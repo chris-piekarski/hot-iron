@@ -54,10 +54,12 @@ char atsc_single_viterbi::decode(float input)
     // float best_state_metric = 100000;
     d_best_state_metric = 100000;
 
-    /* Precompute distances from input to each possible symbol */
-    float distances[8] = { fabsf(input + 7), fabsf(input + 5), fabsf(input + 3),
-                           fabsf(input + 1), fabsf(input - 1), fabsf(input - 3),
-                           fabsf(input - 5), fabsf(input - 7) };
+    /* Precompute squared Euclidean distances from input to each possible symbol */
+    float distances[8];
+    for (int s = 0; s < 8; s++) {
+        float d = input - (float)(2 * s - 7);
+        distances[s] = d * d;
+    }
 
     /* We start by iterating over all possible states */
     for (unsigned int state = 0; state < 4; state++) {

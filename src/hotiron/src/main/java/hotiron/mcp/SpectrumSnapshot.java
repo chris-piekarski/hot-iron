@@ -451,7 +451,8 @@ public final class SpectrumSnapshot
 				Json.appendKey(sb, "stage").append(Json.quote(h.stage)).append(',');
 				Json.appendKey(sb, "frames").append(h.frames).append(',');
 				Json.appendKey(sb, "snrDb").append(Json.num(h.snrDb)).append(',');
-				Json.appendKey(sb, "pilotExcessDb").append(Json.num(h.pilotExcessDb));
+				Json.appendKey(sb, "pilotExcessDb").append(Json.num(h.pilotExcessDb)).append(',');
+				Json.appendKey(sb, "station").append(Json.quote(h.station));
 				sb.append('}');
 			}
 			sb.append(']');
@@ -486,9 +487,16 @@ public final class SpectrumSnapshot
 		public final int frames;
 		public final float snrDb;
 		public final float pilotExcessDb;
+		public final String station;
 
 		public TvHit(int channel, float mhz, String grade, float dbm, float confidence, String stage,
 				int frames, float snrDb, float pilotExcessDb)
+		{
+			this(channel, mhz, grade, dbm, confidence, stage, frames, snrDb, pilotExcessDb, "");
+		}
+
+		public TvHit(int channel, float mhz, String grade, float dbm, float confidence, String stage,
+				int frames, float snrDb, float pilotExcessDb, String station)
 		{
 			this.channel = channel;
 			this.mhz = mhz;
@@ -499,6 +507,7 @@ public final class SpectrumSnapshot
 			this.frames = frames;
 			this.snrDb = snrDb;
 			this.pilotExcessDb = pilotExcessDb;
+			this.station = station == null ? "" : station;
 		}
 	}
 

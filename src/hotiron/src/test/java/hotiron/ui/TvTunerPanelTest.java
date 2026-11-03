@@ -107,6 +107,18 @@ class TvTunerPanelTest
 		assertEquals(28, got.get());
 	}
 
+	@Test
+	void rosterAndTunerDisplayVirtualChannelAndCallsignWhenDecoded()
+	{
+		TvTunerPanel p = new TvTunerPanel();
+		TvStationHit katv = new TvStationHit(TvChannelPlan.findByFccChannel(33), -40f, 1f,
+				TvChannelGrade.PICTURE, "picture", 10, 18f, 6f, "7.1 KATV");
+		p.setChannel(33);
+		p.setStations(List.of(katv));
+		assertEquals("33 · 7.1 KATV", p.roster().buttons().get(0).getText());
+		assertTrue(p.roster().buttons().get(0).getToolTipText().contains("7.1 KATV"));
+	}
+
 	private static TvStationHit hit(int ch, TvChannelGrade grade)
 	{
 		return new TvStationHit(TvChannelPlan.findByFccChannel(ch), -40f, 1f, grade, "", 0, Float.NaN,

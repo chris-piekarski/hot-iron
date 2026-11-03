@@ -96,6 +96,12 @@ public final class TvStationDial
 	public static List<TvStationHit> stamp(List<TvStationHit> hits, int fccChannel, TvChannelGrade grade,
 			String stage, int frames, float snrDb)
 	{
+		return stamp(hits, fccChannel, grade, stage, frames, snrDb, "");
+	}
+
+	public static List<TvStationHit> stamp(List<TvStationHit> hits, int fccChannel, TvChannelGrade grade,
+			String stage, int frames, float snrDb, String station)
+	{
 		TvChannel ch = TvChannelPlan.findByFccChannel(fccChannel);
 		if (ch == null)
 			return hits == null ? List.of() : hits;
@@ -112,8 +118,8 @@ public final class TvStationDial
 		TvStationHit prev = byFcc.get(fccChannel);
 		if (prev == null)
 			prev = new TvStationHit(ch, Float.NaN, 1f, TvChannelGrade.OCCUPIED, "", 0, Float.NaN,
-					Float.NaN);
-		byFcc.put(fccChannel, prev.stamp(grade, stage, frames, snrDb));
+					Float.NaN, "");
+		byFcc.put(fccChannel, prev.stamp(grade, stage, frames, snrDb, station));
 		List<TvStationHit> out = new ArrayList<TvStationHit>(byFcc.values());
 		out.sort((a, b) -> Integer.compare(a.channel.fccChannel, b.channel.fccChannel));
 		return List.copyOf(out);
@@ -131,7 +137,7 @@ public final class TvStationDial
 			TvStationHit y = bb.get(i);
 			if (x.channel.fccChannel != y.channel.fccChannel || x.grade != y.grade || x.frames != y.frames)
 				return false;
-			if (!x.stage.equals(y.stage))
+			if (!x.stage.equals(y.stage) || !x.station.equals(y.station))
 				return false;
 		}
 		return true;

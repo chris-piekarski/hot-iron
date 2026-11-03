@@ -1123,8 +1123,9 @@ public class HotIron {
 					double end = xy.getDomainAxis().getUpperBound();
 					hotiron.ui.TvChannelOverlay.paint(g2, area, start, end, java.util.List.of(),
 							settings.getTvChannel().getValue());
-					WatchHud.paint(g2, area, settings.getTvChannel().getValue(), tvEngine.locked(),
-							tvEngine.snrDb(), tvEngine.packets(), tvEngine.frames(), tvEngine.previewFrames());
+					WatchHud.paint(g2, area, settings.getTvChannel().getValue(), tvEngine.stationLabel(),
+							tvEngine.locked(), tvEngine.snrDb(), tvEngine.packets(), tvEngine.frames(),
+							tvEngine.previewFrames());
 					paintOperatorBrief(g2, area, start, end);
 					return;
 				}
@@ -1712,6 +1713,12 @@ public class HotIron {
 			{
 				lastSnapshotMs[0] = now;
 				snapshotStore.publishTvWatchSpectrum(snap);
+				if (!snap.isEmpty())
+				{
+					float specSnr = TvWatchGainPolicy.spectrumSnrDb(snap.mhz, snap.dbfs, ch);
+					float interf = TvWatchGainPolicy.interfererExcessDb(snap.mhz, snap.dbfs, ch);
+					tvEngine.updateSpectrumMetrics(specSnr, interf);
+				}
 			}
 			showTvRfSpectrum(snap);
 			pushParkedRfWaterfall(row, tvEngine.iqSpectrum().sampleRate(), loHz);
@@ -1769,14 +1776,20 @@ public class HotIron {
 			boolean locked = tvEngine.locked();
 			float snr = tvEngine.snrDb();
 			int frames = tvEngine.frames();
+			String station = tvEngine.stationLabel();
 			snapshotStore.publishWatchStats(locked, snr, tvEngine.packets());
 			snapshotStore.publishWatchDebug(tvEngine.debug());
 			if (frames > 0)
-				stampTv(ch.fccChannel, hotiron.core.TvChannelGrade.PICTURE, "picture", frames, snr);
+				stampTv(ch.fccChannel, hotiron.core.TvChannelGrade.PICTURE, "picture", frames, snr, station);
+			else if (!station.isEmpty())
+				stampTv(ch.fccChannel, null, "", 0, snr, station);
 			advanceTvQualify(ch.fccChannel, frames, snr);
 			if (settingsPanel != null)
-				settingsPanel.tvTunerPanel().setPreviewStatus(WatchHud.text(ch.fccChannel, locked, snr,
+			{
+				settingsPanel.tvTunerPanel().setStation(station);
+				settingsPanel.tvTunerPanel().setPreviewStatus(WatchHud.text(ch.fccChannel, station, locked, snr,
 						tvEngine.packets(), frames, tvEngine.previewFrames()));
+			}
 			if (chartPanel != null)
 				chartPanel.repaint();
 			if (settings.isAutoGain().getValue())
@@ -1787,12 +1800,15 @@ public class HotIron {
 				long sinceTrim = lastTrimMs[0] == 0 ? sinceArm : now - lastTrimMs[0];
 				if (sinceArm >= TvWatchGainPolicy.FIRST_TRIM_MS
 						&& sinceTrim >= TvWatchGainPolicy.TRIM_SETTLE_MS
-						&& !TvWatchGainPolicy.shouldHoldIf(d.locked, d.rsGoodWindow, d.rmsIq)
-						&& TvWatchGainPolicy.shouldTrimIf(ifTotal[0], d.rmsIq))
+						&& !TvWatchGainPolicy.shouldHoldIf(d.locked, d.rsGoodWindow, d.rmsIq, d.clipFraction)
+						&& TvWatchGainPolicy.shouldTrimIf(ifTotal[0], d.rmsIq, d.clipFraction,
+								d.eqSnrDb, d.spectrumSnrDb, d.interfererDb))
 				{
-					int next = TvWatchGainPolicy.retune(ifTotal[0], d.rmsIq);
+					int next = TvWatchGainPolicy.retuneForQuality(ifTotal[0], d.rmsIq, d.clipFraction,
+							d.eqSnrDb, d.spectrumSnrDb, d.interfererDb);
 					System.err.println("ATSC watch: IF " + ifTotal[0] + " -> " + next
-							+ String.format(java.util.Locale.US, " (rms=%.3f)", d.rmsIq));
+							+ String.format(java.util.Locale.US, " (rms=%.3f clip=%.3f)",
+									d.rmsIq, d.clipFraction));
 					ifTotal[0] = next;
 					lastTrimMs[0] = now;
 					tvEngine.requestGains(GainPolicy.lnaGain(next), GainPolicy.vgaGain(next));
@@ -1819,7 +1835,7 @@ public class HotIron {
 				if (frames == 0 && System.currentTimeMillis()
 						- tvWatchEnteredMs >= hotiron.core.TvQualifySession.MIN_WATCH_MS_FOR_NO_LOCK)
 					stampTv(ch.fccChannel, hotiron.core.TvChannelGrade.NO_LOCK, tvEngine.debug().stage(),
-							0, tvEngine.snrDb());
+							0, tvEngine.snrDb(), tvEngine.stationLabel());
 			}
 			tvEngine.setSpectrumListener(null);
 			tvEngine.setAudioSpectrumListener(null);
@@ -1835,11 +1851,12 @@ public class HotIron {
 		}
 	}
 
-	private void stampTv(int fcc, hotiron.core.TvChannelGrade grade, String stage, int frames, float snrDb)
+	private void stampTv(int fcc, hotiron.core.TvChannelGrade grade, String stage, int frames, float snrDb,
+			String station)
 	{
 		java.util.List<hotiron.core.TvStationHit> cur = settings.getDetectedTvStations().getValue();
 		java.util.List<hotiron.core.TvStationHit> next = hotiron.core.TvStationDial.stamp(cur, fcc, grade,
-				stage, frames, snrDb);
+				stage, frames, snrDb, station);
 		tvStations = next;
 		StationDetectSink.publishTv(settings, next);
 	}

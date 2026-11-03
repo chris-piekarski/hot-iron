@@ -64,6 +64,7 @@ struct AtscRx
 	size_t segs_off = 0;
 	std::vector<plinfo> segs_pl;
 	int last_segno = -2;
+	int warm_segments = 52;
 	int locked = 0;
 	int packets = 0;
 	int good = 0;
@@ -83,11 +84,16 @@ struct AtscRx
 	double sum_bb2 = 0;
 	long n_iq = 0;
 	long n_bb = 0;
+	long clip_iq = 0;
 	uint64_t total_iq = 0;
 	float last_rms_iq = 0;
 	float last_rms_bb = 0;
+	float last_clip_fraction = 0;
 	float equalizer_main_tap = 0;
 	float equalizer_peak_tap = 0;
+	float last_cfo_hz = 0;
+	float last_sro_ppm = 0;
+	float last_eq_snr_db = 0;
 	int lvl[4]{};
 	int invert = 0;
 
@@ -161,7 +167,11 @@ extern "C" int atsc_rx_debug(void* rx, int64_t* counters, int counter_cap,
 			r->last_rms_bb,
 			ratio_db,
 			r->equalizer_main_tap,
-			r->equalizer_peak_tap
+			r->equalizer_peak_tap,
+			r->last_clip_fraction,
+			r->last_cfo_hz,
+			r->last_sro_ppm,
+			r->last_eq_snr_db
 	};
 	if (counters && counter_cap > 0)
 		memcpy(counters, values, (size_t) std::min(counter_cap, ATSC_RX_DEBUG_COUNTERS)
@@ -187,6 +197,14 @@ static void drop_pending_segments(AtscRx* r)
 	r->segs.clear();
 	r->segs_off = 0;
 	r->segs_pl.clear();
+}
+
+static bool is_zero_rs_payload(const unsigned char* rs_pkt)
+{
+	unsigned char acc = 0;
+	for (int k = 0; k < ATSC_MPEG_PKT_LENGTH; k++)
+		acc |= rs_pkt[k];
+	return acc == 0;
 }
 
 static int pump_segments(AtscRx* r, uint8_t* ts_out, int ts_cap)
@@ -285,6 +303,13 @@ static int pump_segments(AtscRx* r, uint8_t* ts_out, int ts_cap)
 			r->der.work(12, erins, erouts);
 			for (int i = 0; i < 12; i++)
 			{
+				if (r->warm_segments > 0)
+				{
+					r->warm_segments--;
+					continue;
+				}
+				if (is_zero_rs_payload(rs_out + i * ATSC_MPEG_PKT_LENGTH))
+					continue;
 				r->packets++;
 				int ok = !rs_pl[i].transport_error_p();
 				if (r->lock_n == LOCK_WIN)
@@ -336,10 +361,14 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 	r->total_iq += (uint64_t) npairs;
 	for (int i = 0; i < npairs; i++)
 	{
-		float fi = iq[2 * i] / 128.f;
-		float fq = iq[2 * i + 1] / 128.f;
+		int8_t ii = iq[2 * i];
+		int8_t qq = iq[2 * i + 1];
+		float fi = ii / 128.f;
+		float fq = qq / 128.f;
 		r->sum_iq2 += (double) (fi * fi + fq * fq);
 		r->n_iq++;
+		if (ii >= 125 || ii <= -125 || qq >= 125 || qq <= -125)
+			r->clip_iq++;
 	}
 
 	r->rs.clear();
@@ -373,6 +402,19 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 		r->lvl[b]++;
 	}
 	int w = pump_segments(r, ts_out, ts_cap);
+	r->last_rms_iq = r->n_iq ? (float) std::sqrt(r->sum_iq2 / r->n_iq) : r->last_rms_iq;
+	r->last_rms_bb = r->n_bb ? (float) std::sqrt(r->sum_bb2 / r->n_bb) : r->last_rms_bb;
+	r->last_clip_fraction = r->n_iq ? (float) r->clip_iq / (float) r->n_iq : r->last_clip_fraction;
+	r->last_cfo_hz = r->fpll.cfo_hz((float) r->out_rate);
+	r->last_sro_ppm = r->sync.sro_ppm();
+	r->last_eq_snr_db = r->equ.snr_db();
+	{
+		std::vector<float> eq_taps = r->equ.taps();
+		r->equalizer_main_tap = eq_taps.size() > 51 ? eq_taps[51] : 0.f;
+		r->equalizer_peak_tap = 0.f;
+		for (float tap : eq_taps)
+			r->equalizer_peak_tap = std::max(r->equalizer_peak_tap, std::fabs(tap));
+	}
 	r->log_in += npairs;
 	if (r->log_in > (long) r->in_rate * 2)
 	{
@@ -381,20 +423,12 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 		float snr = 0;
 		if (r->lock_n > 8)
 			snr = 10.f * std::log10(std::max(1e-3f, (float) r->lock_good / (float) r->lock_n));
-		float rms_iq = r->n_iq ? (float) std::sqrt(r->sum_iq2 / r->n_iq) : 0;
-		float rms_bb = r->n_bb ? (float) std::sqrt(r->sum_bb2 / r->n_bb) : 0;
-		r->last_rms_iq = rms_iq;
-		r->last_rms_bb = rms_bb;
-		std::vector<float> eq_taps = r->equ.taps();
-		r->equalizer_main_tap = eq_taps.size() > 51 ? eq_taps[51] : 0.f;
-		r->equalizer_peak_tap = 0.f;
-		for (float tap : eq_taps)
-			r->equalizer_peak_tap = std::max(r->equalizer_peak_tap, std::fabs(tap));
 		fprintf(stderr,
-				"atsc_rx: locked=%d packets=%d bad=%d good=%d (+%d) segs=%d fsc=%d rs_good_db=%.1f agc=%.1f rms_iq=%.4f rms_bb=%.2f eq_main=%.4f eq_peak=%.4f inv=%d bb=%zu pat=%d psip=%d null=%d other=%d lvl=%d/%d/%d/%d\n",
+				"atsc_rx: locked=%d packets=%d bad=%d good=%d (+%d) segs=%d fsc=%d rs_good_db=%.1f eq_snr=%.1f agc=%.1f rms_iq=%.4f clip=%.4f rms_bb=%.2f eq_main=%.4f eq_peak=%.4f cfo=%.0f sro=%.1f inv=%d bb=%zu pat=%d psip=%d null=%d other=%d lvl=%d/%d/%d/%d\n",
 				r->locked, r->packets, r->rsd.num_bad_packets(), r->good, dgood,
-				r->segs_out, r->fsc_out, snr, r->agc_ff, rms_iq, rms_bb,
-				r->equalizer_main_tap, r->equalizer_peak_tap, r->invert,
+				r->segs_out, r->fsc_out, snr, r->last_eq_snr_db, r->agc_ff, r->last_rms_iq,
+				r->last_clip_fraction, r->last_rms_bb,
+				r->equalizer_main_tap, r->equalizer_peak_tap, r->last_cfo_hz, r->last_sro_ppm, r->invert,
 				r->bb.size() - r->bb_off, r->pid_pat, r->pid_psip, r->pid_null, r->pid_other,
 				r->lvl[0], r->lvl[1], r->lvl[2], r->lvl[3]);
 		r->log_in = 0;
@@ -402,6 +436,7 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 		r->sum_bb2 = 0;
 		r->n_iq = 0;
 		r->n_bb = 0;
+		r->clip_iq = 0;
 		r->pid_pat = 0;
 		r->pid_psip = 0;
 		r->pid_null = 0;
@@ -410,7 +445,9 @@ extern "C" int atsc_rx_process(void* rx, const int8_t* iq, int nbytes, uint8_t* 
 	}
 	if (snr_db)
 	{
-		if (r->lock_n > 8)
+		if (r->last_eq_snr_db > 0.f)
+			*snr_db = r->last_eq_snr_db;
+		else if (r->lock_n > 8)
 			*snr_db = 10.f * std::log10(std::max(1e-3f, (float) r->lock_good / (float) r->lock_n));
 		else
 			*snr_db = 0;

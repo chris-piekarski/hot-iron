@@ -15,8 +15,9 @@ Living implementation plans live here so later work (and agents) can pick them u
 |---|---|
 | [nRF 2.4 GHz sniff](nrf-sniffer.md) | In progress 2026-08-27. Quick Select **BLE** 2400–2484, overlay, Nordic UART host + MCP `ble_sniff` / `ble_frames`. PCA10031 / nRF51822; `sniffer_pca10031_1c2a221.hex` flashed. Hardware IT still open. |
 | [NFC park + nfc-laboratory](nfc-laboratory.md) | In progress 2026-08-23. `RadioMode.NFC`, parked 11.56 / 10 MS/s, nfc-lab frames, MCP `nfc_sniff` / `nfc_frames`. Hardware IT still open. |
-| [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; hardware IT still open. |
-| [TV channel roster](tv-channel-roster.md) | In progress 2026-08-29. Occupancy vs picture grades, Scan qualify pass, spectrum-tools list. |
+| [ATSC 1.0 TV watch](atsc-tv-watch.md) | In progress 2026-08-21. Live RF 28/33 MPEG-2 preview verified; Cholesky LS/DFE equalizer, PSIP TVCT, and doctor diagnostics landed; hardware IT still open. |
+| [TV channel roster](tv-channel-roster.md) | In progress 2026-08-29. Occupancy vs picture grades, PSIP `7.1 CALL` roster labels, Scan qualify pass, spectrum-tools list. |
+| [OnAir in-place upgrades](onair-port.md) | In progress 2026-11-03. Slice 1 (TV Watch LS/DFE equalizer, PSIP TVCT, doctor diagnostics, quality gain policy) done; FM Stereo/RBDS, ADS-B face, and Rewind/PPM/Survey queued. |
 | [GNSS L1 overlay + GPS C/A sniff](gnss-l1-sniff.md) | In progress 2026-08-30. RNSS L1 ticks + occupancy HUD; parked GPS L1 C/A PRN list (not a PVT fix). Hardware sniff still open. |
 | [CB 11 m AM listen](cb-11m-listen.md) | In progress 2026-08-30. Quick Select 26–28, 40-channel overlay, Scan hops parked AM until chatter, Listen. Hardware listen still open. |
 

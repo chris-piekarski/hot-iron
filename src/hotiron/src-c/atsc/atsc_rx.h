@@ -20,14 +20,15 @@ HOTIRON_API int HOTIRON_CALL atsc_rx_process(
 HOTIRON_API int HOTIRON_CALL atsc_rx_locked(void* rx);
 HOTIRON_API int HOTIRON_CALL atsc_rx_packets(void* rx);
 /*
- * Debug schema v1.
+ * Debug schema v1/v2.
  * counters: packets, bad, good, segments, fieldSegments, pendingBaseband,
  *           rsGoodWindow, rsWindow, inverted, totalIqSamples
  * gauges:   agcGain, rmsIq, rmsBaseband, rsGoodRatioDb,
- *           equalizerMainTap, equalizerPeakTap
+ *           equalizerMainTap, equalizerPeakTap,
+ *           clipFraction, cfoHz, sroPpm, eqSnrDb
  */
 #define ATSC_RX_DEBUG_COUNTERS 10
-#define ATSC_RX_DEBUG_GAUGES 6
+#define ATSC_RX_DEBUG_GAUGES 10
 HOTIRON_API int HOTIRON_CALL atsc_rx_debug(
 	void* rx,
 	int64_t* counters,

@@ -27,6 +27,7 @@ private:
 
     // the length of the field sync pattern that we know unequivocally
     static constexpr int KNOWN_FIELD_SYNC_LENGTH = 4 + 511 + 3 * 63;
+    static constexpr int NDFE = 32;
 
     float training_sequence1[KNOWN_FIELD_SYNC_LENGTH];
     float training_sequence2[KNOWN_FIELD_SYNC_LENGTH];
@@ -38,6 +39,12 @@ private:
                 int nsamples);
 
     std::vector<float> d_taps;
+    std::vector<float> d_fb_taps;
+    std::vector<float> d_dec_hist;
+    float d_bias = 0.0f;
+    float d_gain_corr = 1.0f;
+    float d_snr_db = 0.0f;
+    bool d_trained = false;
 
     float data_mem[ATSC_DATA_SEGMENT_LENGTH + NTAPS]; // Buffer for previous data packet
     float data_mem2[ATSC_DATA_SEGMENT_LENGTH];
@@ -54,6 +61,7 @@ public:
 
     std::vector<float> taps() const override;
     std::vector<float> data() const override;
+    float snr_db() const { return d_snr_db; }
 
     int general_work(int noutput_items,
                      gr_vector_int& ninput_items,

@@ -18,8 +18,13 @@
 
 #define ATSC_SEGMENTS_PER_DATA_FIELD 313
 
-static const int PN511_ERROR_LIMIT = 20; // max number of bits wrong
-static const int PN63_ERROR_LIMIT = 5;
+/*
+ * Random data gives ~255 +/- 11 errors over PN511. Allowing up to 140
+ * errors (and 20 on PN63) after removing the segment mean lets field
+ * sync lock through strong multipath echoes before the equalizer converges.
+ */
+static const int PN511_ERROR_LIMIT = 140;
+static const int PN63_ERROR_LIMIT = 20;
 
 namespace gr {
 namespace dtv {
@@ -62,12 +67,18 @@ int atsc_fs_checker_impl::general_work(int noutput_items,
     int output_produced = 0;
 
     for (int i = 0; i < noutput_items; i++) {
-        // check for a hit on the PN 511 pattern
+        const float* seg = &in[i * ATSC_DATA_SEGMENT_LENGTH];
+        double mean = 0.0;
+        for (int j = 0; j < ATSC_DATA_SEGMENT_LENGTH; j++)
+            mean += seg[j];
+        const float m = (float)(mean / ATSC_DATA_SEGMENT_LENGTH);
+
+        // check for a hit on the PN 511 pattern (DC-removed, as in OnAir fieldSyncAt)
         int errors = 0;
 
         for (int j = 0; j < LENGTH_511 && errors < PN511_ERROR_LIMIT; j++)
             errors +=
-                (in[i * ATSC_DATA_SEGMENT_LENGTH + j + OFFSET_511] >= 0) ^ atsc_pn511[j];
+                ((seg[j + OFFSET_511] - m) >= 0) ^ atsc_pn511[j];
 
         this->d_debug_logger->debug("second PN63 error count = {:d}", errors);
 
@@ -75,7 +86,7 @@ int atsc_fs_checker_impl::general_work(int noutput_items,
             // determine if this is field 1 or field 2
             errors = 0;
             for (int j = 0; j < LENGTH_2ND_63; j++)
-                errors += (in[i * ATSC_DATA_SEGMENT_LENGTH + j + OFFSET_2ND_63] >= 0) ^
+                errors += ((seg[j + OFFSET_2ND_63] - m) >= 0) ^
                           atsc_pn63[j];
 
             // we should have either field 1 (== PN63) or field 2 (== ~PN63)

@@ -54,6 +54,13 @@ public:
                      gr_vector_int& ninput_items,
                      gr_vector_const_void_star& input_items,
                      gr_vector_void_star& output_items) override;
+
+    float sro_ppm() const
+    {
+        return d_rx_clock_to_symbol_freq > 0.0
+            ? (float)((d_w / d_rx_clock_to_symbol_freq - 1.0) * 1e6)
+            : 0.0f;
+    }
 };
 
 } /* namespace dtv */

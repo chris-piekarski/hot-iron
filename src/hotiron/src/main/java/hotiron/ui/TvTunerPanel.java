@@ -45,6 +45,7 @@ public final class TvTunerPanel extends JPanel
 	private IntConsumer onSelect;
 	private Runnable onScan;
 	private int fcc = 33;
+	private String station = "";
 	private boolean scanning;
 	private boolean qualifying;
 	private int qualifyFcc;
@@ -180,15 +181,50 @@ public final class TvTunerPanel extends JPanel
 	{
 		roster.setHits(hits);
 		roster.setSelectedFcc(fcc);
+		refreshUnitLabel();
 	}
 
 	public void setChannel(int fccChannel)
 	{
 		TvChannel c = TvChannelPlan.clamp(fccChannel);
+		if (fcc != c.fccChannel)
+			station = "";
 		fcc = c.fccChannel;
 		ch.setText(c.label());
-		unit.setText((c.vhf() ? "VHF" : "UHF") + "  ·  ATSC 1.0");
 		roster.setSelectedFcc(fcc);
+		refreshUnitLabel();
+	}
+
+	public void setStation(String stationLabel)
+	{
+		String next = stationLabel == null ? "" : stationLabel.trim();
+		if (next.equals(station))
+			return;
+		station = next;
+		refreshUnitLabel();
+	}
+
+	public String getStation()
+	{
+		return station;
+	}
+
+	private void refreshUnitLabel()
+	{
+		TvChannel c = TvChannelPlan.clamp(fcc);
+		String st = station;
+		if (st.isEmpty())
+		{
+			for (TvStationHit hit : roster.rows())
+			{
+				if (hit != null && hit.channel != null && hit.channel.fccChannel == fcc && !hit.station.isEmpty())
+				{
+					st = hit.station;
+					break;
+				}
+			}
+		}
+		unit.setText((c.vhf() ? "VHF" : "UHF") + "  ·  ATSC 1.0" + (st.isEmpty() ? "" : "  ·  " + st));
 	}
 
 	public int getChannel()

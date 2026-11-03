@@ -15,6 +15,7 @@ public final class TvStationHit
 	public final int frames;
 	public final float snrDb;
 	public final float pilotExcessDb;
+	public final String station;
 
 	public TvStationHit(TvChannel channel, float powerDbm)
 	{
@@ -23,11 +24,17 @@ public final class TvStationHit
 
 	public TvStationHit(TvChannel channel, float powerDbm, float confidence)
 	{
-		this(channel, powerDbm, confidence, TvChannelGrade.OCCUPIED, "", 0, Float.NaN, Float.NaN);
+		this(channel, powerDbm, confidence, TvChannelGrade.OCCUPIED, "", 0, Float.NaN, Float.NaN, "");
 	}
 
 	public TvStationHit(TvChannel channel, float powerDbm, float confidence, TvChannelGrade grade,
 			String stage, int frames, float snrDb, float pilotExcessDb)
+	{
+		this(channel, powerDbm, confidence, grade, stage, frames, snrDb, pilotExcessDb, "");
+	}
+
+	public TvStationHit(TvChannel channel, float powerDbm, float confidence, TvChannelGrade grade,
+			String stage, int frames, float snrDb, float pilotExcessDb, String station)
 	{
 		this.channel = channel;
 		this.powerDbm = powerDbm;
@@ -37,6 +44,7 @@ public final class TvStationHit
 		this.frames = Math.max(0, frames);
 		this.snrDb = snrDb;
 		this.pilotExcessDb = pilotExcessDb;
+		this.station = station == null ? "" : station.trim();
 	}
 
 	public String label()
@@ -44,9 +52,16 @@ public final class TvStationHit
 		return channel.label();
 	}
 
+	public String rosterLabel()
+	{
+		if (station.isEmpty())
+			return label();
+		return label() + " · " + station;
+	}
+
 	public TvStationHit withConfidence(float confidence)
 	{
-		return new TvStationHit(channel, powerDbm, confidence, grade, stage, frames, snrDb, pilotExcessDb);
+		return new TvStationHit(channel, powerDbm, confidence, grade, stage, frames, snrDb, pilotExcessDb, station);
 	}
 
 	/**
@@ -61,16 +76,23 @@ public final class TvStationHit
 		TvStationHit keep = remembered.grade.trust() >= live.grade.trust() ? remembered : live;
 		TvStationHit fresh = remembered.grade.trust() >= live.grade.trust() ? live : remembered;
 		float pilot = Float.isFinite(fresh.pilotExcessDb) ? fresh.pilotExcessDb : keep.pilotExcessDb;
+		String st = !live.station.isEmpty() ? live.station : remembered.station;
 		return new TvStationHit(keep.channel, fresh.powerDbm, fresh.confidence, keep.grade, keep.stage,
-				keep.frames, keep.snrDb, pilot);
+				keep.frames, keep.snrDb, pilot, st);
 	}
 
 	public TvStationHit stamp(TvChannelGrade grade, String stage, int frames, float snrDb)
 	{
+		return stamp(grade, stage, frames, snrDb, "");
+	}
+
+	public TvStationHit stamp(TvChannelGrade grade, String stage, int frames, float snrDb, String station)
+	{
 		TvChannelGrade g = grade == null ? this.grade : grade;
 		if (this.grade == TvChannelGrade.PICTURE && g != TvChannelGrade.PICTURE)
 			g = TvChannelGrade.PICTURE;
-		return new TvStationHit(channel, powerDbm, confidence, g, stage, frames, snrDb, pilotExcessDb);
+		String st = (station != null && !station.trim().isEmpty()) ? station.trim() : this.station;
+		return new TvStationHit(channel, powerDbm, confidence, g, stage, frames, snrDb, pilotExcessDb, st);
 	}
 
 	@Override

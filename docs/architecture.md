@@ -43,7 +43,7 @@ flowchart TD
 - `SweepConfig` — immutable snapshot of **radio** fields only (range, FFT, samples, LNA/VGA, antenna, CLKOUT, serial)
 - `RadioMode` — derived (`stopped` / `sweep` / `listen` / `watch` / `nfc` / `gnss`), not stored
 - `AutoGainPolicy` (LNA then VGA; display policy, writes radio gain)
-- `FmListenGainPolicy` / `TvWatchGainPolicy` — parked-IQ seeds (Listen adds IF so a 200 kHz station uses the 8-bit ADC; Watch UHF starts at LNA 40 + VGA 22, Auto Watch enables the RF amp for that session, and IF keeps trimming toward ~0.5 RMS)
+- `FmListenGainPolicy` / `TvWatchGainPolicy` — parked-IQ seeds (Listen adds IF so a 200 kHz station uses the 8-bit ADC; Watch UHF starts at LNA 40 + VGA 22, Auto Watch enables the RF amp for that session, and IF trims toward ~0.5 RMS while backing off on ADC clip or strong out-of-channel interferers)
 - `BandScanSession` — FM/TV/NFC **Scan** dwells each window after the first live sweep (TV: VHF then UHF; NFC: 12–15 then 27.12 / 40.68) so **Seek** jumps a pinned station list (NFC has no Seek list)
 - `AutoSweepPolicy` (FFT Bin + samples from span; display policy, writes radio FFT/samples; hysteresis so pan does not thrash)
 - `FrequencyRange.forInterleavedNativeSweep()` (±10 MHz pad so FM 88–108 is filled)
@@ -57,7 +57,7 @@ These are the best candidates for unit testing (and have the majority of our tes
 ### Native Integration
 - `src-c/0001-hackrf_sweep-to-library-conversion-v2026.01.3.patch` — Turns the upstream `hackrf_sweep` tool into a reusable library. `num_samples` requests 8192-sample firmware dwell blocks; `sweep_power_average` runs one FFT per block and averages linear power before emitting one row per tuning frequency.
 - `src-c/hackrf_fm.c` — parked IQ RX (`hackrf_start_rx`) for listen/watch. First-party; not a second sweep patch.
-- `src-c/atsc/` — ATSC 1.0 RX (`atsc_rx_create` / `process` / `destroy`): GNU Radio `gr-dtv` inner loops + Phil Karn `libfec`, no GR runtime. Pipeline: RRC → FPLL → DC blocker → AGC → sync → field-sync checker → equalizer → Viterbi → deinterleaver → RS → derandomizer.
+- `src-c/atsc/` — ATSC 1.0 RX (`atsc_rx_create` / `process` / `destroy`): GNU Radio `gr-dtv` inner loops upgraded with OnAir (`b7cf9ac`) Cholesky least-squares FF + DFE equalizer (`solve_spd`), segment-sync LMS tracking, DC-removed PN511/PN63 field-sync correlation, Euclidean Viterbi metrics, and Phil Karn `libfec` (`decode_rs_char`), with no GR runtime. Pipeline: RRC → FPLL → DC blocker → AGC → sync → field-sync checker → LS/DFE equalizer → Viterbi → deinterleaver → RS → derandomizer.
 - `HackRFSweepNativeBridge.java` / `HackRFFmNativeBridge.java` + hand-maintained `HackrfSweepLibrary.java` (JNAerator is not in the build; keep in sync with `src-c/hackrf_sweep.h`, `hackrf_fm.h`, `atsc_rx.h`)
 - The build process resets the hackrf submodule to `HACKRF_SDK_PIN` (v2026.01.3) and applies the patch.
 - Sweep, FM listen, and ATSC watch are exclusive. `WfmDemodulator` (Java) turns int8 IQ into 48 kHz mono PCM. FM Listen also FFTs the same parked 4 MS/s IQ into a local ±2 MHz RF chart and `fm_spectrum` MCP snapshot; while Listening the bottom strip is that RF waterfall beside 0–16 kHz audio. Watch reuses parked IQ at 16 MS/s through an 8 MHz analog filter (`hackrf_fm_lib_*`, `TvChannelPlan`); that same IQ drives the local ±8 MHz RF chart, `tv_spectrum`, and the left RF waterfall of the Watch dual strip. AC-3 PCM feeds the right AUDIO waterfall (same 0–16 kHz raster as Listen). `IqSpectrum` supplies parked-IQ FFTs without another USB path; those rows go through `DatasetSpectrumPeak` so peak/persistence/`spectrum_history` stay live. Decoded frames (IQ preview, then MPEG-2) go to a 16:9 box on `TvTunerPanel`. Native `atsc_rx_*` in `libhackrf-sweep` emits MPEG-TS; `MpegTsPlayer` runs host `ffmpeg` for MPEG-2 `bgr24` frames and AC-3 → 48 kHz PCM on `AudioSink`. `tv_debug` / `tv_debug_history` expose stage diagnostics including FFmpeg/TS decode counters.
@@ -231,7 +231,7 @@ Policies are `final` classes with private constructors and static methods. They 
 
 Java `HackRFSweepNativeBridge` / `HackRFFmNativeBridge` vs C `hackrf_sweep_lib_*` / `hackrf_fm_lib_*`. One shared library (`libhackrf-sweep`); the FM bridge touches the sweep class so JNA load happens once.
 
-`MpegTsPlayer` adapts MPEG-TS bytes to host `ffmpeg` and keeps decode counters (`Stats` + `MpegTsProbe`) for `tv_debug`. Watch only starts that player after a healthy Reed-Solomon window and maps the PMT video/audio PIDs. `AudioSinks.openPlayback()` is Java Sound, then Pulse (WSL), then `RecordingAudioSink`. Unit tests inject `AudioSink` and never open a mixer.
+`MpegTsPlayer` adapts MPEG-TS bytes to host `ffmpeg` and keeps decode counters (`Stats` + `MpegTsProbe`) for `tv_debug`. `MpegTsProbe` also parses ATSC A/65 PSIP TVCT/CVCT (`0x1FFB` / `0xC8`) virtual channels and callsigns (`"7.1 KATV"`) and selects the primary DTV program. Watch only starts that player after a healthy Reed-Solomon window and maps the PMT video/audio PIDs. `AudioSinks.openPlayback()` is Java Sound, then Pulse (WSL), then `RecordingAudioSink`. Unit tests inject `AudioSink` and never open a mixer.
 
 ### Exclusive USB
 

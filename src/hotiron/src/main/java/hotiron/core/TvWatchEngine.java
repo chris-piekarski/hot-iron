@@ -32,7 +32,7 @@ public final class TvWatchEngine
 	 */
 	public static final int SETTLE_MS = 0;
 	static final int DEBUG_COUNTERS = 10;
-	static final int DEBUG_GAUGES = 6;
+	static final int DEBUG_GAUGES = 10;
 	static final long DEBUG_INTERVAL_MS = 200;
 	/** Rolling RS window must be this full before we judge decode health. */
 	static final int RS_MIN_WINDOW = 32;
@@ -232,9 +232,19 @@ public final class TvWatchEngine
 		return debug;
 	}
 
+	public void updateSpectrumMetrics(float spectrumSnrDb, float interfererDb)
+	{
+		debug = debug.withSpectrumMetrics(spectrumSnrDb, interfererDb);
+	}
+
 	public boolean hasPat()
 	{
 		return sawPat;
+	}
+
+	public String stationLabel()
+	{
+		return tsProbe.snapshot().stationLabel();
 	}
 
 	public void setSpectrumListener(AudioSpectrum.FrameListener listener)
@@ -495,7 +505,9 @@ public final class TvWatchEngine
 								debugCounters[9], dropped.get(), queue.size(), player.frames(),
 								preview.frames(), debugGauges[0], debugGauges[1],
 								debugGauges[2], debugGauges[3], debugGauges[4],
-								debugGauges[5], player.stats());
+								debugGauges[5], debugGauges[6], debugGauges[7],
+								debugGauges[8], debugGauges[9], debug.spectrumSnrDb,
+								debug.interfererDb, player.stats().withPsipFrom(tsProbe.snapshot()));
 					}
 				}
 			}
@@ -506,7 +518,7 @@ public final class TvWatchEngine
 			{
 				lastDebugMs = now;
 				debug = debug.withPlayer(now, sawPat, locked, player.frames(),
-						preview.frames(), player.stats());
+						preview.frames(), player.stats().withPsipFrom(tsProbe.snapshot()));
 			}
 			if (n >= 188)
 			{
