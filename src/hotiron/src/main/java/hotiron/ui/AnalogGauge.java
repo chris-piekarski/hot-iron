@@ -266,7 +266,7 @@ public final class AnalogGauge extends JComponent
 		Font base = getFont();
 		if (base != null)
 			return base.deriveFont(style, size);
-		return new Font(Font.SANS_SERIF, style, Math.round(size));
+		return OperatorTheme.ui(style, size);
 	}
 
 	private static void strokeTick(Graphics2D g, int cx, int cy, int arcR, float t01, float width, int length)

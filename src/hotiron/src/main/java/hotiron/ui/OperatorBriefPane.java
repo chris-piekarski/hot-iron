@@ -35,7 +35,7 @@ public final class OperatorBriefPane extends JPanel
 		area.setEditable(false);
 		area.setLineWrap(true);
 		area.setWrapStyleWord(true);
-		area.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+		area.setFont(OperatorTheme.ui(12f));
 		area.setBackground(BACK);
 		area.setForeground(DIM);
 		area.setCaretColor(INK);

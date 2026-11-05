@@ -182,7 +182,7 @@ public final class NfcEnvelopeScope
 		g.setStroke(FLOOR_STROKE);
 		g.setColor(FLOOR);
 		g.drawLine((int) plot.getX(), (int) y, (int) (plot.getX() + plot.getWidth()), (int) y);
-		g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+		g.setFont(OperatorTheme.ui(10f));
 		g.drawString("decode", (int) plot.getX() + 6, (int) y - 3);
 	}
 
@@ -191,7 +191,7 @@ public final class NfcEnvelopeScope
 		if (!(windowSec > 0))
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		g.setFont(OperatorTheme.ui(11f));
 		g.setColor(AXIS);
 		int y = (int) (plot.getY() + plot.getHeight() - 2);
 		int x0 = (int) plot.getX();
@@ -224,7 +224,7 @@ public final class NfcEnvelopeScope
 		if (h < 16)
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		g.setFont(OperatorTheme.ui(11f));
 		g.setColor(AXIS);
 		FontMetrics fm = g.getFontMetrics();
 		int axisX = gutter - 1;

@@ -37,7 +37,7 @@ public final class HardwarePane extends JPanel
 	{
 		AnalyzerLookAndFeel.install();
 		setLayout(new MigLayout("insets 10, wrap 1, fillx, gapy 6", "[grow,fill]", ""));
-		Font mono = new Font(Font.MONOSPACED, Font.BOLD, 14);
+		Font mono = OperatorTheme.ui(Font.BOLD, 14f);
 		fftBin.setFont(mono);
 		samples.setFont(mono);
 		samples.setModel(new SpinnerListModel(

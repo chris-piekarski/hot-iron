@@ -61,7 +61,7 @@ public final class CbTunerPanel extends JPanel
 		AnalyzerLookAndFeel.install();
 		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][][grow]"));
 		setBorder(BorderFactory.createTitledBorder("CB 11 m"));
-		title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 36));
+		title.setFont(OperatorTheme.readout(36f));
 		title.setForeground(LCD_DIM);
 		hint.setForeground(LCD_DIM);
 		ExclusiveToolTip.setText(tuneDown, "Previous CB channel (1–40 wrap)");

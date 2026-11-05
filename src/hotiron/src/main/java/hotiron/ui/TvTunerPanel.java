@@ -57,7 +57,7 @@ public final class TvTunerPanel extends JPanel
 		setBorder(BorderFactory.createTitledBorder("TV tuner"));
 		JPanel stack = new JPanel(new MigLayout("insets 4 6 6 6, wrap 1, fillx", "[grow,fill]"));
 		stack.setOpaque(false);
-		ch.setFont(new Font(Font.MONOSPACED, Font.BOLD, 32));
+		ch.setFont(OperatorTheme.readout(32f));
 		ch.setForeground(LCD_DIM);
 		unit.setForeground(LCD_DIM);
 		ExclusiveToolTip.setText(tuneDown, "Previous US TV channel (skips the FM/aviation gaps)");

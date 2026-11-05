@@ -243,7 +243,7 @@ public final class BandHeaderPainter
 
 	static Font labelFont(boolean tuned)
 	{
-		return new Font(Font.SANS_SERIF, Font.BOLD, tuned ? LABEL_SIZE + 1 : LABEL_SIZE);
+		return OperatorTheme.ui(Font.BOLD, tuned ? LABEL_SIZE + 1 : LABEL_SIZE);
 	}
 
 	public static float labelBaselineY(Rectangle2D area, FontMetrics fm)

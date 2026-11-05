@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.AbstractButton;
-import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JPanel;
 import javax.swing.JToggleButton;
@@ -223,7 +222,7 @@ public class QuickFrequencySelectorPanel extends JPanel
 		button.setBackground(SpectrumSurveyStyle.chipBackground(preset, on));
 		button.setOpaque(true);
 		button.setContentAreaFilled(true);
-		button.setBorder(BorderFactory.createLineBorder(c, on ? 3 : 2));
+		button.setBorder(OperatorTheme.roundBorder(c, on ? 2 : 1));
 	}
 
 	private ActionListener addListener(String type)

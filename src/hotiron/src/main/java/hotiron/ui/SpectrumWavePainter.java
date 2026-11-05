@@ -225,7 +225,7 @@ public final class SpectrumWavePainter
 
 	private static void paintTicks(Graphics2D g2, int x0, int y0, int w, int h)
 	{
-		g2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+		g2.setFont(OperatorTheme.ui(11f));
 		FontMetrics fm = g2.getFontMetrics();
 		int base = y0 + h / 2 + fm.getAscent() / 2 - 1;
 		for (SpectrumSurveyAxis.Tick tick : SpectrumSurveyAxis.ticks())
