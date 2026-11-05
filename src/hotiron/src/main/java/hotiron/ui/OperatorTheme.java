@@ -1,5 +1,7 @@
 package hotiron.ui;
 
+import com.formdev.flatlaf.FlatLaf;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
@@ -66,14 +68,12 @@ public final class OperatorTheme
 
 	public static void installDefaults()
 	{
-		Font base = ui(13f);
-		UIManager.put("defaultFont", base);
-		UIManager.put("Button.font", base);
-		UIManager.put("ToggleButton.font", base);
-		UIManager.put("Label.font", base);
-		UIManager.put("CheckBox.font", base);
-		UIManager.put("ComboBox.font", base);
-		UIManager.put("TitledBorder.font", ui(Font.PLAIN, 12f));
+		// Family only. A plain Font in UIManager is an absolute override, so
+		// FlatLaf cannot apply -Dflatlaf.uiScale and labels stay 13 pt while
+		// the controls grow. FlatLaf builds FontUIResource sizes from this face.
+		FlatLaf.setPreferredFontFamily(FACE);
+		FlatLaf.setPreferredLightFontFamily(FACE);
+		FlatLaf.setPreferredSemiboldFontFamily(FACE);
 		UIManager.put("Button.arc", ARC);
 		UIManager.put("Component.arc", ARC);
 		UIManager.put("TextComponent.arc", ARC);
@@ -135,9 +135,12 @@ public final class OperatorTheme
 			{
 				g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 				g2.setColor(color);
-				g2.setStroke(new BasicStroke(thickness));
-				int inset = thickness;
-				g2.drawRoundRect(x + inset, y + inset, w - inset * 2 - 1, h - inset * 2 - 1, arc, arc);
+				g2.setStroke(new BasicStroke(thickness, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+				// Stroke sits inside a fixed inset. A thicker selected ring must
+				// not grow the insets or Quick Select labels clip.
+				int inset = Math.max(1, (thickness + 1) / 2);
+				g2.drawRoundRect(x + inset, y + inset, Math.max(0, w - inset * 2 - 1),
+						Math.max(0, h - inset * 2 - 1), arc, arc);
 			}
 			finally
 			{
@@ -148,8 +151,7 @@ public final class OperatorTheme
 		@Override
 		public Insets getBorderInsets(Component c)
 		{
-			int pad = thickness + 3;
-			return new Insets(pad, pad + 6, pad, pad + 6);
+			return new Insets(3, 6, 3, 6);
 		}
 
 		@Override
