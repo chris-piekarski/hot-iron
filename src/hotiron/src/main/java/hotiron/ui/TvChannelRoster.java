@@ -126,7 +126,7 @@ public final class TvChannelRoster extends JPanel
 			b.setFocusable(false);
 			b.setFont(b.getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12)
 					: b.getFont().deriveFont(Font.BOLD, 12f));
-			b.setToolTipText(tip(hit));
+			ExclusiveToolTip.setText(b, tip(hit));
 			b.addActionListener(e -> {
 				if (onSelect != null)
 					onSelect.accept(fcc);

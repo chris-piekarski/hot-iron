@@ -116,7 +116,7 @@ class TvTunerPanelTest
 		p.setChannel(33);
 		p.setStations(List.of(katv));
 		assertEquals("33 · 7.1 KATV", p.roster().buttons().get(0).getText());
-		assertTrue(p.roster().buttons().get(0).getToolTipText().contains("7.1 KATV"));
+		assertTrue(ExclusiveToolTip.hintOf(p.roster().buttons().get(0)).contains("7.1 KATV"));
 	}
 
 	private static TvStationHit hit(int ch, TvChannelGrade grade)

@@ -1897,7 +1897,8 @@ public class HotIron {
 		if (!q.shouldAdvance(System.currentTimeMillis(), frames))
 			return;
 		if (frames == 0)
-			stampTv(fcc, hotiron.core.TvChannelGrade.NO_LOCK, tvEngine.debug().stage(), 0, snrDb);
+			stampTv(fcc, hotiron.core.TvChannelGrade.NO_LOCK, tvEngine.debug().stage(), 0, snrDb,
+					tvEngine.stationLabel());
 		long now = System.currentTimeMillis();
 		if (q.advance(now))
 		{
