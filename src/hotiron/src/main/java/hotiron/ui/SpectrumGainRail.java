@@ -39,7 +39,7 @@ public final class SpectrumGainRail extends JPanel
 		ExclusiveToolTip.setText(antennaLna, "Onboard RF amp +14 dB. Restarts USB. Skip next to a broadcast tower.");
 		ExclusiveToolTip.install(autoGain);
 		ExclusiveToolTip.install(antennaLna);
-		Font tick = new Font("Monospaced", Font.BOLD, 11);
+		Font tick = OperatorTheme.ui(Font.BOLD, 11f);
 		lna.setFont(tick);
 		vga.setFont(tick);
 		lna.setInverted(false);

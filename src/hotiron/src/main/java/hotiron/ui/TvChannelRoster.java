@@ -52,7 +52,7 @@ public final class TvChannelRoster extends JPanel
 		setBackground(new Color(22, 24, 28));
 		setLayout(new MigLayout("insets 0, wrap 1, fillx", "[grow,fill]", "[][]"));
 		summary.setForeground(MUTED);
-		summary.setFont(summary.getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11)
+		summary.setFont(summary.getFont() == null ? OperatorTheme.ui(11f)
 				: summary.getFont().deriveFont(Font.PLAIN, 11f));
 		grid.setOpaque(false);
 		add(summary, "growx");
@@ -124,7 +124,7 @@ public final class TvChannelRoster extends JPanel
 			int fcc = hit.channel.fccChannel;
 			JButton b = new JButton(hit.rosterLabel());
 			b.setFocusable(false);
-			b.setFont(b.getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12)
+			b.setFont(b.getFont() == null ? OperatorTheme.ui(Font.BOLD, 12f)
 					: b.getFont().deriveFont(Font.BOLD, 12f));
 			ExclusiveToolTip.setText(b, tip(hit));
 			b.addActionListener(e -> {

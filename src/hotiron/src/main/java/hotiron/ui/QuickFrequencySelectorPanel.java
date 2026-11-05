@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.swing.AbstractButton;
-import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JPanel;
 import javax.swing.JToggleButton;
@@ -179,9 +178,11 @@ public class QuickFrequencySelectorPanel extends JPanel
 			width = Math.max(SurveyChipLayout.MIN_BUTTON_W * 4, getWidth() - OperatorLayout.RANGE_WIDTH);
 		if (width < 8)
 			width = 800;
-		FontMetrics fm = getFontMetrics(chipFont);
+		FontMetrics fm = getFontMetrics(chipFont.deriveFont(Font.BOLD));
+		Insets pad = OperatorTheme.roundBorder(Color.BLACK, 2).getBorderInsets(this);
+		int textPad = pad.left + pad.right;
 		chips = SurveyChipLayout.place(width, preset -> {
-			int tw = fm.stringWidth(preset.label) + 20;
+			int tw = fm.stringWidth(preset.label) + textPad;
 			return Math.max(SurveyChipLayout.MIN_BUTTON_W, tw);
 		});
 		int topH = SurveyChipLayout.rowsHeight(SurveyChipLayout.topRows(chips));
@@ -223,7 +224,7 @@ public class QuickFrequencySelectorPanel extends JPanel
 		button.setBackground(SpectrumSurveyStyle.chipBackground(preset, on));
 		button.setOpaque(true);
 		button.setContentAreaFilled(true);
-		button.setBorder(BorderFactory.createLineBorder(c, on ? 3 : 2));
+		button.setBorder(OperatorTheme.roundBorder(c, on ? 2 : 1));
 	}
 
 	private ActionListener addListener(String type)

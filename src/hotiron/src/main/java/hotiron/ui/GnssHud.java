@@ -36,7 +36,7 @@ public final class GnssHud
 		Graphics2D g = (Graphics2D) g0.create();
 		try
 		{
-			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+			g.setFont(OperatorTheme.ui(Font.BOLD, 12f));
 			int w = Math.min(g.getFontMetrics().stringWidth(s) + 16, (int) area.getWidth() - 16);
 			int h = g.getFontMetrics().getHeight() + 6;
 			int x = (int) Math.round(area.getMinX() + 8);

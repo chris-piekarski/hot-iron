@@ -45,7 +45,7 @@ public final class GnssSniffPanel extends JPanel
 		AnalyzerLookAndFeel.install();
 		setLayout(new MigLayout("insets 4 6 6 6, wrap 1, fill", "[grow,fill]", "[][][][][grow]"));
 		setBorder(BorderFactory.createTitledBorder("GNSS sniff"));
-		title.setFont(new Font(Font.MONOSPACED, Font.BOLD, 18));
+		title.setFont(OperatorTheme.ui(Font.BOLD, 18f));
 		title.setForeground(LCD_DIM);
 		hint.setForeground(LCD_DIM);
 		status.setForeground(LCD_DIM);

@@ -161,7 +161,7 @@ public final class TvVideoPanel extends JPanel
 			g.drawImage(img, dest.x, dest.y, dest.width, dest.height, null);
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		float fontPx = dest.height < 140 ? 11f : 14f;
-		g.setFont(getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, (int) fontPx)
+		g.setFont(getFont() == null ? OperatorTheme.ui(Font.BOLD, fontPx)
 				: getFont().deriveFont(Font.BOLD, fontPx));
 		g.setColor(new Color(255, 186, 64));
 		int ty = dest.y + (dest.height < 140 ? 16 : 22);

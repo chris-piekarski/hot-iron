@@ -2,6 +2,9 @@ package hotiron.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyVetoException;
@@ -102,6 +105,24 @@ class QuickFrequencySelectorPanelTest {
         assertEquals(SurveyChipLayout.Side.TOP, fmChip.side);
         assertEquals(SurveyChipLayout.Side.BOTTOM, panel.chips().stream()
                 .filter(c -> c.preset == QuickSelectPreset.ALL).findFirst().orElseThrow().side);
+    }
+
+    @Test
+    void selectedChipLabelFitsInsideTheRoundedBorder() {
+        QuickFrequencySelectorPanel panel = new QuickFrequencySelectorPanel();
+        panel.setSize(1200, 220);
+        panel.doLayout();
+        for (QuickSelectPreset preset : QuickSelectPreset.values()) {
+            AbstractButton button = panel.findButton(preset.label);
+            assertNotNull(button);
+            Font bold = button.getFont().deriveFont(Font.BOLD);
+            FontMetrics fm = button.getFontMetrics(bold);
+            Insets insets = button.getInsets();
+            int content = button.getWidth() - insets.left - insets.right;
+            int text = fm.stringWidth(preset.label);
+            assertTrue(text <= content,
+                    preset.label + " bold " + text + "px needs content " + content + " insets " + insets);
+        }
     }
 
     @Test

@@ -54,9 +54,9 @@ public final class TunerPanel extends JPanel
 		AnalyzerLookAndFeel.install();
 		setLayout(new MigLayout("insets 6 8 8 8, fillx, wrap 1, aligny top", "[grow,fill]", "[]"));
 		setBorder(BorderFactory.createTitledBorder("FM tuner"));
-		freq.setFont(new Font(Font.MONOSPACED, Font.BOLD, 44));
+		freq.setFont(OperatorTheme.readout(44f));
 		freq.setForeground(LCD_DIM);
-		unit.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 14));
+		unit.setFont(OperatorTheme.ui(14f));
 		unit.setForeground(LCD_DIM);
 		ExclusiveToolTip.setText(tuneDown, "Fine tune down one channel (200 kHz)");
 		ExclusiveToolTip.setText(tuneUp, "Fine tune up one channel (200 kHz)");

@@ -50,7 +50,7 @@ public final class FrequencyRangePanel extends JPanel
 		AnalyzerLookAndFeel.install();
 		setOpaque(false);
 		setLayout(new MigLayout("insets 2, wrap 1, fill, gapy 4", "[grow,fill]", "[][grow][]"));
-		readout.setFont(new Font(Font.MONOSPACED, Font.BOLD, 20));
+		readout.setFont(OperatorTheme.readout(20f));
 		readout.setCursor(Cursor.getPredefinedCursor(Cursor.TEXT_CURSOR));
 		span.setFont(span.getFont().deriveFont(Font.PLAIN, 12f));
 		span.setEnabled(false);

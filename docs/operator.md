@@ -12,7 +12,7 @@ That builds if needed and opens the window. You can also run the packaged launch
 ./src/hotiron/build/hotiron/hotiron.sh
 ```
 
-Windows ships `hotiron.cmd` next to it. The window title is **HotIron**. At startup, the window fills the current monitor (minus a margin). Quick Select and the sweep-range readout sit in a banner above the plots. The right-hand **Spectrum tools** column is a fixed **520 px** so band tuners do not reflow the graphs. On a shorter display, that column remains scrollable. An **MCP log** at the bottom of the column shows bind, clients, and tool calls.
+Windows ships `hotiron.cmd` next to it. The window title is **HotIron**. Controls use one sans face (Segoe UI when the desktop has it), 8-pixel corners, and a blue accent. The spectrum trace is blue and the peak hold is light gray. At startup, the window fills the current monitor (minus a margin). Quick Select and the sweep-range readout sit in a banner above the plots. The right-hand **Spectrum tools** column is a fixed **520 px** so band tuners do not reflow the graphs. On a shorter display, that column remains scrollable. An **MCP log** at the bottom of the column shows bind, clients, and tool calls.
 
 ## MCP (agents)
 

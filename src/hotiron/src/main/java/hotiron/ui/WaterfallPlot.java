@@ -55,7 +55,7 @@ public class WaterfallPlot extends JPanel {
 	private double				spectrumPaletteSize		= 65;
 	private double				spectrumPaletteStart	= -90;
 	private long[]				rowEpochMs;
-	private static final Color	TIME_AXIS_COLOR			= new Color(0xBB, 0xBB, 0xBB);
+	private static final Color	TIME_AXIS_COLOR			= OperatorTheme.TEXT_MUTED;
 	private static final Color	BANNER_RF				= new Color(40, 40, 44, 210);
 	private static final Color	BANNER_RF_TEXT			= new Color(200, 200, 204);
 	private static final Color	BANNER_AUDIO			= new Color(255, 186, 64, 230);
@@ -704,7 +704,7 @@ public class WaterfallPlot extends JPanel {
 	private void drawModeBanner(Graphics2D g, int x0) {
 		String title = instanceBanner();
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.BOLD, 12) : getFont().deriveFont(Font.BOLD, 12f);
+		Font font = OperatorTheme.ui(Font.BOLD, 12f);
 		g.setFont(font);
 		FontMetrics fm = g.getFontMetrics();
 		int padX = 8;
@@ -724,7 +724,7 @@ public class WaterfallPlot extends JPanel {
 		if (w < 40 || h < 16)
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11) : getFont().deriveFont(Font.PLAIN, 11f);
+		Font font = OperatorTheme.ui(11f);
 		g.setFont(font);
 		g.setColor(TIME_AXIS_COLOR);
 		int y = h - 2;
@@ -754,7 +754,7 @@ public class WaterfallPlot extends JPanel {
 		if (!(span > 0))
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11) : getFont().deriveFont(Font.PLAIN, 11f);
+		Font font = OperatorTheme.ui(11f);
 		g.setFont(font);
 		g.setColor(TIME_AXIS_COLOR);
 		int y = h - 2;
@@ -783,7 +783,7 @@ public class WaterfallPlot extends JPanel {
 		if (w < 40 || h < 16)
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11) : getFont().deriveFont(Font.PLAIN, 11f);
+		Font font = OperatorTheme.ui(11f);
 		g.setFont(font);
 		g.setColor(TIME_AXIS_COLOR);
 		int y = h - 2;
@@ -873,7 +873,7 @@ public class WaterfallPlot extends JPanel {
 		if (ticks.isEmpty())
 			return;
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 11) : getFont().deriveFont(Font.PLAIN, 11f);
+		Font font = OperatorTheme.ui(11f);
 		g.setFont(font);
 		g.setColor(TIME_AXIS_COLOR);
 		FontMetrics fm = g.getFontMetrics();

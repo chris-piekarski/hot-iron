@@ -45,7 +45,7 @@ public final class GnssSniffHud
 		Graphics2D g2 = (Graphics2D) g.create();
 		try
 		{
-			g2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+			g2.setFont(OperatorTheme.ui(Font.BOLD, 12f));
 			int x = (int) area.getX() + 8;
 			int y = (int) area.getY() + 18;
 			int w = Math.min(g2.getFontMetrics().stringWidth(line) + 12, (int) area.getWidth() - 16);

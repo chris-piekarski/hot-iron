@@ -32,7 +32,7 @@ public final class ListenHud
 		Graphics2D g = (Graphics2D) g0.create();
 		try
 		{
-			g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+			g.setFont(OperatorTheme.ui(Font.BOLD, 13f));
 			String s = text(mhz, audioOk);
 			int w = g.getFontMetrics().stringWidth(s) + 16;
 			int h = g.getFontMetrics().getHeight() + 6;

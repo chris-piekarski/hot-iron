@@ -251,7 +251,7 @@ public class HotIron {
 	private javax.swing.Timer					radioApplyTimer;
 	private Thread									threadProcessing;
 	private TextTitle								titleFreqBand						= new TextTitle("",
-			new Font("Dialog", Font.PLAIN, 11));
+			hotiron.ui.OperatorTheme.ui(11f));
 	private RuntimePerformanceWatch					perfWatch							= new RuntimePerformanceWatch();
 	private JFrame									uiFrame;
 	private WaterfallPlot							waterfallPlot;
@@ -451,7 +451,7 @@ public class HotIron {
 				OperatorShell.spectrumStack(settingsPanel.chartToggleBar(), chartPanel), waterfallPlot);
 
 		labelMessages = new JLabel("dsadasd");
-		labelMessages.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+		labelMessages.setFont(hotiron.ui.OperatorTheme.ui(12f));
 		settings.isDebugDisplay().addListener((debug) -> {
 			labelMessages.setVisible(debug);
 		});
@@ -989,16 +989,19 @@ public class HotIron {
 		int axisWidthLeft = 70;
 		int axisWidthRight = 20;
 
-		chart = ChartFactory.createXYLineChart("Spectrum analyzer", "Frequency [MHz]", "Power [dB]", chartDataset,
+		chart = ChartFactory.createXYLineChart(null, "MHz", "dB", chartDataset,
 				PlotOrientation.VERTICAL, false, false, false);
 		chart.getRenderingHints().put(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		chart.getRenderingHints().put(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		chart.getRenderingHints().put(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		if (chart.getTitle() != null)
+			chart.getTitle().setVisible(false);
 
 		XYPlot plot = chart.getXYPlot();
+		plot.setOutlineVisible(false);
 		NumberAxis domainAxis = ((NumberAxis) plot.getDomainAxis());
 		NumberAxis rangeAxis = ((NumberAxis) plot.getRangeAxis());
-		chartLineRenderer = new XYLineAndShapeRenderer();
-		chartLineRenderer.setDefaultShapesVisible(false);
-		chartLineRenderer.setDefaultStroke(new BasicStroke(OperatorLayout.SPECTRUM_LINE_WIDTH));
+		chartLineRenderer = new hotiron.ui.SpectrumTraceRenderer();
 
 		rangeAxis.setAutoRange(false);
 		rangeAxis.setRange(SpectrumPowerScale.DEFAULT_LOW, SpectrumPowerScale.DEFAULT_HIGH);
@@ -1010,9 +1013,7 @@ public class HotIron {
 		domainAxis.setRange(getFreq().getStartMHz(), getFreq().getEndMHz());
 		domainAxis.setNumberFormatOverride(new DecimalFormat(" #.### "));
 
-		chartLineRenderer.setAutoPopulateSeriesStroke(false);
-		chartLineRenderer.setAutoPopulateSeriesPaint(false);
-		chartLineRenderer.setSeriesPaint(0, colors.palette2);
+		chartLineRenderer.setSeriesPaint(0, hotiron.ui.OperatorTheme.TRACE);
 
 		plot.setDomainGridlinesVisible(false);
 		plot.setRenderer(chartLineRenderer);
@@ -1033,19 +1034,19 @@ public class HotIron {
 
 		plot.setAxisOffset(RectangleInsets.ZERO_INSETS); //no space between range axis and plot
 
-		Font labelFont = new Font(Font.MONOSPACED, Font.BOLD, 16);
+		Font labelFont = hotiron.ui.OperatorTheme.ui(Font.PLAIN, 12f);
 		rangeAxis.setLabelFont(labelFont);
 		rangeAxis.setTickLabelFont(labelFont);
-		rangeAxis.setLabelPaint(colors.palette1);
-		rangeAxis.setTickLabelPaint(colors.palette1);
+		rangeAxis.setLabelPaint(hotiron.ui.OperatorTheme.TEXT_MUTED);
+		rangeAxis.setTickLabelPaint(hotiron.ui.OperatorTheme.TEXT);
 		domainAxis.setLabelFont(labelFont);
 		domainAxis.setTickLabelFont(labelFont);
-		domainAxis.setLabelPaint(colors.palette1);
-		domainAxis.setTickLabelPaint(colors.palette1);
-		chartLineRenderer.setDefaultPaint(Color.white);
+		domainAxis.setLabelPaint(hotiron.ui.OperatorTheme.TEXT_MUTED);
+		domainAxis.setTickLabelPaint(hotiron.ui.OperatorTheme.TEXT);
+		chartLineRenderer.setDefaultPaint(hotiron.ui.OperatorTheme.TRACE);
 		plot.setBackgroundPaint(colors.palette4);
 		chart.setBackgroundPaint(colors.palette4);
-		chartLineRenderer.setSeriesPaint(1, colors.palette1);
+		chartLineRenderer.setSeriesPaint(1, hotiron.ui.OperatorTheme.PEAK);
 
 		chartPanel = new ChartPanel(chart);
 		chartPanel.setDisplayToolTips(false);
@@ -1246,12 +1247,12 @@ public class HotIron {
 		freqMarker.setLabelPaint(Color.white);
 		freqMarker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
 		freqMarker.setLabelTextAnchor(TextAnchor.TOP_LEFT);
-		freqMarker.setLabelFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+		freqMarker.setLabelFont(hotiron.ui.OperatorTheme.ui(Font.PLAIN, 12f));
 		ValueMarker signalMarker = new ValueMarker(0, Color.WHITE, new BasicStroke(1f));
 		signalMarker.setLabelPaint(Color.white);
 		signalMarker.setLabelAnchor(RectangleAnchor.TOP_RIGHT);
 		signalMarker.setLabelTextAnchor(TextAnchor.BOTTOM_RIGHT);
-		signalMarker.setLabelFont(new Font(Font.MONOSPACED, Font.BOLD, 16));
+		signalMarker.setLabelFont(hotiron.ui.OperatorTheme.ui(Font.PLAIN, 12f));
 
 		chartPanel.addMouseMotionListener(new MouseMotionAdapter() {
 			DecimalFormat format = new DecimalFormat("0.#");
@@ -1299,11 +1300,11 @@ public class HotIron {
 			}
 		});
 
-		titleFreqBand.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+		titleFreqBand.setFont(hotiron.ui.OperatorTheme.ui(Font.BOLD, 13f));
+		titleFreqBand.setPaint(hotiron.ui.OperatorTheme.TEXT);
 		titleFreqBand.setPosition(RectangleEdge.BOTTOM);
 		titleFreqBand.setHorizontalAlignment(HorizontalAlignment.LEFT);
 		titleFreqBand.setMargin(0.0, 2.0, 0.0, 2.0);
-		titleFreqBand.setPaint(Color.white);
 		chart.addSubtitle(titleFreqBand);
 	}
 
@@ -1616,7 +1617,8 @@ public class HotIron {
 				p.setPeakFalloutMillis(fallRate * 1000l);
 		});
 
-		chartLineRenderer.setDefaultStroke(new BasicStroke(OperatorLayout.SPECTRUM_LINE_WIDTH));
+		chartLineRenderer.setDefaultStroke(new BasicStroke(OperatorLayout.SPECTRUM_LINE_WIDTH, BasicStroke.CAP_ROUND,
+				BasicStroke.JOIN_ROUND));
 		
 		settings.getPersistentDisplayDecayRate().addListener((time) -> {
 			persistentDisplay.setPersistenceTime(time);

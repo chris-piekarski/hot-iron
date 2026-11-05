@@ -18,6 +18,7 @@ public final class AnalyzerLookAndFeel {
 		synchronized (AnalyzerLookAndFeel.class) {
 			if (installed)
 				return;
+			OperatorTheme.installDefaults();
 			FlatDarkLaf.setup();
 			ExclusiveToolTip.installShared();
 			installed = true;
