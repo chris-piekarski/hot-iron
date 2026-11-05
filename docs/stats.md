@@ -2,7 +2,7 @@
 
 # Repository stats
 
-Refreshed **2026-11-03 09:13 UTC** from `2252fd0` on `feat/onair-tv-upgrades` (last commit 2026-11-03 02:13:43 -0700).
+Refreshed **2026-11-05 05:16 UTC** from `3c9f75c` on `master` (last commit 2026-11-04 20:51:19 -0700).
 
 Regenerate:
 
@@ -24,13 +24,13 @@ Vendor trees (`src/hotiron/lib/hackrf`, libusb, FFTW, and `src-c/atsc/{lib,fec,s
 | Minimum firmware | `2024.02.1` |
 | Quick Select presets | 30 |
 | USA allocation rows | 574 |
-| Git commits on this branch | 127 |
-| First-party lines (all counted trees) | 54737 |
+| Git commits on this branch | 128 |
+| First-party lines (all counted trees) | 54738 |
 
 ```mermaid
 pie showData
     title First-party physical lines
-    "Java main" : 33146
+    "Java main" : 33147
     "Java test" : 13787
     "Docs" : 2901
     "Scripts + first-party C/C++" : 4903
@@ -38,14 +38,14 @@ pie showData
 
 ## Java by area
 
-Production (`src/main/java`): **198** files, **33146** lines.
+Production (`src/main/java`): **198** files, **33147** lines.
 
 | Package | Files | Lines |
 |---|---:|---:|
 | `hotiron/core` | 117 | 17469 |
 | `hotiron/ui` | 59 | 8801 |
 | `hotiron/mcp` | 8 | 2966 |
-| `hotiron` | 2 | 2727 |
+| `hotiron` | 2 | 2728 |
 | `hotiron/nativebridge` | 5 | 561 |
 | `hotiron/capture` | 2 | 251 |
 | `hotiron/mvc` | 2 | 249 |
@@ -133,7 +133,7 @@ pie showData
 
 | File | Lines |
 |---|---:|
-| `src/hotiron/src/main/java/hotiron/HotIron.java` | 2720 |
+| `src/hotiron/src/main/java/hotiron/HotIron.java` | 2721 |
 | `src/hotiron/src/main/java/hotiron/ui/WaterfallPlot.java` | 961 |
 | `src/hotiron/src/main/java/hotiron/mcp/SpectrumSnapshotStore.java` | 910 |
 | `src/hotiron/src/main/java/hotiron/core/TvWatchEngine.java` | 804 |
@@ -148,7 +148,7 @@ pie showData
 
 | Author | Commits |
 |---|---:|
-| Chris Piekarski | 47 |
+| Chris Piekarski | 48 |
 | Pavol Sakac | 27 |
 | selabnayr | 24 |
 | _sekki | 12 |
